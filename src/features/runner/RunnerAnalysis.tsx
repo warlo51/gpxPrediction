@@ -302,41 +302,66 @@ function WeeklyLoadChart({ data }: { data: RunnerAnalysisType['weeklyLoad'] }) {
   )
 }
 
-// ─── Section : Zones d'entraînement ──────────────────────────────────────────
+// ─── Section : Zones FC (composant réutilisable) ──────────────────────────────
 
-function TrainingZones({ zones, hasHR }: { zones: RunnerAnalysisType['trainingZones']; hasHR: boolean }) {
+function ZoneList({
+  zones,
+  hasHR,
+  title,
+  subtitle,
+  accentColor,
+  showPct = true,
+}: {
+  zones: { zone: number; label: string; color: string; minHR: number; maxHR: number; pct: number; minPct?: number; maxPct?: number }[]
+  hasHR: boolean
+  title: string
+  subtitle: string
+  accentColor: string
+  showPct?: boolean
+}) {
   return (
-    <div className="glass rounded-2xl p-4 sm:p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-1 h-5 rounded-full bg-rose-500 inline-block" />
-        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
-          Zones d'entraînement
-        </h3>
+    <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="w-1 h-5 rounded-full inline-block" style={{ backgroundColor: accentColor }} />
+        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">{title}</h3>
         {!hasHR && (
-          <span className="text-xs text-slate-600 ml-auto">Estimées (pas de FC)</span>
+          <span className="text-xs text-slate-600 ml-auto">Estimées</span>
         )}
       </div>
-      <div className="space-y-2">
+      <p className="text-xs text-slate-600 mb-4 ml-3">{subtitle}</p>
+      <div className="space-y-2.5 flex-1">
         {zones.map(z => (
-          <div key={z.zone} className="flex items-center gap-3">
-            <span className="text-slate-400 text-xs w-4">{z.zone}</span>
+          <div key={z.zone} className="flex items-center gap-2">
+            <span className="text-slate-500 text-xs w-3 shrink-0">{z.zone}</span>
             <div className="flex-1">
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-xs" style={{ color: z.color }}>{z.label}</span>
-                <span className="text-xs text-slate-500">{z.minHR}–{z.maxHR} bpm</span>
+              <div className="flex items-center justify-between mb-0.5 gap-1">
+                <span className="text-xs truncate" style={{ color: z.color }}>{z.label}</span>
+                <span className="text-xs text-slate-500 shrink-0 tabular-nums">
+                  {z.minHR}–{z.maxHR} bpm
+                  {'minPct' in z && z.minPct !== undefined
+                    ? ` (${z.minPct}–${z.maxPct}% FCR)`
+                    : ''}
+                </span>
               </div>
               <div className="h-2 rounded-full bg-white/5 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${z.pct}%`, backgroundColor: z.color }}
+                  style={{ width: `${showPct ? z.pct : 0}%`, backgroundColor: z.color }}
                 />
               </div>
             </div>
-            <span className="text-xs font-medium w-8 text-right" style={{ color: z.color }}>
-              {z.pct}%
-            </span>
+            {showPct && (
+              <span className="text-xs font-medium w-7 text-right shrink-0" style={{ color: z.color }}>
+                {z.pct}%
+              </span>
+            )}
           </div>
         ))}
+      </div>
+      {/* Légende FC repos / max */}
+      <div className="mt-3 pt-3 border-t border-white/6 flex justify-between text-xs text-slate-600">
+        <span>FC repos : <span className="text-slate-400">{zones[0]?.minHR ? zones[0].minHR - 1 : '--'} bpm env.</span></span>
+        <span>FC max : <span className="text-slate-400">{zones[zones.length - 1]?.maxHR ?? '--'} bpm</span></span>
       </div>
     </div>
   )
@@ -459,11 +484,28 @@ export function RunnerAnalysisPanel() {
         <GradePaceChart data={analysis.gradePaceCurve} />
       </div>
 
-      {/* ── Zones + Terrain ── */}
+      {/* ── Zones FC ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <TrainingZones zones={analysis.trainingZones} hasHR={hasHR} />
-        <TerrainBreakdown data={analysis.terrainBreakdown} hasStreams={hasStreams} />
+        <ZoneList
+          zones={analysis.trainingZones}
+          hasHR={hasHR}
+          title="Zones FC — % FC max"
+          subtitle="Méthode classique : intensité basée sur le % de votre FC maximale"
+          accentColor="#ef4444"
+          showPct={hasHR}
+        />
+        <ZoneList
+          zones={analysis.karvonenZones}
+          hasHR={hasHR}
+          title="Zones FC — Karvonen (FCR)"
+          subtitle="Méthode Karvonen : tient compte de votre FC de repos → plus précise"
+          accentColor="#f97316"
+          showPct={hasHR}
+        />
       </div>
+
+      {/* ── Terrain ── */}
+      <TerrainBreakdown data={analysis.terrainBreakdown} hasStreams={hasStreams} />
 
     </div>
   )

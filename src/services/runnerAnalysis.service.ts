@@ -62,7 +62,7 @@ export type RunnerAnalysis = {
     progressionScore: number   // 0-100 : amélioration de l'allure sur la période
     trailScore: number         // 0-100 : spécificité trail (D+/km)
   }
-  // Zones d'entraînement estimées
+  // Zones FC classiques (% FC max)
   trainingZones: {
     zone: number
     label: string
@@ -70,6 +70,17 @@ export type RunnerAnalysis = {
     minHR: number
     maxHR: number
     pct: number // % du temps estimé dans cette zone
+  }[]
+  // Zones FC de réserve — méthode Karvonen (% FCR)
+  karvonenZones: {
+    zone: number
+    label: string
+    color: string
+    minHR: number   // bpm absolu = FCR * pct + FC repos
+    maxHR: number
+    minPct: number  // % FCR min
+    maxPct: number  // % FCR max
+    pct: number     // % du temps estimé dans cette zone
   }[]
   // Bilan par type de terrain
   terrainBreakdown: {
@@ -340,6 +351,53 @@ function computeTrainingZones(
   }))
 }
 
+// ─── Zones FC de réserve — Karvonen ──────────────────────────────────────────
+
+/**
+ * Méthode Karvonen : FC cible = FC repos + (FC réserve × % intensité)
+ * FC réserve = FC max - FC repos
+ * Plus précise que le % FC max car tient compte de la FC de repos.
+ */
+function computeKarvonenZones(
+  sessions: TrainingSession[],
+  profile: RunnerProfile,
+): RunnerAnalysis['karvonenZones'] {
+  const { restingHR, maxHR } = profile.heartRateModel
+  const fcReserve = maxHR - restingHR
+
+  const zones = [
+    { zone: 1, label: 'Récupération active', color: '#22c55e', pctMin: 0.50, pctMax: 0.60 },
+    { zone: 2, label: 'Endurance fondamentale', color: '#84cc16', pctMin: 0.60, pctMax: 0.70 },
+    { zone: 3, label: 'Aérobie seuil', color: '#f59e0b', pctMin: 0.70, pctMax: 0.80 },
+    { zone: 4, label: 'Seuil anaérobie', color: '#f97316', pctMin: 0.80, pctMax: 0.90 },
+    { zone: 5, label: 'Maximal / PMA', color: '#ef4444', pctMin: 0.90, pctMax: 1.00 },
+  ]
+
+  // FC absolue = FC repos + FCR × pct
+  const toAbsHR = (pct: number) => Math.round(restingHR + fcReserve * pct)
+
+  // Estimer le % de temps dans chaque zone depuis les FC moyennes des séances
+  const sessionsWithHR = sessions.filter(s => s.avgHeartRate)
+  const zoneCounts = new Array(zones.length).fill(0)
+  for (const s of sessionsWithHR) {
+    const hrPct = (s.avgHeartRate! - restingHR) / fcReserve
+    const idx = zones.findIndex(z => hrPct >= z.pctMin && hrPct < z.pctMax)
+    if (idx >= 0) zoneCounts[idx]++
+  }
+  const total = sessionsWithHR.length || 1
+
+  return zones.map((z, i) => ({
+    zone: z.zone,
+    label: z.label,
+    color: z.color,
+    minHR: toAbsHR(z.pctMin),
+    maxHR: toAbsHR(z.pctMax),
+    minPct: Math.round(z.pctMin * 100),
+    maxPct: Math.round(z.pctMax * 100),
+    pct: Math.round((zoneCounts[i]! / total) * 100),
+  }))
+}
+
 // ─── Terrain breakdown ────────────────────────────────────────────────────────
 
 function computeTerrainBreakdown(sessions: TrainingSession[]): RunnerAnalysis['terrainBreakdown'] {
@@ -439,6 +497,7 @@ export function analyzeRunner(
     strengths: computeStrengthsWeaknesses(sorted, profile),
     stats: computeStats(sorted),
     trainingZones: computeTrainingZones(sorted, profile),
+    karvonenZones: computeKarvonenZones(sorted, profile),
     terrainBreakdown: computeTerrainBreakdown(sorted),
   }
 }
