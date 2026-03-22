@@ -74,6 +74,7 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
     if (!clientId.trim()) { setError('Le Client ID est requis.'); return }
     if (!clientSecret.trim()) { setError('Le Client Secret est requis.'); return }
 
+    // redirectUri recalculé dynamiquement — pas stocké, toujours basé sur l'origine courante
     const redirectUri = `${window.location.origin}/strava/callback`
     setCredentials({ clientId: clientId.trim(), clientSecret: clientSecret.trim(), redirectUri })
     setError(null)
@@ -97,6 +98,12 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
             <li>
               Renseignez <strong className="text-blue-200">Authorization Callback Domain</strong> :{' '}
               <code className="bg-blue-900/40 px-1 rounded break-all">{window.location.hostname}</code>
+            </li>
+            <li>
+              L'URL de callback complète sera :{' '}
+              <code className="bg-blue-900/40 px-1 rounded break-all text-emerald-300">
+                {window.location.origin}/strava/callback
+              </code>
             </li>
             <li>Copiez le <strong className="text-blue-200">Client ID</strong> et le <strong className="text-blue-200">Client Secret</strong> ci-dessous</li>
           </ol>
@@ -243,7 +250,7 @@ function StravaImportPanel() {
   return (
     <div className="space-y-4">
       {/* Profil connecté */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-black/20 border border-white/[0.04] rounded-xl p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-black/20 border border-white/4 rounded-xl p-3 sm:p-4">
         <div className="flex items-center gap-3 min-w-0">
           <img
             src={athlete.profile}
@@ -327,14 +334,14 @@ function ProgressBar({ label, progress }: { label: string; progress: number | nu
   return (
     <div className="space-y-1.5">
       <div className="text-xs text-slate-400">{label}</div>
-      <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+      <div className="h-1.5 bg-white/6 rounded-full overflow-hidden">
         {progress !== null ? (
           <div
-            className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-300"
+            className="h-full bg-linear-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-300"
             style={{ width: `${progress * 100}%` }}
           />
         ) : (
-          <div className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full animate-pulse w-1/3" />
+          <div className="h-full bg-linear-to-r from-orange-600 to-orange-400 rounded-full animate-pulse w-1/3" />
         )}
       </div>
     </div>
@@ -411,7 +418,7 @@ export function StravaConnect() {
           <a
             href={buildStravaAuthUrl(credentials)}
             className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl
-                       bg-gradient-to-r from-orange-600 to-orange-500
+                       bg-linear-to-r from-orange-600 to-orange-500
                        hover:from-orange-500 hover:to-orange-400
                        text-white font-semibold text-sm
                        transition-all duration-200 hover:shadow-lg hover:shadow-orange-900/40"

@@ -23,12 +23,14 @@ const STRAVA_AUTH = 'https://www.strava.com/oauth'
 
 /**
  * Génère l'URL d'autorisation Strava.
- * Redirige l'utilisateur vers Strava pour qu'il autorise l'accès.
+ * Le redirectUri est toujours calculé depuis window.location.origin
+ * pour fonctionner en localhost ET en production (Vercel, etc.)
  */
 export function buildStravaAuthUrl(creds: StravaCredentials): string {
+  const redirectUri = `${window.location.origin}/strava/callback`
   const params = new URLSearchParams({
     client_id: creds.clientId,
-    redirect_uri: creds.redirectUri,
+    redirect_uri: redirectUri,
     response_type: 'code',
     approval_prompt: 'auto',
     scope: 'read,activity:read_all',
@@ -38,12 +40,15 @@ export function buildStravaAuthUrl(creds: StravaCredentials): string {
 
 /**
  * Échange le code d'autorisation contre un token d'accès.
- * Appelé après le redirect de Strava avec ?code=...
+ * Le redirectUri doit être identique à celui utilisé lors de l'autorisation.
  */
 export async function exchangeCodeForToken(
   code: string,
   creds: StravaCredentials,
 ): Promise<{ token: StravaToken; athlete: StravaAthlete }> {
+  // Toujours recalculé depuis l'origine courante
+  const redirectUri = `${window.location.origin}/strava/callback`
+
   const res = await fetch(`${STRAVA_AUTH}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -51,6 +56,7 @@ export async function exchangeCodeForToken(
       client_id: creds.clientId,
       client_secret: creds.clientSecret,
       code,
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
   })
