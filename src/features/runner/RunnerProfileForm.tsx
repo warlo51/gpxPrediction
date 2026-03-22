@@ -53,7 +53,7 @@ function Calibrated({
   color?: string; source: 'strava' | 'calculé'
 }) {
   return (
-    <div className="bg-white/3 border border-white/6 rounded-xl p-3 hover:bg-white/[0.05] transition-colors">
+    <div className="bg-white/3 border border-white/6 rounded-xl p-3 hover:bg-white/5 transition-colors">
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-slate-500 text-xs leading-tight">{label}</span>
         <span className={[
@@ -77,16 +77,20 @@ export function RunnerProfileForm() {
   const { profile, setProfile, sessions } = useAppStore()
   const { athlete } = useStravaStore()
 
-  // Seuls champs saisis manuellement
   const [name, setName] = useState(profile.name)
   const [weightKg, setWeightKg] = useState(profile.energyModel.weightKg)
   const [restingHR, setRestingHR] = useState(profile.heartRateModel.restingHR)
-  const [walkingThreshold, setWalkingThreshold] = useState(
-    profile.speedModel.walkingThresholdGrade,
-  )
+  const [walkingThreshold, setWalkingThreshold] = useState(profile.speedModel.walkingThresholdGrade)
   const [saved, setSaved] = useState(false)
 
   const hasHistory = sessions.length > 0
+
+  // Détecter si le seuil de marche a été calibré automatiquement
+  // (différent de la valeur par défaut = 25)
+  const DEFAULT_WALKING_THRESHOLD = 25
+  const walkingThresholdCalibrated =
+    hasHistory && profile.speedModel.walkingThresholdGrade !== DEFAULT_WALKING_THRESHOLD
+  const sessionsWithElevation = sessions.filter(s => s.streams?.altitude && s.elevationGain > 50).length
   const paceMin = Math.floor(profile.basePaceSecPerKm / 60)
   const paceSec = profile.basePaceSecPerKm % 60
 
@@ -166,8 +170,15 @@ export function RunnerProfileForm() {
             />
           </Field>
 
-          <Field label="Seuil de marche" unit="% pente"
-            hint="Pente à partir de laquelle vous marchez">
+          <Field
+            label="Seuil de marche"
+            unit="% pente"
+            hint={
+              walkingThresholdCalibrated
+                ? `Détecté depuis ${sessionsWithElevation} séance${sessionsWithElevation > 1 ? 's' : ''} avec D+`
+                : 'Pente à partir de laquelle vous marchez'
+            }
+          >
             <NumberInput
               value={walkingThreshold} min={5} max={50} step={1}
               onChange={setWalkingThreshold}

@@ -97,44 +97,106 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
     .map((s) => s.speedMs)
   const flatAvgSpeedMs = flatSamples.length > 0 ? mean(removeOutliers(flatSamples)) : 0
 
+  // Vitesse médiane par tranche de pente de 5% (pour détecter le seuil de marche)
+  const BUCKETS = [5, 10, 15, 20, 25, 30, 35, 40]
+  const speedByGradeBucket = BUCKETS.map((gradeMin) => {
+    const gradeMax = gradeMin + 5
+    const samples = speedGradeSamples
+      .filter(s => s.grade >= gradeMin && s.grade < gradeMax)
+      .map(s => s.speedMs)
+    return {
+      gradeMin,
+      gradeMax,
+      medianSpeedMs: samples.length >= 3 ? median(samples) : -1,
+      count: samples.length,
+    }
+  }).filter(b => b.medianSpeedMs > 0)
+
   return {
     sessionId: session.id,
     flatAvgSpeedMs,
     speedGradeSamples,
     hrSpeedSamples,
     performanceDrift,
+    speedByGradeBucket,
   }
+}
+
+/**
+ * Détecte automatiquement le seuil de pente à partir duquel le coureur marche.
+ *
+ * Méthode : pour chaque tranche de 5% de pente, on calcule la vitesse médiane.
+ * Le seuil de marche est la première tranche où la vitesse médiane passe
+ * en dessous du seuil de marche défini (~1.5 m/s ≈ 5.4 km/h).
+ *
+ * On agrège les buckets de toutes les séances pour plus de robustesse.
+ */
+function calibrateWalkingThreshold(
+  allMetrics: SessionMetrics[],
+): number | null {
+  const WALKING_SPEED_MS = 1.6 // ~5.8 km/h — vitesse max considérée comme "marche"
+
+  // Agréger tous les buckets de toutes les séances
+  const bucketMap = new Map<number, number[]>()
+  for (const m of allMetrics) {
+    for (const b of m.speedByGradeBucket) {
+      const arr = bucketMap.get(b.gradeMin) ?? []
+      // On pousse la vitesse médiane de cette séance pour ce bucket
+      if (b.medianSpeedMs > 0) arr.push(b.medianSpeedMs)
+      bucketMap.set(b.gradeMin, arr)
+    }
+  }
+
+  // Pour chaque tranche, calculer la médiane inter-séances
+  // Trouver la première tranche où la médiane < seuil marche
+  const sortedGrades = [...bucketMap.keys()].sort((a, b) => a - b)
+  for (const gradeMin of sortedGrades) {
+    const speeds = bucketMap.get(gradeMin)!
+    if (speeds.length < 2) continue // pas assez de données
+    const medSpeed = median(speeds)
+    if (medSpeed < WALKING_SPEED_MS) {
+      // Le seuil est au milieu de cette tranche (gradeMin + 2.5), arrondi à l'entier
+      return Math.round(gradeMin + 2.5)
+    }
+  }
+
+  return null // pas assez de données pour détecter
 }
 
 // ─── Calibration du modèle vitesse ───────────────────────────────────────────
 
-/**
- * Calibre la relation vitesse ↔ pente à partir de l'ensemble des échantillons.
- * Régression linéaire simple : speed = flatSpeed * (1 - k * grade)
- */
 function calibrateSpeedModel(
   allSamples: SessionMetrics['speedGradeSamples'],
   flatSpeedMs: number,
-): { uphillDecayFactor: number; downhillBoostFactor: number } {
+  allMetrics: SessionMetrics[],
+): { uphillDecayFactor: number; downhillBoostFactor: number; walkingThresholdGrade: number | null } {
   if (allSamples.length < 10) {
     return {
       uphillDecayFactor: DEFAULT_RUNNER_PROFILE.speedModel.uphillDecayFactor,
       downhillBoostFactor: DEFAULT_RUNNER_PROFILE.speedModel.downhillBoostFactor,
+      walkingThresholdGrade: null,
     }
   }
 
   const uphillSamples = allSamples.filter((s) => s.grade > 3 && s.grade < 30)
   const downhillSamples = allSamples.filter((s) => s.grade < -3 && s.grade > -30)
 
-  // Facteur montée : k = (1 - speed/flatSpeed) / grade
+  // Facteur montée : k = -ln(speed/flatSpeed) / grade  (modèle exponentiel)
   const uphillFactors = uphillSamples
-    .map((s) => (1 - s.speedMs / flatSpeedMs) / s.grade)
-    .filter((k) => k > 0 && k < 0.3)
+    .map((s) => {
+      const ratio = s.speedMs / flatSpeedMs
+      if (ratio <= 0 || ratio >= 1) return null
+      return -Math.log(ratio) / s.grade
+    })
+    .filter((k): k is number => k !== null && k > 0.01 && k < 0.15)
 
   // Facteur descente : k = (speed/flatSpeed - 1) / |grade|
   const downhillFactors = downhillSamples
     .map((s) => (s.speedMs / flatSpeedMs - 1) / Math.abs(s.grade))
     .filter((k) => k > 0 && k < 0.15)
+
+  // Seuil de marche détecté depuis les données réelles
+  const walkingThresholdGrade = calibrateWalkingThreshold(allMetrics)
 
   return {
     uphillDecayFactor:
@@ -145,6 +207,7 @@ function calibrateSpeedModel(
       downhillFactors.length >= 5
         ? median(removeOutliers(downhillFactors))
         : DEFAULT_RUNNER_PROFILE.speedModel.downhillBoostFactor,
+    walkingThresholdGrade,
   }
 }
 
@@ -242,9 +305,9 @@ export function calibrateRunner(
 
   const basePaceSecPerKm = Math.round(1000 / flatSpeedMs)
 
-  // ── 3. Calibration modèle vitesse
+  // ── 3. Calibration modèle vitesse (+ seuil de marche détecté)
   const allSpeedGradeSamples = metrics.flatMap((m) => m.speedGradeSamples)
-  const speedModelCalibration = calibrateSpeedModel(allSpeedGradeSamples, flatSpeedMs)
+  const speedModelCalibration = calibrateSpeedModel(allSpeedGradeSamples, flatSpeedMs, metrics)
 
   // ── 4. Calibration FC
   const allHrSamples = metrics.flatMap((m) => m.hrSpeedSamples)
@@ -267,6 +330,10 @@ export function calibrateRunner(
       flatSpeed: flatSpeedMs,
       uphillDecayFactor: speedModelCalibration.uphillDecayFactor,
       downhillBoostFactor: speedModelCalibration.downhillBoostFactor,
+      // Seuil de marche détecté automatiquement depuis les vraies données GPS
+      ...(speedModelCalibration.walkingThresholdGrade !== null && {
+        walkingThresholdGrade: speedModelCalibration.walkingThresholdGrade,
+      }),
     },
 
     heartRateModel: {

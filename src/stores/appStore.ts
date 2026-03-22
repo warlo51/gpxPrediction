@@ -21,17 +21,17 @@ export const DEFAULT_RUNNER_PROFILE: RunnerProfile = {
 
   speedModel: {
     flatSpeed: 2.78,             // ~10 km/h
-    uphillDecayFactor: 0.08,     // -8% de vitesse par % de pente
-    downhillBoostFactor: 0.03,   // +3% de vitesse par % de descente
-    walkingThresholdGrade: 20,   // marche au-delà de 20%
-    walkingSpeed: 1.2,           // ~4.3 km/h en marche
+    uphillDecayFactor: 0.045,    // modèle exponentiel : exp(-0.045*grade) → pente 10% = 64% vitesse
+    downhillBoostFactor: 0.02,   // +2% de vitesse par % de descente (conservateur)
+    walkingThresholdGrade: 25,   // marche au-delà de 25% (réaliste trail)
+    walkingSpeed: 1.0,           // ~3.6 km/h en marche
   },
 
   fatigueModel: {
-    hourlyDecayFactor: 0.03,       // -3% par heure
-    downhillRecoveryFactor: 0.5,   // récupération à 50% en descente
-    fatigueThresholdKm: 30,        // fatigue accrue après 30 km
-    lateFatigueMultiplier: 1.5,    // x1.5 la fatigue au-delà
+    hourlyDecayFactor: 0.015,      // -1.5% par heure (réaliste sur 2-4h)
+    downhillRecoveryFactor: 0.5,
+    fatigueThresholdKm: 35,        // fatigue accrue après 35 km
+    lateFatigueMultiplier: 1.4,
   },
 
   heartRateModel: {
@@ -76,7 +76,7 @@ type AppState = {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // ── Profil coureur
       profile: DEFAULT_RUNNER_PROFILE,
       setProfile: (profile) => set({ profile }),
@@ -101,11 +101,29 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'gpx-predictor-store',
-      // On ne persiste pas le tracé GPX (trop lourd)
       partialize: (state) => ({
         profile: state.profile,
         sessions: state.sessions,
       }),
+      // Migration : corriger les anciens profils avec uphillDecayFactor trop élevé (modèle linéaire)
+      onRehydrateStorage: () => (state) => {
+        if (!state) return
+        if (state.profile.speedModel.uphillDecayFactor >= 0.07) {
+          state.profile = {
+            ...state.profile,
+            speedModel: {
+              ...state.profile.speedModel,
+              uphillDecayFactor: 0.045,
+              downhillBoostFactor: Math.min(state.profile.speedModel.downhillBoostFactor, 0.025),
+              walkingThresholdGrade: Math.max(state.profile.speedModel.walkingThresholdGrade, 22),
+            },
+            fatigueModel: {
+              ...state.profile.fatigueModel,
+              hourlyDecayFactor: Math.min(state.profile.fatigueModel.hourlyDecayFactor, 0.02),
+            },
+          }
+        }
+      },
     },
   ),
 )

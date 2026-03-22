@@ -44,7 +44,7 @@ export type TrainingSession = {
 /** Métriques calculées depuis les streams d'une séance */
 export type SessionMetrics = {
   sessionId: string
-  /** Pente moyenne sur les segments plats */
+  /** Vitesse moyenne sur les segments plats */
   flatAvgSpeedMs: number
   /** Corrélations vitesse/pente échantillonnées */
   speedGradeSamples: Array<{ grade: number; speedMs: number }>
@@ -52,4 +52,9 @@ export type SessionMetrics = {
   hrSpeedSamples: Array<{ speedMs: number; hr: number }>
   /** Dérive de performance (ratio fin/début) */
   performanceDrift: number
+  /**
+   * Vitesse médiane par tranche de pente (5%, 10%, 15%…)
+   * Utilisé pour détecter le seuil de passage à la marche.
+   */
+  speedByGradeBucket: Array<{ gradeMin: number; gradeMax: number; medianSpeedMs: number; count: number }>
 }

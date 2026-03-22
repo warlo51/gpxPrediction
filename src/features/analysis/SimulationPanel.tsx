@@ -350,7 +350,7 @@ export function SimulationPanel() {
   const { track, profile } = useAppStore()
 
   const [strategyId, setStrategyId] = useState<StrategyId>('conservative')
-  const [effortFactor, setEffortFactor] = useState(0.90)
+  const [effortFactor, setEffortFactor] = useState(0.95)
   const [applyFatigue, setApplyFatigue] = useState(true)
   const [applyCardiacDrift, setApplyCardiacDrift] = useState(true)
   const [result, setResult] = useState<SimulationResult | null>(null)

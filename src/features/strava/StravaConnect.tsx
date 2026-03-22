@@ -17,6 +17,7 @@ import {
   fetchActivityStreams,
   mapActivityToSession,
 } from '@/services/strava.service'
+import { calibrateRunner } from '@/services/calibration.service'
 
 // ─── Hook : gestion du callback OAuth ────────────────────────────────────────
 
@@ -174,154 +175,201 @@ type ImportState =
   | { phase: 'idle' }
   | { phase: 'fetching'; loaded: number }
   | { phase: 'streams'; current: number; total: number }
-  | { phase: 'done'; imported: number; skipped: number }
+  | { phase: 'calibrating' }
+  | { phase: 'done'; imported: number; skipped: number; streamsLoaded: number; withElevation: number }
   | { phase: 'error'; message: string }
 
 function StravaImportPanel() {
   const { token, credentials, athlete, disconnect } = useStravaStore()
-  const { sessions, addSession } = useAppStore()
+  const { sessions, addSession, profile, setProfile } = useAppStore()
   const [importState, setImportState] = useState<ImportState>({ phase: 'idle' })
+
+  // Stats des sessions déjà chargées
+  const sessionsWithStreams = sessions.filter(s => s.streams?.distance).length
+  const sessionsWithElevation = sessions.filter(s => s.streams?.altitude && s.elevationGain > 50).length
 
   const handleImport = useCallback(async () => {
     if (!token || !credentials) return
-
     try {
-      // 1. Rafraîchir le token si nécessaire
       const freshToken = await refreshTokenIfNeeded(token, credentials)
       useStravaStore.getState().setToken(freshToken)
 
-      // 2. Récupérer la liste des activités
+      // 1. Liste des activités
       setImportState({ phase: 'fetching', loaded: 0 })
       const activities = await fetchStravaActivities(
         freshToken.accessToken,
         (loaded) => setImportState({ phase: 'fetching', loaded }),
       )
 
-      // Filtrer les activités déjà importées
-      const existingIds = new Set(
-        sessions.filter((s) => s.stravaId).map((s) => s.stravaId),
-      )
-      const newActivities = activities.filter((a) => !existingIds.has(a.id))
+      const existingIds = new Set(sessions.filter(s => s.stravaId).map(s => s.stravaId))
+      const newActivities = activities.filter(a => !existingIds.has(a.id))
 
       if (newActivities.length === 0) {
-        setImportState({ phase: 'done', imported: 0, skipped: activities.length })
+        setImportState({ phase: 'done', imported: 0, skipped: activities.length, streamsLoaded: sessionsWithStreams, withElevation: sessionsWithElevation })
         return
       }
 
-      // 3. Récupérer les streams pour chaque nouvelle activité
-      let imported = 0
+      // 2. Streams pour chaque activité (altitude + vitesse = base de la calibration vitesse/pente)
+      const newSessions = []
+      let streamsLoaded = 0
+      let withElevation = 0
+
       for (let i = 0; i < newActivities.length; i++) {
         const activity = newActivities[i]!
-        setImportState({
-          phase: 'streams',
-          current: i + 1,
-          total: newActivities.length,
-        })
+        setImportState({ phase: 'streams', current: i + 1, total: newActivities.length })
 
         const streams = await fetchActivityStreams(activity.id, freshToken.accessToken)
         const session = mapActivityToSession(activity, streams ?? undefined)
         addSession(session)
-        imported++
+        newSessions.push(session)
 
-        // Délai pour éviter le rate-limiting Strava (100 req/15min)
+        if (streams) {
+          streamsLoaded++
+          if (activity.total_elevation_gain > 50) withElevation++
+        }
+
         if (i < newActivities.length - 1) {
-          await new Promise((r) => setTimeout(r, 200))
+          await new Promise(r => setTimeout(r, 200))
         }
       }
 
+      // 3. Calibration automatique : analyse vitesse réelle par % de pente sur toutes les séances
+      setImportState({ phase: 'calibrating' })
+      const allSessions = [...sessions, ...newSessions]
+      const calibrated = calibrateRunner(allSessions, profile)
+      setProfile(calibrated)
+
       setImportState({
         phase: 'done',
-        imported,
+        imported: newActivities.length,
         skipped: activities.length - newActivities.length,
+        streamsLoaded: sessionsWithStreams + streamsLoaded,
+        withElevation: sessionsWithElevation + withElevation,
       })
     } catch (err) {
-      setImportState({
-        phase: 'error',
-        message: err instanceof Error ? err.message : 'Erreur lors de l\'import',
-      })
+      setImportState({ phase: 'error', message: err instanceof Error ? err.message : "Erreur lors de l'import" })
     }
-  }, [token, credentials, sessions, addSession])
+  }, [token, credentials, sessions, addSession, profile, setProfile, sessionsWithStreams, sessionsWithElevation])
 
   if (!athlete || !token) return null
 
-  const isImporting =
-    importState.phase === 'fetching' || importState.phase === 'streams'
+  const isImporting = ['fetching', 'streams', 'calibrating'].includes(importState.phase)
 
   return (
     <div className="space-y-4">
       {/* Profil connecté */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-black/20 border border-white/4 rounded-xl p-3 sm:p-4">
         <div className="flex items-center gap-3 min-w-0">
-          <img
-            src={athlete.profile}
-            alt={athlete.firstname}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-orange-500 shrink-0"
-          />
+          <img src={athlete.profile} alt={athlete.firstname}
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-orange-500 shrink-0" />
           <div className="min-w-0">
-            <div className="text-white font-semibold text-sm truncate">
-              {athlete.firstname} {athlete.lastname}
-            </div>
+            <div className="text-white font-semibold text-sm truncate">{athlete.firstname} {athlete.lastname}</div>
             <div className="text-slate-500 text-xs truncate">
               {athlete.city ?? ''}{athlete.city && athlete.country ? ', ' : ''}{athlete.country ?? ''}
             </div>
           </div>
-          <span className="shrink-0 text-xs px-2 py-0.5 bg-orange-900/40 text-orange-400 rounded-full font-medium">
-            ✅ Connecté
-          </span>
+          <span className="shrink-0 text-xs px-2 py-0.5 bg-orange-900/40 text-orange-400 rounded-full font-medium">✅ Connecté</span>
         </div>
-        <button
-          onClick={disconnect}
-          className="text-xs text-slate-500 hover:text-red-400 transition-colors shrink-0"
-        >
+        <button onClick={disconnect} className="text-xs text-slate-500 hover:text-red-400 transition-colors shrink-0">
           Déconnecter
         </button>
       </div>
+
+      {/* Stats des données disponibles pour la calibration */}
+      {sessions.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="bg-white/3 border border-white/6 rounded-xl p-2.5">
+            <div className="text-slate-200 font-bold text-lg">{sessions.length}</div>
+            <div className="text-slate-500">séances</div>
+          </div>
+          <div className="bg-white/3 border border-white/6 rounded-xl p-2.5">
+            <div className="text-indigo-400 font-bold text-lg">{sessionsWithStreams}</div>
+            <div className="text-slate-500">avec streams</div>
+          </div>
+          <div className="bg-white/3 border border-white/6 rounded-xl p-2.5">
+            <div className="text-orange-400 font-bold text-lg">{sessionsWithElevation}</div>
+            <div className="text-slate-500">avec D+ &gt; 50m</div>
+          </div>
+        </div>
+      )}
+
+      {/* Indicateur qualité calibration */}
+      {sessions.length > 0 && sessionsWithElevation > 0 && (
+        <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-xl p-3 text-xs text-emerald-400 flex items-start gap-2">
+          <span className="shrink-0 mt-0.5">🎯</span>
+          <span>
+            <strong>{sessionsWithElevation} séance{sessionsWithElevation > 1 ? 's' : ''} avec dénivelé</strong> — la vitesse réelle en montée/descente est analysée point par point pour calibrer votre profil.
+            {sessionsWithElevation < 3 && <span className="text-emerald-700 ml-1">Plus vous avez de sorties avec D+, plus la calibration sera précise.</span>}
+          </span>
+        </div>
+      )}
+      {sessions.length > 0 && sessionsWithStreams === 0 && (
+        <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl p-3 text-xs text-amber-400 flex items-start gap-2">
+          <span className="shrink-0">⚠️</span>
+          <span>Aucun stream chargé — importez vos activités pour activer la calibration vitesse/pente.</span>
+        </div>
+      )}
 
       {/* Bouton import */}
       <button
         onClick={() => { void handleImport() }}
         disabled={isImporting}
         className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50
-                   text-white font-semibold text-sm transition-all flex items-center justify-center gap-2"
+                   text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-orange-900/40
+                   flex items-center justify-center gap-2"
       >
         {isImporting ? (
           <>
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            Importation en cours…
+            {importState.phase === 'calibrating' ? 'Calibration du profil…' : 'Importation en cours…'}
           </>
         ) : (
-          '⬇️ Importer mes activités Strava'
+          `⬇️ ${sessions.length > 0 ? 'Mettre à jour mes activités' : 'Importer mes activités Strava'}`
         )}
       </button>
 
-      {/* Barre de progression */}
+      {/* Barres de progression */}
       {importState.phase === 'fetching' && (
-        <ProgressBar
-          label={`Récupération des activités… (${importState.loaded} chargées)`}
-          progress={null}
-        />
+        <ProgressBar label={`Récupération des activités… (${importState.loaded} chargées)`} progress={null} />
       )}
       {importState.phase === 'streams' && (
         <ProgressBar
-          label={`Chargement des streams… (${importState.current}/${importState.total})`}
+          label={`Chargement des streams vitesse/altitude… (${importState.current}/${importState.total})`}
           progress={importState.current / importState.total}
         />
+      )}
+      {importState.phase === 'calibrating' && (
+        <ProgressBar label="Analyse vitesse par % de pente et calibration du profil…" progress={null} />
       )}
 
       {/* Résultat */}
       {importState.phase === 'done' && (
-        <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl p-3 text-sm text-emerald-400">
-          ✅ Import terminé — <strong>{importState.imported}</strong> nouvelle{importState.imported > 1 ? 's' : ''} activité{importState.imported > 1 ? 's' : ''} importée{importState.imported > 1 ? 's' : ''}
-          {importState.skipped > 0 && (
-            <span className="text-slate-500 ml-1">({importState.skipped} déjà présentes)</span>
+        <div className="space-y-2">
+          <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl p-3 text-sm text-emerald-400">
+            ✅{' '}
+            {importState.imported > 0
+              ? <><strong>{importState.imported}</strong> nouvelle{importState.imported > 1 ? 's' : ''} activité{importState.imported > 1 ? 's' : ''} importée{importState.imported > 1 ? 's' : ''}</>
+              : 'Déjà à jour'}
+            {importState.skipped > 0 && <span className="text-slate-500 ml-1">({importState.skipped} déjà présentes)</span>}
+          </div>
+          {importState.imported > 0 && (
+            <div className="bg-indigo-950/40 border border-indigo-800/40 rounded-xl p-3 text-xs text-indigo-300 flex items-start gap-2">
+              <span className="shrink-0">🧠</span>
+              <span>
+                Profil recalibré depuis <strong>{importState.streamsLoaded} séances</strong>
+                {importState.withElevation > 0 && <> dont <strong className="text-orange-400">{importState.withElevation} avec dénivelé</strong> — votre vitesse réelle en montée/descente est maintenant prise en compte.</>}
+                {' '}Consultez l'onglet <strong>Profil coureur</strong> pour voir les valeurs.
+              </span>
+            </div>
           )}
         </div>
       )}
 
       {/* Erreur */}
       {importState.phase === 'error' && (
-        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-3 text-sm text-red-400">
-          ⚠️ {importState.message}
+        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-3 text-sm text-red-400 flex items-start gap-2">
+          <span className="shrink-0">⚠️</span>
+          <span>{importState.message}</span>
         </div>
       )}
     </div>
