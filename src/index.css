@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Fix Leaflet dark mode */
+.leaflet-container {
+  background: #0f172a;
+  font-family: inherit;
+}
+.leaflet-tile-pane {
+  filter: brightness(0.85) saturate(0.8);
+}
+.leaflet-popup-content-wrapper {
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+.leaflet-popup-tip {
+  background: #1e293b;
+}
+.leaflet-popup-content {
+  margin: 10px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.leaflet-control-zoom a {
+  background: #1e293b;
+  color: #94a3b8;
+  border-color: #334155;
+}
+.leaflet-control-zoom a:hover {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+@theme {
+  --color-primary: #6366f1;
+  --color-primary-dark: #4f46e5;
+  --color-surface: #0f172a;
+  --color-surface-2: #1e293b;
+  --color-surface-3: #334155;
+  --color-text: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}

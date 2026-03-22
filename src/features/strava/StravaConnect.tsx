@@ -1,0 +1,439 @@
+/**
+ * Composant de connexion Strava
+ * - Formulaire Client ID / Client Secret saisis par l'utilisateur
+ * - Bouton "Connecter Strava" → redirect OAuth
+ * - Gestion du callback (code dans l'URL)
+ * - Import des activités avec progression
+ */
+
+import { useState, useEffect, useCallback } from 'react'
+import { useStravaStore } from '@/stores/stravaStore'
+import { useAppStore } from '@/stores/appStore'
+import {
+  buildStravaAuthUrl,
+  exchangeCodeForToken,
+  refreshTokenIfNeeded,
+  fetchStravaActivities,
+  fetchActivityStreams,
+  mapActivityToSession,
+} from '@/services/strava.service'
+
+// ─── Hook : gestion du callback OAuth ────────────────────────────────────────
+
+/**
+ * Détecte le ?code= dans l'URL après le redirect Strava
+ * et échange le code contre un token.
+ */
+function useStravaCallback() {
+  const { credentials, setToken, setAthlete } = useStravaStore()
+  const [callbackError, setCallbackError] = useState<string | null>(null)
+  const [isExchanging, setIsExchanging] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    const error = params.get('error')
+
+    if (error) {
+      setCallbackError('Autorisation refusée par Strava.')
+      window.history.replaceState({}, '', window.location.pathname)
+      return
+    }
+
+    if (!code || !credentials) return
+
+    // Nettoyer l'URL immédiatement
+    window.history.replaceState({}, '', window.location.pathname)
+
+    setIsExchanging(true)
+    exchangeCodeForToken(code, credentials)
+      .then(({ token, athlete }) => {
+        setToken(token)
+        setAthlete(athlete)
+      })
+      .catch((err: unknown) => {
+        setCallbackError(err instanceof Error ? err.message : 'Erreur OAuth Strava')
+      })
+      .finally(() => setIsExchanging(false))
+  }, [credentials, setToken, setAthlete])
+
+  return { callbackError, isExchanging }
+}
+
+// ─── Formulaire de credentials ────────────────────────────────────────────────
+
+function CredentialsForm({ onSaved }: { onSaved: () => void }) {
+  const { credentials, setCredentials } = useStravaStore()
+  const [clientId, setClientId] = useState(credentials?.clientId ?? '')
+  const [clientSecret, setClientSecret] = useState(credentials?.clientSecret ?? '')
+  const [showSecret, setShowSecret] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function handleSave() {
+    if (!clientId.trim()) { setError('Le Client ID est requis.'); return }
+    if (!clientSecret.trim()) { setError('Le Client Secret est requis.'); return }
+
+    const redirectUri = `${window.location.origin}/strava/callback`
+    setCredentials({ clientId: clientId.trim(), clientSecret: clientSecret.trim(), redirectUri })
+    setError(null)
+    onSaved()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-950/40 border border-blue-800/50 rounded-xl overflow-hidden">
+        <button
+          onClick={() => setShowGuide((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-blue-300 font-semibold"
+        >
+          <span>📋 Comment obtenir vos clés Strava ?</span>
+          <span className="text-blue-500 text-xs">{showGuide ? '▲ Masquer' : '▼ Afficher'}</span>
+        </button>
+        {showGuide && (
+          <ol className="list-decimal list-inside space-y-1.5 text-blue-400 text-xs px-4 pb-4">
+            <li>Allez sur <a href="https://www.strava.com/settings/api" target="_blank" rel="noreferrer" className="underline hover:text-blue-200">strava.com/settings/api</a></li>
+            <li>Créez une application (nom libre, catégorie "Other")</li>
+            <li>
+              Renseignez <strong className="text-blue-200">Authorization Callback Domain</strong> :{' '}
+              <code className="bg-blue-900/40 px-1 rounded break-all">{window.location.hostname}</code>
+            </li>
+            <li>Copiez le <strong className="text-blue-200">Client ID</strong> et le <strong className="text-blue-200">Client Secret</strong> ci-dessous</li>
+          </ol>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+            Client ID
+          </label>
+          <input
+            type="text"
+            placeholder="Ex : 123456"
+            value={clientId}
+            onChange={(e) => { setClientId(e.target.value); setError(null) }}
+            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm
+                       focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500
+                       transition-colors placeholder:text-slate-600"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+            Client Secret
+          </label>
+          <div className="relative">
+            <input
+              type={showSecret ? 'text' : 'password'}
+              placeholder="••••••••••••••••••••"
+              value={clientSecret}
+              onChange={(e) => { setClientSecret(e.target.value); setError(null) }}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 pr-10 text-white text-sm
+                         focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500
+                         transition-colors placeholder:text-slate-600 w-full"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecret((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+            >
+              {showSecret ? '🙈' : '👁️'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {error && <p className="text-red-400 text-xs">⚠️ {error}</p>}
+
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <button
+          onClick={handleSave}
+          className="w-full sm:w-auto px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white text-sm
+                     font-semibold rounded-xl transition-colors"
+        >
+          Enregistrer et continuer →
+        </button>
+        <p className="text-xs text-slate-600 text-center sm:text-left">
+          Ces informations sont stockées uniquement dans votre navigateur.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Import des activités ─────────────────────────────────────────────────────
+
+type ImportState =
+  | { phase: 'idle' }
+  | { phase: 'fetching'; loaded: number }
+  | { phase: 'streams'; current: number; total: number }
+  | { phase: 'done'; imported: number; skipped: number }
+  | { phase: 'error'; message: string }
+
+function StravaImportPanel() {
+  const { token, credentials, athlete, disconnect } = useStravaStore()
+  const { sessions, addSession } = useAppStore()
+  const [importState, setImportState] = useState<ImportState>({ phase: 'idle' })
+
+  const handleImport = useCallback(async () => {
+    if (!token || !credentials) return
+
+    try {
+      // 1. Rafraîchir le token si nécessaire
+      const freshToken = await refreshTokenIfNeeded(token, credentials)
+      useStravaStore.getState().setToken(freshToken)
+
+      // 2. Récupérer la liste des activités
+      setImportState({ phase: 'fetching', loaded: 0 })
+      const activities = await fetchStravaActivities(
+        freshToken.accessToken,
+        (loaded) => setImportState({ phase: 'fetching', loaded }),
+      )
+
+      // Filtrer les activités déjà importées
+      const existingIds = new Set(
+        sessions.filter((s) => s.stravaId).map((s) => s.stravaId),
+      )
+      const newActivities = activities.filter((a) => !existingIds.has(a.id))
+
+      if (newActivities.length === 0) {
+        setImportState({ phase: 'done', imported: 0, skipped: activities.length })
+        return
+      }
+
+      // 3. Récupérer les streams pour chaque nouvelle activité
+      let imported = 0
+      for (let i = 0; i < newActivities.length; i++) {
+        const activity = newActivities[i]!
+        setImportState({
+          phase: 'streams',
+          current: i + 1,
+          total: newActivities.length,
+        })
+
+        const streams = await fetchActivityStreams(activity.id, freshToken.accessToken)
+        const session = mapActivityToSession(activity, streams ?? undefined)
+        addSession(session)
+        imported++
+
+        // Délai pour éviter le rate-limiting Strava (100 req/15min)
+        if (i < newActivities.length - 1) {
+          await new Promise((r) => setTimeout(r, 200))
+        }
+      }
+
+      setImportState({
+        phase: 'done',
+        imported,
+        skipped: activities.length - newActivities.length,
+      })
+    } catch (err) {
+      setImportState({
+        phase: 'error',
+        message: err instanceof Error ? err.message : 'Erreur lors de l\'import',
+      })
+    }
+  }, [token, credentials, sessions, addSession])
+
+  if (!athlete || !token) return null
+
+  const isImporting =
+    importState.phase === 'fetching' || importState.phase === 'streams'
+
+  return (
+    <div className="space-y-4">
+      {/* Profil connecté */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 rounded-xl p-3 sm:p-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <img
+            src={athlete.profile}
+            alt={athlete.firstname}
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-orange-500 shrink-0"
+          />
+          <div className="min-w-0">
+            <div className="text-white font-semibold text-sm truncate">
+              {athlete.firstname} {athlete.lastname}
+            </div>
+            <div className="text-slate-500 text-xs truncate">
+              {athlete.city ?? ''}{athlete.city && athlete.country ? ', ' : ''}{athlete.country ?? ''}
+            </div>
+          </div>
+          <span className="shrink-0 text-xs px-2 py-0.5 bg-orange-900/40 text-orange-400 rounded-full font-medium">
+            ✅ Connecté
+          </span>
+        </div>
+        <button
+          onClick={disconnect}
+          className="text-xs text-slate-500 hover:text-red-400 transition-colors shrink-0"
+        >
+          Déconnecter
+        </button>
+      </div>
+
+      {/* Bouton import */}
+      <button
+        onClick={() => { void handleImport() }}
+        disabled={isImporting}
+        className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50
+                   text-white font-semibold text-sm transition-all flex items-center justify-center gap-2"
+      >
+        {isImporting ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            Importation en cours…
+          </>
+        ) : (
+          '⬇️ Importer mes activités Strava'
+        )}
+      </button>
+
+      {/* Barre de progression */}
+      {importState.phase === 'fetching' && (
+        <ProgressBar
+          label={`Récupération des activités… (${importState.loaded} chargées)`}
+          progress={null}
+        />
+      )}
+      {importState.phase === 'streams' && (
+        <ProgressBar
+          label={`Chargement des streams… (${importState.current}/${importState.total})`}
+          progress={importState.current / importState.total}
+        />
+      )}
+
+      {/* Résultat */}
+      {importState.phase === 'done' && (
+        <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl p-3 text-sm text-emerald-400">
+          ✅ Import terminé — <strong>{importState.imported}</strong> nouvelle{importState.imported > 1 ? 's' : ''} activité{importState.imported > 1 ? 's' : ''} importée{importState.imported > 1 ? 's' : ''}
+          {importState.skipped > 0 && (
+            <span className="text-slate-500 ml-1">({importState.skipped} déjà présentes)</span>
+          )}
+        </div>
+      )}
+
+      {/* Erreur */}
+      {importState.phase === 'error' && (
+        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-3 text-sm text-red-400">
+          ⚠️ {importState.message}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Barre de progression ─────────────────────────────────────────────────────
+
+function ProgressBar({ label, progress }: { label: string; progress: number | null }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+        {progress !== null ? (
+          <div
+            className="h-full bg-orange-500 rounded-full transition-all duration-300"
+            style={{ width: `${progress * 100}%` }}
+          />
+        ) : (
+          <div className="h-full bg-orange-500 rounded-full animate-pulse w-1/3" />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Composant principal ──────────────────────────────────────────────────────
+
+export function StravaConnect() {
+  const { credentials, token, athlete } = useStravaStore()
+  const { callbackError, isExchanging } = useStravaCallback()
+
+  const [step, setStep] = useState<'credentials' | 'connect'>(
+    credentials ? 'connect' : 'credentials',
+  )
+
+  // Si déjà connecté, aller directement à l'import
+  const isConnected = !!(token && athlete)
+
+  if (isExchanging) {
+    return (
+      <div className="flex items-center gap-3 text-slate-400 py-6 justify-center">
+        <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        <span>Connexion à Strava en cours…</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-slate-800/60 rounded-2xl p-5 space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <StravaLogo />
+        <div>
+          <h3 className="text-white font-semibold">Connexion Strava</h3>
+          <p className="text-slate-500 text-xs">
+            Importez automatiquement vos runs pour calibrer votre profil
+          </p>
+        </div>
+      </div>
+
+      {callbackError && (
+        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-3 text-sm text-red-400">
+          ⚠️ {callbackError}
+        </div>
+      )}
+
+      {/* Étape 1 : credentials */}
+      {!isConnected && step === 'credentials' && (
+        <CredentialsForm onSaved={() => setStep('connect')} />
+      )}
+
+      {/* Étape 2 : bouton OAuth */}
+      {!isConnected && step === 'connect' && credentials && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="text-emerald-400">✓</span>
+            Clés enregistrées (Client ID : {credentials.clientId})
+            <button
+              onClick={() => setStep('credentials')}
+              className="underline hover:text-slate-300 ml-1"
+            >
+              Modifier
+            </button>
+          </div>
+          <a
+            href={buildStravaAuthUrl(credentials)}
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl
+                       bg-orange-600 hover:bg-orange-500 text-white font-semibold text-sm
+                       transition-colors"
+          >
+            <StravaLogo size={18} white />
+            Autoriser l'accès à mes activités Strava
+          </a>
+          <p className="text-xs text-slate-600 text-center">
+            Vous serez redirigé vers Strava puis revenu ici automatiquement.
+          </p>
+        </div>
+      )}
+
+      {/* Connecté : import */}
+      {isConnected && <StravaImportPanel />}
+    </div>
+  )
+}
+
+// ─── Logo Strava SVG ──────────────────────────────────────────────────────────
+
+function StravaLogo({ size = 28, white = false }: { size?: number; white?: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066l-2.084 4.116z"
+        fill={white ? '#fff' : '#FC4C02'}
+      />
+      <path
+        d="M11.094 13.828l2.589-5.111 2.584 5.111h3.065L13.683 3.828 8.035 13.828h3.059z"
+        fill={white ? 'rgba(255,255,255,0.7)' : '#FC4C0280'}
+      />
+    </svg>
+  )
+}
