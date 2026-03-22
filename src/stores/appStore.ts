@@ -76,7 +76,7 @@ type AppState = {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // ── Profil coureur
       profile: DEFAULT_RUNNER_PROFILE,
       setProfile: (profile) => set({ profile }),

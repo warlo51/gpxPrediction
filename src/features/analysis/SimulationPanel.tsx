@@ -216,7 +216,7 @@ function SegmentTable({ result }: { result: SimulationResult }) {
       {/* Cartes mobile */}
       <div className="flex flex-col gap-2 sm:hidden">
         {result.segments.map((s, i) => (
-          <div key={s.segment.id} className="bg-white/3 border border-white/[0.05] rounded-xl p-3 space-y-2">
+          <div key={s.segment.id} className="bg-white/3 border border-white/5 rounded-xl p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-slate-500 text-xs">Segment {i + 1}</span>
               <span className="text-white font-semibold text-sm">{formatDuration(s.estimatedDuration)}</span>
@@ -349,8 +349,8 @@ function SummaryCard({
 export function SimulationPanel() {
   const { track, profile } = useAppStore()
 
-  const [strategyId, setStrategyId] = useState<StrategyId>('conservative')
-  const [effortFactor, setEffortFactor] = useState(0.95)
+  const [strategyId, setStrategyId] = useState<StrategyId>('performance')
+  const [effortFactor, setEffortFactor] = useState(1.0)
   const [applyFatigue, setApplyFatigue] = useState(true)
   const [applyCardiacDrift, setApplyCardiacDrift] = useState(true)
   const [result, setResult] = useState<SimulationResult | null>(null)
@@ -410,7 +410,7 @@ export function SimulationPanel() {
             <div className="flex items-center gap-3">
               <input
                 type="range"
-                min={0.7} max={1.05} step={0.01}
+                min={0.7} max={1.10} step={0.01}
                 value={effortFactor}
                 onChange={(e) => setEffortFactor(parseFloat(e.target.value))}
                 className="flex-1 accent-indigo-500"
@@ -420,7 +420,7 @@ export function SimulationPanel() {
               </span>
             </div>
             <p className="text-xs text-slate-600 mt-1">
-              70 % = très conservateur · 105 % = effort maximal
+              70 % = très conservateur · 100 % = allure calibrée · 110 % = effort maximal
             </p>
           </div>
 
@@ -458,9 +458,22 @@ export function SimulationPanel() {
               <span>Segments</span>
               <span className="text-white">{track.segments.length}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Coureur</span>
-              <span className="text-indigo-300">{profile.name}</span>
+            <div className="border-t border-white/4 pt-1.5 mt-1.5">
+              <div className="font-medium text-slate-300 mb-1">👤 Profil utilisé</div>
+              <div className="flex justify-between">
+                <span>Allure de base</span>
+                <span className="text-indigo-300">
+                  {Math.floor(profile.basePaceSecPerKm / 60)}:{String(profile.basePaceSecPerKm % 60).padStart(2, '0')} /km
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Vitesse plat</span>
+                <span className="text-indigo-300">{(profile.speedModel.flatSpeed * 3.6).toFixed(1)} km/h</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Séances calibrées</span>
+                <span className="text-orange-400">{profile.sessionCount}</span>
+              </div>
             </div>
           </div>
         </div>

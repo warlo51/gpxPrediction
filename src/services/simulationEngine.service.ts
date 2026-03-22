@@ -148,6 +148,10 @@ function computeCalories(
 /**
  * Retourne le facteur d'effort selon la progression sur le parcours (0–1)
  * et la courbe d'effort de la stratégie.
+ *
+ * Les effortCurve représentent des variations relatives à l'effort global :
+ *   1.0 = effort nominal, 0.9 = 90% de l'effort nominal, 1.05 = légère sur-allure
+ * Le baseEffortFactor (slider UI) est le seul levier de scaling global.
  */
 function getPhaseEffortFactor(
   progress: number, // 0 à 1
@@ -165,6 +169,8 @@ function getPhaseEffortFactor(
     phaseFactor = end!
   }
 
+  // baseEffortFactor est appliqué directement, phaseFactor module autour de 1.0
+  // Exemple : baseEffortFactor=0.95, phaseFactor=1.05 → 0.9975
   return baseEffortFactor * phaseFactor
 }
 
@@ -195,13 +201,20 @@ export function runSimulation(
     let effortFactor = getPhaseEffortFactor(progress, strategy, params.effortFactor)
 
     // ── Ajustement montée/descente selon la stratégie
-    if (seg.avgGrade > 3) {
-      effortFactor *= (0.7 + strategy.uphillAggressiveness * 0.6)
-    } else if (seg.avgGrade < -3) {
-      effortFactor *= (1.2 - strategy.downhillRecovery * 0.3)
+    // uphillAggressiveness : 0 = marche prudente, 1 = pousse fort en montée
+    // downhillRecovery : 1 = récupère (lent en descente), 0 = exploite la descente
+    // Ces ajustements sont FAIBLES (±5%) car computeBaseSpeed gère déjà la physique de la pente
+    if (seg.avgGrade > 5) {
+      // Montée : agressivité module légèrement l'effort (+5% si agressif, -3% si conservateur)
+      const uphillBonus = (strategy.uphillAggressiveness - 0.5) * 0.10
+      effortFactor = clamp(effortFactor * (1 + uphillBonus), 0.7, 1.1)
+    } else if (seg.avgGrade < -5) {
+      // Descente : récupération réduit légèrement l'effort (économise de l'énergie)
+      const downhillPenalty = strategy.downhillRecovery * 0.05
+      effortFactor = clamp(effortFactor * (1 - downhillPenalty), 0.8, 1.1)
     }
 
-    effortFactor = clamp(effortFactor, 0.5, 1.1)
+    effortFactor = clamp(effortFactor, 0.6, 1.1)
 
     // ── Fatigue
     const fatigueFactor = computeFatigueFactor(

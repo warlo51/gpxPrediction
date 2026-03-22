@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { useStravaStore } from '@/stores/stravaStore'
 import { calibrateRunner } from '@/services/calibration.service'
+import { RunnerAnalysisPanel } from './RunnerAnalysis'
 
 // ─── Composants UI ────────────────────────────────────────────────────────────
 
@@ -170,20 +171,31 @@ export function RunnerProfileForm() {
             />
           </Field>
 
-          <Field
-            label="Seuil de marche"
-            unit="% pente"
-            hint={
-              walkingThresholdCalibrated
-                ? `Détecté depuis ${sessionsWithElevation} séance${sessionsWithElevation > 1 ? 's' : ''} avec D+`
-                : 'Pente à partir de laquelle vous marchez'
-            }
-          >
-            <NumberInput
-              value={walkingThreshold} min={5} max={50} step={1}
-              onChange={setWalkingThreshold}
-            />
-          </Field>
+          {walkingThresholdCalibrated ? (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+                Seuil de marche <span className="ml-1 text-slate-600 normal-case font-normal">(% pente)</span>
+              </label>
+              <Calibrated
+                label="Seuil de marche détecté"
+                value={`${profile.speedModel.walkingThresholdGrade} %`}
+                sub={`Depuis ${sessionsWithElevation} séance${sessionsWithElevation > 1 ? 's' : ''} avec D+`}
+                color="text-orange-300"
+                source="strava"
+              />
+            </div>
+          ) : (
+            <Field
+              label="Seuil de marche"
+              unit="% pente"
+              hint="Pente à partir de laquelle vous marchez (sera auto-détecté avec plus d'historique)"
+            >
+              <NumberInput
+                value={walkingThreshold} min={5} max={50} step={1}
+                onChange={setWalkingThreshold}
+              />
+            </Field>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-4 border-t border-white/6">
@@ -300,6 +312,15 @@ export function RunnerProfileForm() {
           </div>
         )}
       </div>
+
+      {/* ── Bloc 3 : Analyse poussée ── */}
+      <div className="flex items-center gap-3 mt-2">
+        <div className="flex-1 h-px bg-white/6" />
+        <span className="text-slate-500 text-xs uppercase tracking-widest font-medium">Analyse du profil</span>
+        <div className="flex-1 h-px bg-white/6" />
+      </div>
+
+      <RunnerAnalysisPanel />
     </div>
   )
 }

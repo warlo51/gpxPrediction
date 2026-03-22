@@ -292,16 +292,32 @@ export function calibrateRunner(
     .map((m) => m.flatAvgSpeedMs)
     .filter((v) => v > 0.5 && v < 8)
 
+  // Allure globale brute depuis les séances (s/km → m/s)
   const globalPaces = history
     .filter((s) => s.avgPace > 0)
-    .map((s) => 1000 / s.avgPace) // avgPace en s/km → m/s
+    .map((s) => 1000 / s.avgPace)
 
-  const flatSpeedMs =
-    flatSpeeds.length >= 2
-      ? median(removeOutliers(flatSpeeds))
-      : globalPaces.length > 0
-        ? median(removeOutliers(globalPaces)) * 1.05 // légère correction plat vs allure globale
-        : baseProfile.speedModel.flatSpeed
+  let flatSpeedMs: number
+
+  if (flatSpeeds.length >= 2) {
+    // On a des segments plats détectés via streams → source la plus fiable
+    flatSpeedMs = median(removeOutliers(flatSpeeds))
+  } else if (globalPaces.length > 0) {
+    // Pas de streams → on corrige l'allure globale vers le haut
+    // car elle est ralentie par les montées.
+    // Correction basée sur le D+/km moyen des séances :
+    // ~+8% de correction par 100m D+/km (empirique trail)
+    const avgElevGainPerKm = mean(
+      history
+        .filter((s) => s.distance > 0)
+        .map((s) => (s.elevationGain / (s.distance / 1000)))
+    )
+    // Facteur de correction : D+/km × 0.08 (ex: 50m/km D+ → +4%)
+    const correctionFactor = 1 + Math.min(0.35, (avgElevGainPerKm / 100) * 0.08)
+    flatSpeedMs = median(removeOutliers(globalPaces)) * correctionFactor
+  } else {
+    flatSpeedMs = baseProfile.speedModel.flatSpeed
+  }
 
   const basePaceSecPerKm = Math.round(1000 / flatSpeedMs)
 
