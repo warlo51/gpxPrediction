@@ -181,19 +181,22 @@ export function TrackMap({ track, height = '320px' }: TrackMapProps) {
   }, [hoveredSegmentId])
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl overflow-hidden">
+    <div className="glass rounded-2xl overflow-hidden">
       {/* En-tête */}
-      <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-        <h3 className="text-slate-300 font-semibold text-sm uppercase tracking-wide">
-          🗺️ Carte du parcours
-        </h3>
+      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-1 h-5 rounded-full bg-emerald-500 inline-block" />
+          <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+            Carte du parcours
+          </h3>
+        </div>
         <div className="flex items-center gap-3 text-xs text-slate-500">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-1.5 rounded-full bg-emerald-500" />
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500/80 ring-2 ring-emerald-500/20" />
             Départ
           </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-1.5 rounded-full bg-red-500" />
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500/80 ring-2 ring-red-500/20" />
             Arrivée
           </span>
         </div>
@@ -207,7 +210,7 @@ export function TrackMap({ track, height = '320px' }: TrackMapProps) {
       />
 
       {/* Légende segments */}
-      <div className="px-4 py-3 border-t border-slate-700 grid grid-cols-3 sm:flex sm:flex-wrap gap-2 sm:gap-3">
+      <div className="px-4 py-3 border-t border-white/[0.06] grid grid-cols-3 sm:flex sm:flex-wrap gap-2 sm:gap-3">
         {(Object.keys(SEGMENT_COLORS) as SegmentType[]).map((type) => (
           <div key={type} className="flex items-center gap-1.5 text-xs text-slate-400">
             <span

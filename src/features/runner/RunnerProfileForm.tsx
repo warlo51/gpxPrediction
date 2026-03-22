@@ -23,9 +23,9 @@ function NumberInput({
       value={value}
       min={min} max={max} step={step}
       onChange={(e) => onChange(parseFloat(e.target.value))}
-      className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm
-                 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500
-                 transition-colors w-full"
+      className="bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
+                 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 hover:border-white/20/50
+                 transition-colors w-full hover:border-white/20"
     />
   )
 }
@@ -53,14 +53,14 @@ function Calibrated({
   color?: string; source: 'strava' | 'calculé'
 }) {
   return (
-    <div className="bg-slate-900/60 rounded-xl p-3">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-slate-500 text-xs">{label}</span>
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 hover:bg-white/[0.05] transition-colors">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-slate-500 text-xs leading-tight">{label}</span>
         <span className={[
-          'text-xs px-1.5 py-0.5 rounded-full font-medium',
+          'text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-1',
           source === 'strava'
-            ? 'bg-orange-900/40 text-orange-400'
-            : 'bg-indigo-900/40 text-indigo-400',
+            ? 'bg-orange-900/50 text-orange-400 border border-orange-800/40'
+            : 'bg-indigo-900/50 text-indigo-400 border border-indigo-800/40',
         ].join(' ')}>
           {source === 'strava' ? '⚡ Strava' : '🧮 Calculé'}
         </span>
@@ -119,13 +119,16 @@ export function RunnerProfileForm() {
     <div className="w-full flex flex-col gap-6">
 
       {/* ── Bloc 1 : Saisie manuelle ── */}
-      <div className="bg-slate-800/60 rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="text-white font-bold text-lg">🏃 Profil coureur</h2>
-            <p className="text-slate-500 text-xs mt-0.5">
-              Seules les données que l'application ne peut pas déduire sont à renseigner.
-            </p>
+      <div className="glass rounded-2xl p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-lg">🏃</div>
+            <div>
+              <h2 className="text-white font-bold text-base sm:text-lg">Profil coureur</h2>
+              <p className="text-slate-500 text-xs mt-0.5">
+                Seules les données non déductibles sont à renseigner.
+              </p>
+            </div>
           </div>
           {athlete && (
             <div className="flex items-center gap-2 text-xs text-orange-400 bg-orange-900/20 px-3 py-1.5 rounded-full">
@@ -141,8 +144,8 @@ export function RunnerProfileForm() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm
-                         focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500
+              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm
+                         focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 hover:border-white/20
                          transition-colors w-full"
             />
           </Field>
@@ -172,7 +175,7 @@ export function RunnerProfileForm() {
           </Field>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-4 border-t border-slate-700">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-4 border-t border-white/[0.06]">
           <button
             onClick={() => {
               setName(profile.name)
@@ -208,11 +211,14 @@ export function RunnerProfileForm() {
       </div>
 
       {/* ── Bloc 2 : Données calibrées (lecture seule) ── */}
-      <div className="bg-slate-800/60 rounded-2xl p-6">
+      <div className="glass rounded-2xl p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-slate-300 font-semibold text-sm uppercase tracking-wide">
-            Données calibrées automatiquement
-          </h3>
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-5 rounded-full bg-orange-500 inline-block" />
+            <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+              Données calibrées automatiquement
+            </h3>
+          </div>
           {!hasHistory && (
             <span className="text-xs text-slate-600 italic">
               Importez des séances pour améliorer la précision
@@ -274,7 +280,7 @@ export function RunnerProfileForm() {
 
         {/* Hint si pas d'historique */}
         {!hasHistory && (
-          <div className="mt-4 bg-slate-900/40 rounded-xl p-3 text-xs text-slate-500 flex items-start gap-2">
+          <div className="mt-4 bg-black/20 border border-white/[0.04] rounded-xl p-3 text-xs text-slate-500 flex items-start gap-2">
             <span className="text-indigo-400 mt-0.5">💡</span>
             <span>
               Connectez votre compte Strava dans l'onglet <strong className="text-slate-400">Historique</strong> pour que

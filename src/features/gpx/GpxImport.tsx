@@ -65,7 +65,7 @@ export function GpxImport({ onTrackLoaded }: GpxImportProps) {
   const isParsing = status.state === 'parsing'
 
   return (
-    <div className="w-full max-w-xl mx-auto">
+    <div className="w-full">
       {/* Zone de drop */}
       <div
         onDrop={handleDrop}
@@ -75,34 +75,33 @@ export function GpxImport({ onTrackLoaded }: GpxImportProps) {
           'relative border-2 border-dashed rounded-2xl p-6 sm:p-10 text-center transition-all duration-200 cursor-pointer',
           isDragging
             ? 'border-indigo-400 bg-indigo-950/40 scale-[1.02]'
-            : 'border-slate-600 bg-slate-800/50 hover:border-slate-400 hover:bg-slate-800',
+            : 'border-slate-700/60 bg-slate-900/30 hover:border-indigo-600/50 hover:bg-indigo-950/20',
           isParsing ? 'pointer-events-none opacity-60' : '',
         ].join(' ')}
         onClick={() => document.getElementById('gpx-file-input')?.click()}
       >
-        <input
-          id="gpx-file-input"
-          type="file"
-          accept=".gpx"
-          className="hidden"
-          onChange={handleInputChange}
-        />
+        <input id="gpx-file-input" type="file" accept=".gpx" className="hidden" onChange={handleInputChange} />
 
         {isParsing ? (
           <div className="flex flex-col items-center gap-3 text-slate-400">
             <div className="w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-            <span>Analyse du fichier GPX…</span>
+            <span className="text-sm">Analyse du fichier GPX…</span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 sm:gap-3">
-            <div className="text-4xl sm:text-5xl">📂</div>
-            <div className="text-slate-200 font-medium text-base sm:text-lg">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-950/60 border border-indigo-800/40
+                            flex items-center justify-center text-2xl sm:text-3xl mb-1">
+              📂
+            </div>
+            <div className="text-slate-200 font-semibold text-base sm:text-lg">
               {isDragging ? 'Relâchez pour importer' : 'Glissez votre fichier GPX ici'}
             </div>
             <div className="text-slate-500 text-sm">
-              ou <span className="text-indigo-400 underline">cliquez pour sélectionner</span>
+              ou <span className="text-indigo-400 underline underline-offset-2">cliquez pour sélectionner</span>
             </div>
-            <div className="text-slate-600 text-xs mt-1">Format .gpx uniquement</div>
+            <div className="mt-1 text-slate-600 text-xs px-3 py-1 bg-slate-800/60 rounded-full border border-slate-700/50">
+              Format .gpx uniquement
+            </div>
           </div>
         )}
       </div>

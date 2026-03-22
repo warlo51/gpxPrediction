@@ -181,11 +181,13 @@ export function ElevationChart({ track }: ElevationChartProps) {
         />
       </div>
 
-      {/* Graphique */}
-      <div className="bg-slate-800/60 rounded-2xl p-4">
-        <h3 className="text-slate-300 font-semibold mb-4 text-sm uppercase tracking-wide">
-          Profil altimétrique
-        </h3>
+      <div className="mt-4 glass rounded-2xl p-4 sm:p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-1 h-5 rounded-full bg-violet-500 inline-block" />
+          <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wide">
+            Détail des segments ({track.segments.length})
+          </h3>
+        </div>
         <ResponsiveContainer width="100%" height={260}>
           <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
@@ -288,7 +290,7 @@ export function ElevationChart({ track }: ElevationChartProps) {
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-xs text-slate-400">
             <thead>
-              <tr className="text-slate-500 border-b border-slate-700">
+              <tr className="text-slate-500 border-b border-white/[0.06]">
                 <th className="text-left pb-2 pr-4">#</th>
                 <th className="text-left pb-2 pr-4">Type</th>
                 <th className="text-right pb-2 pr-4">Distance</th>
@@ -304,8 +306,8 @@ export function ElevationChart({ track }: ElevationChartProps) {
                   onMouseEnter={() => setHoveredSegmentId(seg.id)}
                   onMouseLeave={() => setHoveredSegmentId(null)}
                   className={[
-                    'border-b border-slate-800 transition-colors cursor-pointer',
-                    hoveredSegmentId === seg.id ? 'bg-indigo-900/20' : 'hover:bg-slate-800/40',
+                    'border-b border-white/[0.04] transition-colors cursor-pointer',
+                    hoveredSegmentId === seg.id ? 'bg-indigo-900/20' : 'hover:bg-white/[0.03]',
                   ].join(' ')}
                 >
                   <td className="py-1.5 pr-4 text-slate-600">{seg.index + 1}</td>
@@ -334,21 +336,15 @@ export function ElevationChart({ track }: ElevationChartProps) {
 }
 
 function StatCard({
-  icon,
-  label,
-  value,
-  color = 'text-white',
+  icon, label, value, color = 'text-white',
 }: {
-  icon: string
-  label: string
-  value: string
-  color?: string
+  icon: string; label: string; value: string; color?: string
 }) {
   return (
-    <div className="bg-slate-800/60 rounded-xl p-3 text-center">
-      <div className="text-xl mb-1">{icon}</div>
+    <div className="glass rounded-xl p-3 text-center hover:scale-[1.02] transition-transform duration-200">
+      <div className="text-xl sm:text-2xl mb-1">{icon}</div>
       <div className="text-slate-500 text-xs mb-1">{label}</div>
-      <div className={`font-bold text-sm ${color}`}>{value}</div>
+      <div className={`font-bold text-sm sm:text-base ${color}`}>{value}</div>
     </div>
   )
 }

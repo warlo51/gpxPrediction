@@ -31,7 +31,7 @@ function StrategySelector({
             'text-left p-3 sm:p-4 rounded-xl border-2 transition-all duration-200',
             selected === strategy.id
               ? 'border-current bg-slate-800'
-              : 'border-slate-700 bg-slate-800/40 hover:border-slate-500',
+              : 'border-slate-700 bg-white/[0.03] hover:border-slate-500',
           ].join(' ')}
           style={selected === strategy.id ? { borderColor: strategy.color } : {}}
         >
@@ -61,15 +61,14 @@ function ResultSummary({ result }: { result: SimulationResult }) {
 
   return (
     <div
-      className="rounded-2xl border p-5 bg-slate-800/60"
-      style={{ borderColor: `${strategy?.color ?? '#6366f1'}40` }}
+      className="glass rounded-2xl border p-4 sm:p-5"
+      style={{ borderColor: `${strategy?.color ?? '#6366f1'}30` }}
     >
-      <div
-        className="text-sm font-semibold mb-4 flex items-center gap-2"
-        style={{ color: strategy?.color ?? '#6366f1' }}
-      >
-        <span>📊</span>
-        <span>Résultats — Stratégie {strategy?.name}</span>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-5 rounded-full inline-block" style={{ backgroundColor: strategy?.color ?? '#6366f1' }} />
+        <div className="text-sm font-semibold" style={{ color: strategy?.color ?? '#6366f1' }}>
+          Résultats — Stratégie {strategy?.name}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
@@ -99,7 +98,7 @@ function ResultSummary({ result }: { result: SimulationResult }) {
 
       {/* Allure et FC moyennes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="bg-slate-900/60 rounded-xl p-3">
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
           <div className="text-xs text-slate-500 mb-1">Allure moyenne estimée</div>
           <div className="text-white font-bold">
             {formatPace(
@@ -113,7 +112,7 @@ function ResultSummary({ result }: { result: SimulationResult }) {
             {formatPace(Math.max(...result.segments.map((s) => s.paceRange.max)))}
           </div>
         </div>
-        <div className="bg-slate-900/60 rounded-xl p-3">
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
           <div className="text-xs text-slate-500 mb-1">FC moyenne estimée</div>
           <div className="text-white font-bold">
             {Math.round(
@@ -150,10 +149,13 @@ function PaceChart({ result }: { result: SimulationResult }) {
   }))
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-4">
-      <h3 className="text-slate-300 font-semibold text-sm uppercase tracking-wide mb-4">
-        Allure cible par segment (s/km)
-      </h3>
+    <div className="glass rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-5 rounded-full inline-block shrink-0" style={{ backgroundColor: color }} />
+        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          Allure cible par segment (s/km)
+        </h3>
+      </div>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -203,15 +205,18 @@ function PaceChart({ result }: { result: SimulationResult }) {
 
 function SegmentTable({ result }: { result: SimulationResult }) {
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-4">
-      <h3 className="text-slate-300 font-semibold text-sm uppercase tracking-wide mb-3">
-        Détail par segment
-      </h3>
+    <div className="glass rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-1 h-5 rounded-full bg-violet-500 inline-block" />
+        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          Détail par segment
+        </h3>
+      </div>
 
       {/* Cartes mobile */}
       <div className="flex flex-col gap-2 sm:hidden">
         {result.segments.map((s, i) => (
-          <div key={s.segment.id} className="bg-slate-900/50 rounded-xl p-3 space-y-2">
+          <div key={s.segment.id} className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-slate-500 text-xs">Segment {i + 1}</span>
               <span className="text-white font-semibold text-sm">{formatDuration(s.estimatedDuration)}</span>
@@ -255,7 +260,7 @@ function SegmentTable({ result }: { result: SimulationResult }) {
       <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-xs text-slate-400">
           <thead>
-            <tr className="text-slate-500 border-b border-slate-700">
+            <tr className="text-slate-500 border-b border-white/[0.06]">
               <th className="text-left pb-2 pr-3">#</th>
               <th className="text-right pb-2 pr-3">Dist.</th>
               <th className="text-right pb-2 pr-3">Pente</th>
@@ -268,7 +273,7 @@ function SegmentTable({ result }: { result: SimulationResult }) {
           </thead>
           <tbody>
             {result.segments.map((s, i) => (
-              <tr key={s.segment.id} className="border-b border-slate-800/80 hover:bg-slate-800/40 transition-colors">
+              <tr key={s.segment.id} className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
                 <td className="py-1.5 pr-3 text-slate-600">{i + 1}</td>
                 <td className="py-1.5 pr-3 text-right">{(s.segment.distance / 1000).toFixed(2)} km</td>
                 <td className="py-1.5 pr-3 text-right font-medium" style={{ color: s.segment.avgGrade > 0 ? '#f97316' : s.segment.avgGrade < 0 ? '#38bdf8' : '#94a3b8' }}>
@@ -316,22 +321,23 @@ function FatigueBar({ value }: { value: number }) {
 function SummaryCard({
   icon, label, value, accent, warn,
 }: {
-  icon: string
-  label: string
-  value: string
-  accent?: boolean
-  warn?: boolean
+  icon: string; label: string; value: string; accent?: boolean; warn?: boolean
 }) {
   return (
-    <div className="bg-slate-900/60 rounded-xl p-3 text-center">
+    <div className={[
+      'rounded-xl p-3 sm:p-4 text-center border transition-all duration-200',
+      accent
+        ? 'bg-indigo-950/40 border-indigo-800/40'
+        : warn
+          ? 'bg-amber-950/30 border-amber-800/30'
+          : 'bg-white/[0.03] border-white/[0.06]',
+    ].join(' ')}>
       <div className="text-xl mb-1">{icon}</div>
       <div className="text-slate-500 text-xs mb-1">{label}</div>
-      <div
-        className={[
-          'font-bold text-sm',
-          accent ? 'text-indigo-300' : warn ? 'text-amber-400' : 'text-white',
-        ].join(' ')}
-      >
+      <div className={[
+        'font-bold text-sm sm:text-base',
+        accent ? 'text-indigo-300' : warn ? 'text-amber-400' : 'text-white',
+      ].join(' ')}>
         {value}
       </div>
     </div>
@@ -380,8 +386,11 @@ export function SimulationPanel() {
   return (
     <div className="w-full flex flex-col gap-6">
       {/* Configuration */}
-      <div className="bg-slate-800/60 rounded-2xl p-6">
-        <h2 className="text-white font-bold text-base sm:text-lg mb-4">⚙️ Configuration de la simulation</h2>
+      <div className="glass rounded-2xl p-4 sm:p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <span className="w-1 h-5 rounded-full bg-indigo-500 inline-block" />
+          <h2 className="text-white font-bold text-base sm:text-lg">Configuration de la simulation</h2>
+        </div>
 
         {/* Stratégie */}
         <div className="mb-6">
@@ -435,7 +444,7 @@ export function SimulationPanel() {
           </div>
 
           {/* Résumé parcours */}
-          <div className="bg-slate-900/40 rounded-xl p-3 text-xs text-slate-400 space-y-1.5">
+          <div className="bg-black/20 border border-white/[0.04] rounded-xl p-3 text-xs text-slate-400 space-y-1.5">
             <div className="font-medium text-slate-300 mb-2">📋 Parcours chargé</div>
             <div className="flex justify-between">
               <span>Distance</span>

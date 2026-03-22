@@ -113,8 +113,8 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
             placeholder="Ex : 123456"
             value={clientId}
             onChange={(e) => { setClientId(e.target.value); setError(null) }}
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm
-                       focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500
+            className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm
+                       focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 hover:border-white/20
                        transition-colors placeholder:text-slate-600"
           />
         </div>
@@ -128,8 +128,8 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
               placeholder="••••••••••••••••••••"
               value={clientSecret}
               onChange={(e) => { setClientSecret(e.target.value); setError(null) }}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 pr-10 text-white text-sm
-                         focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500
+              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 pr-10 text-white text-sm
+                         focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 hover:border-white/20
                          transition-colors placeholder:text-slate-600 w-full"
             />
             <button
@@ -243,7 +243,7 @@ function StravaImportPanel() {
   return (
     <div className="space-y-4">
       {/* Profil connecté */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 rounded-xl p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-black/20 border border-white/[0.04] rounded-xl p-3 sm:p-4">
         <div className="flex items-center gap-3 min-w-0">
           <img
             src={athlete.profile}
@@ -327,14 +327,14 @@ function ProgressBar({ label, progress }: { label: string; progress: number | nu
   return (
     <div className="space-y-1.5">
       <div className="text-xs text-slate-400">{label}</div>
-      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
         {progress !== null ? (
           <div
-            className="h-full bg-orange-500 rounded-full transition-all duration-300"
+            className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-300"
             style={{ width: `${progress * 100}%` }}
           />
         ) : (
-          <div className="h-full bg-orange-500 rounded-full animate-pulse w-1/3" />
+          <div className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full animate-pulse w-1/3" />
         )}
       </div>
     </div>
@@ -364,21 +364,29 @@ export function StravaConnect() {
   }
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-5 space-y-5">
+    <div className="glass rounded-2xl p-4 sm:p-5 space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <StravaLogo />
+        <div className="w-10 h-10 rounded-xl bg-orange-950/60 border border-orange-800/40 flex items-center justify-center shrink-0">
+          <StravaLogo size={22} />
+        </div>
         <div>
           <h3 className="text-white font-semibold">Connexion Strava</h3>
           <p className="text-slate-500 text-xs">
             Importez automatiquement vos runs pour calibrer votre profil
           </p>
         </div>
+        {isConnected && (
+          <span className="ml-auto text-xs px-2 py-1 rounded-full bg-emerald-900/40 border border-emerald-700/40 text-emerald-400 font-medium shrink-0">
+            ✅ Connecté
+          </span>
+        )}
       </div>
 
       {callbackError && (
-        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-3 text-sm text-red-400">
-          ⚠️ {callbackError}
+        <div className="bg-red-900/30 border border-red-800/50 rounded-xl p-3 text-sm text-red-400 flex items-start gap-2">
+          <span className="shrink-0">⚠️</span>
+          {callbackError}
         </div>
       )}
 
@@ -402,9 +410,11 @@ export function StravaConnect() {
           </div>
           <a
             href={buildStravaAuthUrl(credentials)}
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl
-                       bg-orange-600 hover:bg-orange-500 text-white font-semibold text-sm
-                       transition-colors"
+            className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl
+                       bg-gradient-to-r from-orange-600 to-orange-500
+                       hover:from-orange-500 hover:to-orange-400
+                       text-white font-semibold text-sm
+                       transition-all duration-200 hover:shadow-lg hover:shadow-orange-900/40"
           >
             <StravaLogo size={18} white />
             Autoriser l'accès à mes activités Strava

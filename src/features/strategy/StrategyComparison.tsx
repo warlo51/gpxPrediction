@@ -52,10 +52,13 @@ function ComparisonTable({
   )
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-4 overflow-x-auto">
-      <h3 className="text-slate-300 font-semibold text-sm uppercase tracking-wide mb-4">
-        Comparaison des stratégies
-      </h3>
+    <div className="glass rounded-2xl p-4 sm:p-5 overflow-x-auto">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-5 rounded-full bg-indigo-500 inline-block" />
+        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          Comparaison des stratégies
+        </h3>
+      </div>
 
       {/* Cartes mobile */}
       <div className="flex flex-col gap-3 sm:hidden">
@@ -99,7 +102,7 @@ function ComparisonTable({
       {/* Tableau desktop */}
       <table className="hidden sm:table w-full text-sm">
         <thead>
-          <tr className="text-slate-500 text-xs border-b border-slate-700">
+          <tr className="text-slate-500 text-xs border-b border-white/[0.06]">
             <th className="text-left pb-3 pr-4">Stratégie</th>
             <th className="text-right pb-3 pr-4">Temps estimé</th>
             <th className="text-right pb-3 pr-4">Allure moy.</th>
@@ -120,8 +123,8 @@ function ComparisonTable({
                 <tr
                   key={c.strategy.id}
                   className={[
-                    'border-b border-slate-800 transition-colors',
-                    isRecommended ? 'bg-slate-700/30' : 'hover:bg-slate-800/40',
+                    'border-b border-white/[0.04] transition-colors',
+                    isRecommended ? 'bg-white/[0.04]' : 'hover:bg-white/[0.03]',
                   ].join(' ')}
                 >
                   <td className="py-3 pr-4">
@@ -195,10 +198,13 @@ function PaceOverlayChart({ comparisons }: { comparisons: StrategyComparison[] }
   })
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-4">
-      <h3 className="text-slate-300 font-semibold text-sm uppercase tracking-wide mb-4">
-        Superposition des allures par segment (s/km)
-      </h3>
+    <div className="glass rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-5 rounded-full bg-indigo-500 inline-block shrink-0" />
+        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          Superposition des allures par segment (s/km)
+        </h3>
+      </div>
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -279,10 +285,13 @@ function HROverlayChart({ comparisons }: { comparisons: StrategyComparison[] }) 
   })
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-4">
-      <h3 className="text-slate-300 font-semibold text-sm uppercase tracking-wide mb-4">
-        Superposition des FC cibles par segment (bpm)
-      </h3>
+    <div className="glass rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-5 rounded-full bg-rose-500 inline-block shrink-0" />
+        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          Superposition des FC cibles par segment (bpm)
+        </h3>
+      </div>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -351,44 +360,48 @@ function RecommendationCard({
 
   return (
     <div
-      className="rounded-2xl border-2 p-5"
-      style={{ borderColor: recommended.strategy.color }}
+      className="glass rounded-2xl border p-4 sm:p-5 relative overflow-hidden"
+      style={{ borderColor: `${recommended.strategy.color}40` }}
     >
-      <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
+      {/* Halo coloré en fond */}
+      <div
+        className="absolute -top-12 -right-12 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none"
+        style={{ backgroundColor: recommended.strategy.color }}
+      />
+
+      <div className="relative flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
         <div>
-          <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">
-            ✨ Stratégie recommandée pour ce profil
+          <div className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full mb-2"
+            style={{ backgroundColor: `${recommended.strategy.color}20`, color: recommended.strategy.color }}>
+            <span>✨</span> Recommandée pour votre profil
           </div>
-          <h3
-            className="text-xl font-bold"
-            style={{ color: recommended.strategy.color }}
-          >
+          <h3 className="text-xl font-bold" style={{ color: recommended.strategy.color }}>
             {recommended.strategy.name}
           </h3>
           <p className="text-slate-400 text-sm mt-1">{recommended.strategy.description}</p>
         </div>
-        <div className="text-center shrink-0">
-          <div className="text-3xl font-bold text-white">
+        <div className="text-center shrink-0 bg-white/[0.03] border border-white/[0.06] rounded-2xl px-5 py-3">
+          <div className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
             {formatDuration(recommended.result.totalDuration)}
           </div>
           <div className="text-xs text-slate-500 mt-0.5">temps estimé</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 text-sm">
-        <div className="bg-slate-900/50 rounded-xl p-3 text-center">
+      <div className="relative grid grid-cols-3 gap-2 sm:gap-3 text-sm">
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
           <div className="text-slate-500 text-xs mb-1">Allure moyenne</div>
           <div className="text-indigo-300 font-semibold">
             {formatPace(recommended.avgPaceSec)}
           </div>
         </div>
-        <div className="bg-slate-900/50 rounded-xl p-3 text-center">
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
           <div className="text-slate-500 text-xs mb-1">Fatigue estimée</div>
           <div className="text-amber-400 font-semibold">
             {(recommended.avgFatigue * 100).toFixed(1)} %
           </div>
         </div>
-        <div className="bg-slate-900/50 rounded-xl p-3 text-center">
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
           <div className="text-slate-500 text-xs mb-1">vs. plus rapide</div>
           <div className="text-slate-300 font-semibold">
             {isAlsoFastest ? '—' : `+${formatDuration(timeDiff)}`}

@@ -74,8 +74,11 @@ function SessionForm({ onAdd }: { onAdd: (s: TrainingSession) => void }) {
   }
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-5">
-      <h3 className="text-slate-200 font-semibold mb-4">➕ Ajouter une séance</h3>
+    <div className="glass rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-5 rounded-full bg-emerald-500 inline-block" />
+        <h3 className="text-slate-200 font-semibold">Ajouter une séance</h3>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
         <FormField label="Nom de la séance">
@@ -149,17 +152,20 @@ function SessionList({
   }
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-4">
-      <h3 className="text-slate-300 font-semibold text-sm uppercase tracking-wide mb-3">
-        Historique ({sessions.length} séance{sessions.length > 1 ? 's' : ''})
-      </h3>
+    <div className="glass rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-1 h-5 rounded-full bg-indigo-500 inline-block" />
+        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          Historique ({sessions.length} séance{sessions.length > 1 ? 's' : ''})
+        </h3>
+      </div>
 
       {/* Vue cartes sur mobile */}
       <div className="flex flex-col gap-2 sm:hidden">
         {[...sessions]
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
           .map((s) => (
-            <div key={s.id} className="bg-slate-900/60 rounded-xl p-3 flex flex-col gap-2">
+            <div key={s.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex flex-col gap-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="text-slate-200 font-medium text-sm truncate">{s.name}</div>
@@ -192,7 +198,7 @@ function SessionList({
       <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-xs text-slate-400">
           <thead>
-            <tr className="text-slate-500 border-b border-slate-700">
+            <tr className="text-slate-500 border-b border-white/[0.06]">
               <th className="text-left pb-2 pr-3">Séance</th>
               <th className="text-left pb-2 pr-3">Date</th>
               <th className="text-right pb-2 pr-3">Distance</th>
@@ -208,7 +214,7 @@ function SessionList({
             {[...sessions]
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .map((s) => (
-                <tr key={s.id} className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors">
+                <tr key={s.id} className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
                   <td className="py-2 pr-3 text-slate-200 font-medium max-w-35 truncate">{s.name}</td>
                   <td className="py-2 pr-3">{new Date(s.date).toLocaleDateString('fr-FR')}</td>
                   <td className="py-2 pr-3 text-right">{(s.distance / 1000).toFixed(1)} km</td>
@@ -261,15 +267,18 @@ function CalibrationPanel() {
   }
 
   return (
-    <div className="bg-slate-800/60 rounded-2xl p-5">
-      <h3 className="text-slate-200 font-semibold mb-4">🧠 Calibration automatique</h3>
+    <div className="glass rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-5 rounded-full bg-violet-500 inline-block" />
+        <h3 className="text-slate-200 font-semibold">Calibration automatique</h3>
+      </div>
 
       {/* Résumé de la qualité */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <MiniStat label="Séances" value={`${summary.sessionCount}`} />
         <MiniStat label="Avec streams" value={`${summary.sessionsWithStreams}`} />
         <MiniStat label="Avec FC" value={`${summary.sessionsWithHR}`} />
-        <div className="bg-slate-900/60 rounded-xl p-3 text-center">
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
           <div className="text-slate-500 text-xs mb-1">Confiance</div>
           <div className={`font-bold text-sm ${confidenceColor[summary.confidence] ?? 'text-white'}`}>
             {confidenceLabel[summary.confidence] ?? summary.confidence}
@@ -279,7 +288,7 @@ function CalibrationPanel() {
 
       {/* Profil actuel */}
       {sessions.length > 0 && (
-        <div className="bg-slate-900/40 rounded-xl p-4 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-slate-400">
+        <div className="bg-black/20 border border-white/[0.04] rounded-xl p-4 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-slate-400">
           <div>
             <span className="text-slate-500 block">Vitesse plat calibrée</span>
             <span className="text-white font-semibold">
@@ -395,8 +404,8 @@ function TextInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm
-                 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500
+      className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm
+                 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 hover:border-white/20
                  transition-colors w-full placeholder:text-slate-600"
     />
   )
@@ -404,7 +413,7 @@ function TextInput({
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-slate-900/60 rounded-xl p-3 text-center">
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
       <div className="text-slate-500 text-xs mb-1">{label}</div>
       <div className="text-white font-bold text-sm">{value}</div>
     </div>
