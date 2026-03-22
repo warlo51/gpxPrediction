@@ -53,7 +53,7 @@ function Calibrated({
   color?: string; source: 'strava' | 'calculé'
 }) {
   return (
-    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 hover:bg-white/[0.05] transition-colors">
+    <div className="bg-white/3 border border-white/6 rounded-xl p-3 hover:bg-white/[0.05] transition-colors">
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-slate-500 text-xs leading-tight">{label}</span>
         <span className={[
@@ -175,7 +175,7 @@ export function RunnerProfileForm() {
           </Field>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-4 border-t border-white/[0.06]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-4 border-t border-white/6">
           <button
             onClick={() => {
               setName(profile.name)
@@ -280,7 +280,7 @@ export function RunnerProfileForm() {
 
         {/* Hint si pas d'historique */}
         {!hasHistory && (
-          <div className="mt-4 bg-black/20 border border-white/[0.04] rounded-xl p-3 text-xs text-slate-500 flex items-start gap-2">
+          <div className="mt-4 bg-black/20 border border-white/4 rounded-xl p-3 text-xs text-slate-500 flex items-start gap-2">
             <span className="text-indigo-400 mt-0.5">💡</span>
             <span>
               Connectez votre compte Strava dans l'onglet <strong className="text-slate-400">Historique</strong> pour que

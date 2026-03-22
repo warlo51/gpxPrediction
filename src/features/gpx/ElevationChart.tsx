@@ -290,7 +290,7 @@ export function ElevationChart({ track }: ElevationChartProps) {
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-xs text-slate-400">
             <thead>
-              <tr className="text-slate-500 border-b border-white/[0.06]">
+              <tr className="text-slate-500 border-b border-white/6">
                 <th className="text-left pb-2 pr-4">#</th>
                 <th className="text-left pb-2 pr-4">Type</th>
                 <th className="text-right pb-2 pr-4">Distance</th>
@@ -306,8 +306,8 @@ export function ElevationChart({ track }: ElevationChartProps) {
                   onMouseEnter={() => setHoveredSegmentId(seg.id)}
                   onMouseLeave={() => setHoveredSegmentId(null)}
                   className={[
-                    'border-b border-white/[0.04] transition-colors cursor-pointer',
-                    hoveredSegmentId === seg.id ? 'bg-indigo-900/20' : 'hover:bg-white/[0.03]',
+                    'border-b border-white/4 transition-colors cursor-pointer',
+                    hoveredSegmentId === seg.id ? 'bg-indigo-900/20' : 'hover:bg-white/3',
                   ].join(' ')}
                 >
                   <td className="py-1.5 pr-4 text-slate-600">{seg.index + 1}</td>

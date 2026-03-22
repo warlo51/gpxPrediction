@@ -102,7 +102,7 @@ function ComparisonTable({
       {/* Tableau desktop */}
       <table className="hidden sm:table w-full text-sm">
         <thead>
-          <tr className="text-slate-500 text-xs border-b border-white/[0.06]">
+          <tr className="text-slate-500 text-xs border-b border-white/6">
             <th className="text-left pb-3 pr-4">Stratégie</th>
             <th className="text-right pb-3 pr-4">Temps estimé</th>
             <th className="text-right pb-3 pr-4">Allure moy.</th>
@@ -123,8 +123,8 @@ function ComparisonTable({
                 <tr
                   key={c.strategy.id}
                   className={[
-                    'border-b border-white/[0.04] transition-colors',
-                    isRecommended ? 'bg-white/[0.04]' : 'hover:bg-white/[0.03]',
+                    'border-b border-white/4 transition-colors',
+                    isRecommended ? 'bg-white/4' : 'hover:bg-white/3',
                   ].join(' ')}
                 >
                   <td className="py-3 pr-4">
@@ -380,7 +380,7 @@ function RecommendationCard({
           </h3>
           <p className="text-slate-400 text-sm mt-1">{recommended.strategy.description}</p>
         </div>
-        <div className="text-center shrink-0 bg-white/[0.03] border border-white/[0.06] rounded-2xl px-5 py-3">
+        <div className="text-center shrink-0 bg-white/3 border border-white/6 rounded-2xl px-5 py-3">
           <div className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
             {formatDuration(recommended.result.totalDuration)}
           </div>
@@ -389,19 +389,19 @@ function RecommendationCard({
       </div>
 
       <div className="relative grid grid-cols-3 gap-2 sm:gap-3 text-sm">
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
+        <div className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
           <div className="text-slate-500 text-xs mb-1">Allure moyenne</div>
           <div className="text-indigo-300 font-semibold">
             {formatPace(recommended.avgPaceSec)}
           </div>
         </div>
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
+        <div className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
           <div className="text-slate-500 text-xs mb-1">Fatigue estimée</div>
           <div className="text-amber-400 font-semibold">
             {(recommended.avgFatigue * 100).toFixed(1)} %
           </div>
         </div>
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
+        <div className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
           <div className="text-slate-500 text-xs mb-1">vs. plus rapide</div>
           <div className="text-slate-300 font-semibold">
             {isAlsoFastest ? '—' : `+${formatDuration(timeDiff)}`}

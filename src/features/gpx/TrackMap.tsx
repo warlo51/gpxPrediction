@@ -183,7 +183,7 @@ export function TrackMap({ track, height = '320px' }: TrackMapProps) {
   return (
     <div className="glass rounded-2xl overflow-hidden">
       {/* En-tête */}
-      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-white/6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="w-1 h-5 rounded-full bg-emerald-500 inline-block" />
           <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
@@ -210,7 +210,7 @@ export function TrackMap({ track, height = '320px' }: TrackMapProps) {
       />
 
       {/* Légende segments */}
-      <div className="px-4 py-3 border-t border-white/[0.06] grid grid-cols-3 sm:flex sm:flex-wrap gap-2 sm:gap-3">
+      <div className="px-4 py-3 border-t border-white/6 grid grid-cols-3 sm:flex sm:flex-wrap gap-2 sm:gap-3">
         {(Object.keys(SEGMENT_COLORS) as SegmentType[]).map((type) => (
           <div key={type} className="flex items-center gap-1.5 text-xs text-slate-400">
             <span

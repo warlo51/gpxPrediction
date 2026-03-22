@@ -165,7 +165,7 @@ function SessionList({
         {[...sessions]
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
           .map((s) => (
-            <div key={s.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex flex-col gap-2">
+            <div key={s.id} className="bg-white/3 border border-white/6 rounded-xl p-3 flex flex-col gap-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="text-slate-200 font-medium text-sm truncate">{s.name}</div>
@@ -198,7 +198,7 @@ function SessionList({
       <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-xs text-slate-400">
           <thead>
-            <tr className="text-slate-500 border-b border-white/[0.06]">
+            <tr className="text-slate-500 border-b border-white/6">
               <th className="text-left pb-2 pr-3">Séance</th>
               <th className="text-left pb-2 pr-3">Date</th>
               <th className="text-right pb-2 pr-3">Distance</th>
@@ -214,7 +214,7 @@ function SessionList({
             {[...sessions]
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .map((s) => (
-                <tr key={s.id} className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
+                <tr key={s.id} className="border-b border-white/4 hover:bg-white/3 transition-colors">
                   <td className="py-2 pr-3 text-slate-200 font-medium max-w-35 truncate">{s.name}</td>
                   <td className="py-2 pr-3">{new Date(s.date).toLocaleDateString('fr-FR')}</td>
                   <td className="py-2 pr-3 text-right">{(s.distance / 1000).toFixed(1)} km</td>
@@ -278,7 +278,7 @@ function CalibrationPanel() {
         <MiniStat label="Séances" value={`${summary.sessionCount}`} />
         <MiniStat label="Avec streams" value={`${summary.sessionsWithStreams}`} />
         <MiniStat label="Avec FC" value={`${summary.sessionsWithHR}`} />
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
+        <div className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
           <div className="text-slate-500 text-xs mb-1">Confiance</div>
           <div className={`font-bold text-sm ${confidenceColor[summary.confidence] ?? 'text-white'}`}>
             {confidenceLabel[summary.confidence] ?? summary.confidence}
@@ -288,7 +288,7 @@ function CalibrationPanel() {
 
       {/* Profil actuel */}
       {sessions.length > 0 && (
-        <div className="bg-black/20 border border-white/[0.04] rounded-xl p-4 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-slate-400">
+        <div className="bg-black/20 border border-white/4 rounded-xl p-4 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-slate-400">
           <div>
             <span className="text-slate-500 block">Vitesse plat calibrée</span>
             <span className="text-white font-semibold">
@@ -413,7 +413,7 @@ function TextInput({
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
+    <div className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
       <div className="text-slate-500 text-xs mb-1">{label}</div>
       <div className="text-white font-bold text-sm">{value}</div>
     </div>

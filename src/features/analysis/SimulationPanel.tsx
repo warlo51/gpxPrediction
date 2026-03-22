@@ -31,7 +31,7 @@ function StrategySelector({
             'text-left p-3 sm:p-4 rounded-xl border-2 transition-all duration-200',
             selected === strategy.id
               ? 'border-current bg-slate-800'
-              : 'border-slate-700 bg-white/[0.03] hover:border-slate-500',
+              : 'border-slate-700 bg-white/3 hover:border-slate-500',
           ].join(' ')}
           style={selected === strategy.id ? { borderColor: strategy.color } : {}}
         >
@@ -98,7 +98,7 @@ function ResultSummary({ result }: { result: SimulationResult }) {
 
       {/* Allure et FC moyennes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+        <div className="bg-white/3 border border-white/6 rounded-xl p-3">
           <div className="text-xs text-slate-500 mb-1">Allure moyenne estimée</div>
           <div className="text-white font-bold">
             {formatPace(
@@ -112,7 +112,7 @@ function ResultSummary({ result }: { result: SimulationResult }) {
             {formatPace(Math.max(...result.segments.map((s) => s.paceRange.max)))}
           </div>
         </div>
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+        <div className="bg-white/3 border border-white/6 rounded-xl p-3">
           <div className="text-xs text-slate-500 mb-1">FC moyenne estimée</div>
           <div className="text-white font-bold">
             {Math.round(
@@ -216,7 +216,7 @@ function SegmentTable({ result }: { result: SimulationResult }) {
       {/* Cartes mobile */}
       <div className="flex flex-col gap-2 sm:hidden">
         {result.segments.map((s, i) => (
-          <div key={s.segment.id} className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-3 space-y-2">
+          <div key={s.segment.id} className="bg-white/3 border border-white/[0.05] rounded-xl p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-slate-500 text-xs">Segment {i + 1}</span>
               <span className="text-white font-semibold text-sm">{formatDuration(s.estimatedDuration)}</span>
@@ -260,7 +260,7 @@ function SegmentTable({ result }: { result: SimulationResult }) {
       <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-xs text-slate-400">
           <thead>
-            <tr className="text-slate-500 border-b border-white/[0.06]">
+            <tr className="text-slate-500 border-b border-white/6">
               <th className="text-left pb-2 pr-3">#</th>
               <th className="text-right pb-2 pr-3">Dist.</th>
               <th className="text-right pb-2 pr-3">Pente</th>
@@ -273,7 +273,7 @@ function SegmentTable({ result }: { result: SimulationResult }) {
           </thead>
           <tbody>
             {result.segments.map((s, i) => (
-              <tr key={s.segment.id} className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
+              <tr key={s.segment.id} className="border-b border-white/4 hover:bg-white/3 transition-colors">
                 <td className="py-1.5 pr-3 text-slate-600">{i + 1}</td>
                 <td className="py-1.5 pr-3 text-right">{(s.segment.distance / 1000).toFixed(2)} km</td>
                 <td className="py-1.5 pr-3 text-right font-medium" style={{ color: s.segment.avgGrade > 0 ? '#f97316' : s.segment.avgGrade < 0 ? '#38bdf8' : '#94a3b8' }}>
@@ -330,7 +330,7 @@ function SummaryCard({
         ? 'bg-indigo-950/40 border-indigo-800/40'
         : warn
           ? 'bg-amber-950/30 border-amber-800/30'
-          : 'bg-white/[0.03] border-white/[0.06]',
+          : 'bg-white/3 border-white/6',
     ].join(' ')}>
       <div className="text-xl mb-1">{icon}</div>
       <div className="text-slate-500 text-xs mb-1">{label}</div>
@@ -444,7 +444,7 @@ export function SimulationPanel() {
           </div>
 
           {/* Résumé parcours */}
-          <div className="bg-black/20 border border-white/[0.04] rounded-xl p-3 text-xs text-slate-400 space-y-1.5">
+          <div className="bg-black/20 border border-white/4 rounded-xl p-3 text-xs text-slate-400 space-y-1.5">
             <div className="font-medium text-slate-300 mb-2">📋 Parcours chargé</div>
             <div className="flex justify-between">
               <span>Distance</span>
