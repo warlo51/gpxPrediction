@@ -26,6 +26,8 @@ export type StravaActivity = {
   name: string
   type: string
   start_date: string
+  /** Date locale de l'activité (fuseau horaire du coureur) */
+  start_date_local?: string
   /** Distance en mètres */
   distance: number
   /** Durée en secondes */

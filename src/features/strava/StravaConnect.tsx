@@ -169,6 +169,101 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
   )
 }
 
+// ─── Sélecteur de jours de la semaine ────────────────────────────────────────
+
+const DAYS = [
+  { key: 1, label: 'Lun', full: 'Lundi' },
+  { key: 2, label: 'Mar', full: 'Mardi' },
+  { key: 3, label: 'Mer', full: 'Mercredi' },
+  { key: 4, label: 'Jeu', full: 'Jeudi' },
+  { key: 5, label: 'Ven', full: 'Vendredi' },
+  { key: 6, label: 'Sam', full: 'Samedi' },
+  { key: 0, label: 'Dim', full: 'Dimanche' },
+]
+
+function DayFilter({
+  selected,
+  onChange,
+}: {
+  selected: Set<number>
+  onChange: (days: Set<number>) => void
+}) {
+  function toggle(day: number) {
+    const next = new Set(selected)
+    if (next.has(day)) next.delete(day)
+    else next.add(day)
+    onChange(next)
+  }
+
+  function selectAll() { onChange(new Set(DAYS.map(d => d.key))) }
+  function clearAll() { onChange(new Set()) }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+          Filtrer par jour de la semaine
+        </span>
+        <div className="flex gap-2 text-xs">
+          <button
+            onClick={selectAll}
+            className="text-slate-500 hover:text-white transition-colors"
+          >
+            Tous
+          </button>
+          <span className="text-slate-700">·</span>
+          <button
+            onClick={clearAll}
+            className="text-slate-500 hover:text-white transition-colors"
+          >
+            Aucun
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {DAYS.map(d => {
+          const active = selected.has(d.key)
+          return (
+            <button
+              key={d.key}
+              onClick={() => toggle(d.key)}
+              title={d.full}
+              className={[
+                'rounded-lg py-2 text-xs font-semibold transition-all duration-150 select-none',
+                active
+                  ? 'bg-orange-600 text-white shadow-md shadow-orange-900/40'
+                  : 'bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300 border border-white/6',
+              ].join(' ')}
+            >
+              {d.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {selected.size === 0 && (
+        <p className="text-xs text-amber-400/80">
+          ⚠️ Aucun jour sélectionné — sélectionnez au moins un jour ou tous pour importer.
+        </p>
+      )}
+      {selected.size > 0 && selected.size < 7 && (
+        <p className="text-xs text-slate-600">
+          Seules les activités du {[...selected]
+            .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+            .map(k => DAYS.find(d => d.key === k)!.full)
+            .join(', ')} seront importées.
+        </p>
+      )}
+      {selected.size === 7 && (
+        <p className="text-xs text-slate-600">
+          Tous les jours — aucun filtre appliqué.
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ─── Import des activités ─────────────────────────────────────────────────────
 
 type ImportState =
@@ -176,13 +271,17 @@ type ImportState =
   | { phase: 'fetching'; loaded: number }
   | { phase: 'streams'; current: number; total: number }
   | { phase: 'calibrating' }
-  | { phase: 'done'; imported: number; skipped: number; streamsLoaded: number; withElevation: number }
+  | { phase: 'done'; imported: number; skipped: number; filteredOut: number; streamsLoaded: number; withElevation: number }
   | { phase: 'error'; message: string }
 
 function StravaImportPanel() {
   const { token, credentials, athlete, disconnect } = useStravaStore()
   const { sessions, addSession, profile, setProfile } = useAppStore()
   const [importState, setImportState] = useState<ImportState>({ phase: 'idle' })
+  // Tous les jours sélectionnés par défaut
+  const [selectedDays, setSelectedDays] = useState<Set<number>>(
+    new Set(DAYS.map(d => d.key))
+  )
 
   // Stats des sessions déjà chargées
   const sessionsWithStreams = sessions.filter(s => s.streams?.distance).length
@@ -190,6 +289,8 @@ function StravaImportPanel() {
 
   const handleImport = useCallback(async () => {
     if (!token || !credentials) return
+    // Bloquer si aucun jour sélectionné
+    if (selectedDays.size === 0) return
     try {
       const freshToken = await refreshTokenIfNeeded(token, credentials)
       useStravaStore.getState().setToken(freshToken)
@@ -202,14 +303,32 @@ function StravaImportPanel() {
       )
 
       const existingIds = new Set(sessions.filter(s => s.stravaId).map(s => s.stravaId))
-      const newActivities = activities.filter(a => !existingIds.has(a.id))
+
+      // Filtrer par jour de la semaine si moins de 7 jours sélectionnés
+      const activitiesFiltered = selectedDays.size === 7
+        ? activities
+        : activities.filter(a => {
+            const day = new Date(a.start_date_local ?? a.start_date).getDay()
+            return selectedDays.has(day)
+          })
+
+      const newActivities = activitiesFiltered.filter(a => !existingIds.has(a.id))
+      const skippedAlreadyPresent = activities.filter(a => existingIds.has(a.id)).length
+      const filteredOut = activities.length - activitiesFiltered.length
 
       if (newActivities.length === 0) {
-        setImportState({ phase: 'done', imported: 0, skipped: activities.length, streamsLoaded: sessionsWithStreams, withElevation: sessionsWithElevation })
+        setImportState({
+          phase: 'done',
+          imported: 0,
+          skipped: skippedAlreadyPresent,
+          filteredOut,
+          streamsLoaded: sessionsWithStreams,
+          withElevation: sessionsWithElevation,
+        })
         return
       }
 
-      // 2. Streams pour chaque activité (altitude + vitesse = base de la calibration vitesse/pente)
+      // 2. Streams pour chaque activité
       const newSessions = []
       let streamsLoaded = 0
       let withElevation = 0
@@ -233,7 +352,7 @@ function StravaImportPanel() {
         }
       }
 
-      // 3. Calibration automatique : analyse vitesse réelle par % de pente sur toutes les séances
+      // 3. Calibration automatique
       setImportState({ phase: 'calibrating' })
       const allSessions = [...sessions, ...newSessions]
       const calibrated = calibrateRunner(allSessions, profile)
@@ -242,14 +361,15 @@ function StravaImportPanel() {
       setImportState({
         phase: 'done',
         imported: newActivities.length,
-        skipped: activities.length - newActivities.length,
+        skipped: skippedAlreadyPresent,
+        filteredOut,
         streamsLoaded: sessionsWithStreams + streamsLoaded,
         withElevation: sessionsWithElevation + withElevation,
       })
     } catch (err) {
       setImportState({ phase: 'error', message: err instanceof Error ? err.message : "Erreur lors de l'import" })
     }
-  }, [token, credentials, sessions, addSession, profile, setProfile, sessionsWithStreams, sessionsWithElevation])
+  }, [token, credentials, sessions, addSession, profile, setProfile, sessionsWithStreams, sessionsWithElevation, selectedDays])
 
   if (!athlete || !token) return null
 
@@ -310,10 +430,15 @@ function StravaImportPanel() {
         </div>
       )}
 
+      {/* Filtre par jour de la semaine */}
+      <div className="bg-black/20 border border-white/4 rounded-xl p-3 sm:p-4">
+        <DayFilter selected={selectedDays} onChange={setSelectedDays} />
+      </div>
+
       {/* Bouton import */}
       <button
         onClick={() => { void handleImport() }}
-        disabled={isImporting}
+        disabled={isImporting || selectedDays.size === 0}
         className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50
                    text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-orange-900/40
                    flex items-center justify-center gap-2"
@@ -323,8 +448,15 @@ function StravaImportPanel() {
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             {importState.phase === 'calibrating' ? 'Calibration du profil…' : 'Importation en cours…'}
           </>
-        ) : (
+        ) : selectedDays.size === 0 ? (
+          '⚠️ Sélectionnez au moins un jour'
+        ) : selectedDays.size === 7 ? (
           `⬇️ ${sessions.length > 0 ? 'Mettre à jour mes activités' : 'Importer mes activités Strava'}`
+        ) : (
+          `⬇️ Importer les activités — ${[...selectedDays]
+            .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+            .map(k => DAYS.find(d => d.key === k)!.label)
+            .join(', ')}`
         )}
       </button>
 
@@ -351,6 +483,11 @@ function StravaImportPanel() {
               ? <><strong>{importState.imported}</strong> nouvelle{importState.imported > 1 ? 's' : ''} activité{importState.imported > 1 ? 's' : ''} importée{importState.imported > 1 ? 's' : ''}</>
               : 'Déjà à jour'}
             {importState.skipped > 0 && <span className="text-slate-500 ml-1">({importState.skipped} déjà présentes)</span>}
+            {importState.filteredOut > 0 && (
+              <span className="text-slate-500 ml-1">
+                · {importState.filteredOut} ignorée{importState.filteredOut > 1 ? 's' : ''} (hors jours sélectionnés)
+              </span>
+            )}
           </div>
           {importState.imported > 0 && (
             <div className="bg-indigo-950/40 border border-indigo-800/40 rounded-xl p-3 text-xs text-indigo-300 flex items-start gap-2">
