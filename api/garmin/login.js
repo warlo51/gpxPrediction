@@ -19,9 +19,11 @@ const UA_BROWSER = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) Apple
 const UA_MOBILE  = 'com.garmin.android.apps.connectmobile'
 
 // ── Regex ─────────────────────────────────────────────────────────────────────
-const CSRF_RE    = /name="_csrf"\s+value="(.+?)"/
-const TICKET_RE  = /ticket=([^"&\s<]+)/
-const MFA_RE     = /name="mfa-code"|id="mfa-code"|enterMFACode|MFA|verificationCode/i
+const CSRF_RE       = /name="_csrf"\s+value="(.+?)"/
+const TICKET_RE     = /ticket=([^"&\s<]+)/
+const MFA_RE        = /name="mfa-code"|id="mfa-code"|enterMFACode|verificationCode/i
+const MFA_ACTION_RE = /action="([^"]*mfa[^"]*)"|action="([^"]*signin[^"]*)"/i
+const TITLE_RE      = /<title>([^<]*)<\/title>/i
 
 // ── OAuth helpers ─────────────────────────────────────────────────────────────
 async function getOauthConsumer() {
@@ -98,28 +100,43 @@ async function doLogin(username, password, mfaCode, savedState) {
 
   // ── Étape MFA : soumettre le code ─────────────────────────────────────────
   if (mfaCode && savedState) {
+    const mfaSubmitUrl = savedState.mfaUrl ?? signinFull
+
     const params = new URLSearchParams()
     params.append('mfa-code', mfaCode.trim())
     params.append('embed', 'true')
     params.append('_csrf', savedState.csrf)
     params.append('fromPage', 'setupEnterMfaCode')
 
-    const r = await client.post(signinFull, params.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': UA_BROWSER,
-        'Cookie': jar.header(),
-        'Origin': 'https://sso.garmin.com',
-        'Referer': signinFull,
-      },
-    })
-    jar.extract(r)
-    const html = typeof r.data === 'string' ? r.data : JSON.stringify(r.data)
+    let mfaResponse
+    try {
+      mfaResponse = await client.post(mfaSubmitUrl, params.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': UA_BROWSER,
+          'Cookie': jar.header(),
+          'Origin': 'https://sso.garmin.com',
+          'Referer': mfaSubmitUrl,
+        },
+        // Ne pas lancer d'exception sur les 4xx pour qu'on puisse lire le HTML
+        validateStatus: () => true,
+      })
+    } catch (e) {
+      return {
+        error: `Erreur réseau MFA: ${e.message}`,
+        debug: `URL: ${mfaSubmitUrl} | cookies: ${jar.header().slice(0, 100)}`,
+      }
+    }
+
+    jar.extract(mfaResponse)
+    const html = typeof mfaResponse.data === 'string' ? mfaResponse.data : JSON.stringify(mfaResponse.data)
+    const title = TITLE_RE.exec(html)?.[1] ?? ''
+
     const ticket = TICKET_RE.exec(html)?.[1]
     if (!ticket) {
       return {
         error: 'Code MFA invalide ou expiré',
-        debug: html.slice(0, 400),
+        debug: `Status: ${mfaResponse.status} | Title: ${title} | URL: ${mfaSubmitUrl} | HTML: ${html.slice(0, 500)}`,
       }
     }
     return { ticket }
@@ -173,10 +190,18 @@ async function doLogin(username, password, mfaCode, savedState) {
   // Page MFA ?
   const mfaCsrf = CSRF_RE.exec(html)?.[1]
   if (MFA_RE.test(html) && mfaCsrf) {
+    // Chercher l'URL d'action du formulaire MFA dans le HTML
+    const actionMatch = MFA_ACTION_RE.exec(html)
+    const mfaAction = actionMatch?.[1] ?? actionMatch?.[2] ?? null
+    const mfaUrl = mfaAction
+      ? (mfaAction.startsWith('http') ? mfaAction : `https://sso.garmin.com${mfaAction}`)
+      : signinFull  // fallback
+
     return {
       mfa_required: true,
       csrf: mfaCsrf,
       cookies: jar.toJSON(),
+      mfaUrl,
     }
   }
 
@@ -214,7 +239,7 @@ export default async function handler(req, res) {
     if (result.mfa_required) {
       return res.status(200).json({
         mfa_required: true,
-        state: { csrf: result.csrf, cookies: result.cookies },
+        state: { csrf: result.csrf, cookies: result.cookies, mfaUrl: result.mfaUrl },
       })
     }
 
