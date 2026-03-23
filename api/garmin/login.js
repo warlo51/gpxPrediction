@@ -1,12 +1,12 @@
 // api/garmin/login.js
-// Vercel Serverless Function — Node.js runtime
+// Vercel Serverless Function — Node.js ESM runtime
 // POST /api/garmin/login
 // Body: { username: string, password: string }
 // Returns: { oauth1Token, oauth2Token, displayName, profileImageUrl }
 
-const { GarminConnect } = require('garmin-connect')
+import { GarminConnect } from 'garmin-connect'
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -30,9 +30,7 @@ module.exports = async function handler(req, res) {
 
     // Récupérer le profil utilisateur
     let profile = null
-    try {
-      profile = await client.getUserProfile()
-    } catch (_) { /* optionnel */ }
+    try { profile = await client.getUserProfile() } catch (_) { /* optionnel */ }
 
     return res.status(200).json({
       oauth1Token: oauth1,
@@ -43,7 +41,7 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     const message = err?.message ?? 'Erreur de connexion Garmin'
     // Erreur d'auth spécifique
-    if (message.includes('403') || message.includes('401') || message.includes('password')) {
+    if (message.includes('403') || message.includes('401')) {
       return res.status(401).json({ error: 'Identifiants Garmin incorrects' })
     }
     if (message.includes('429')) {

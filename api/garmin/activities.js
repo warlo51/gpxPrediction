@@ -1,12 +1,10 @@
 // api/garmin/activities.js
-// Vercel Serverless Function — Node.js runtime
-// GET /api/garmin/activities?limit=50&start=0
-// Headers: x-garmin-oauth1, x-garmin-oauth2 (JSON stringifiés)
-// Returns: { activities: IActivity[] }
+// Vercel Serverless Function — Node.js ESM runtime
+// GET /api/garmin/activities?limit=100&start=0
 
-const { GarminConnect } = require('garmin-connect')
+import { GarminConnect } from 'garmin-connect'
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-garmin-oauth1, x-garmin-oauth2')
@@ -33,7 +31,6 @@ module.exports = async function handler(req, res) {
 
     const activities = await client.getActivities(start, limit)
 
-    // Filtrer uniquement les activités running/trail
     const RUNNING_TYPES = ['running', 'trail_running', 'treadmill_running', 'virtual_running', 'track_running']
     const runs = activities.filter(a =>
       RUNNING_TYPES.includes((a.activityType?.typeKey ?? '').toLowerCase())
