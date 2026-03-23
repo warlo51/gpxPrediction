@@ -4,7 +4,8 @@
 // Body: { username: string, password: string }
 // Returns: { oauth1Token, oauth2Token, displayName, profileImageUrl }
 
-import { GarminConnect } from 'garmin-connect'
+import pkg from 'garmin-connect'
+const { GarminConnect } = pkg
 
 export default async function handler(req, res) {
   // CORS
