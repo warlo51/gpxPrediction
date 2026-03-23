@@ -60,14 +60,19 @@ export async function garminLogin(
   username: string,
   password: string,
   mfaCode?: string,
+  mfaState?: unknown,
 ): Promise<
-  | { mfa_required: true }
+  | { mfa_required: true; state: unknown }
   | { oauth1: GarminOAuth1Token; oauth2: GarminOAuth2Token; profile: GarminProfile }
 > {
+  const body: Record<string, unknown> = { username, password }
+  if (mfaCode) body.mfaCode = mfaCode
+  if (mfaState) body.state = mfaState
+
   const res = await fetch(`${API_BASE}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password, ...(mfaCode ? { mfaCode } : {}) }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
@@ -77,6 +82,7 @@ export async function garminLogin(
 
   const data = await res.json() as {
     mfa_required?: boolean
+    state?: unknown
     oauth1Token?: GarminOAuth1Token
     oauth2Token?: GarminOAuth2Token
     displayName?: string
@@ -85,7 +91,7 @@ export async function garminLogin(
   }
 
   if (data.error) throw new Error(data.error)
-  if (data.mfa_required) return { mfa_required: true }
+  if (data.mfa_required) return { mfa_required: true, state: data.state }
 
   return {
     oauth1: data.oauth1Token!,

@@ -20,6 +20,7 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
   const [showPwd, setShowPwd] = useState(false)
   const [mfaCode, setMfaCode] = useState('')
   const [mfaRequired, setMfaRequired] = useState(false)
+  const [mfaState, setMfaState] = useState<unknown>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -39,11 +40,12 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
         username.trim(),
         password,
         mfaRequired ? mfaCode.trim() : undefined,
+        mfaRequired ? mfaState : undefined,
       )
 
       if ('mfa_required' in result) {
-        // Garmin demande un code email
         setMfaRequired(true)
+        setMfaState(result.state)  // ← sauvegarder les cookies/csrf pour l'étape 2
         setLoading(false)
         return
       }
@@ -139,7 +141,7 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
             />
           </div>
           <button
-            onClick={() => { setMfaRequired(false); setMfaCode(''); setError(null) }}
+            onClick={() => { setMfaRequired(false); setMfaCode(''); setMfaState(null); setError(null) }}
             className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
           >
             ← Recommencer avec d'autres identifiants
