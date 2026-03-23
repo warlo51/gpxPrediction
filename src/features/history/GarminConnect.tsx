@@ -113,10 +113,10 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
           <div className="bg-sky-950/40 border border-sky-800/50 rounded-xl p-3 text-sm text-sky-300 flex items-start gap-2">
             <span className="shrink-0 text-lg">📧</span>
             <div>
-              <div className="font-semibold mb-0.5">Code de vérification requis</div>
+              <div className="font-semibold mb-0.5">Entrez le code déjà reçu par email</div>
               <div className="text-sky-500 text-xs">
-                Garmin a envoyé un code à <strong className="text-sky-400">{username}</strong>.
-                Consultez votre boîte mail et saisissez le code ci-dessous.
+                Garmin vous a envoyé un code à <strong className="text-sky-400">{username}</strong> lors de la première tentative.
+                Saisissez <strong className="text-sky-300">ce même code</strong> — n'en attendez pas un nouveau.
               </div>
             </div>
           </div>
