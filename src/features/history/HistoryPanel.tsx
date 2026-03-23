@@ -7,6 +7,8 @@ import { useAppStore } from '@/stores/appStore'
 import { calibrateRunner, getCalibrationSummary } from '@/services/calibration.service'
 import { formatPace } from '@/services/simulationEngine.service'
 import { StravaConnect } from '@/features/strava/StravaConnect'
+import { FitImport } from './FitImport'
+import { GarminConnect } from './GarminConnect'
 import type { TrainingSession } from '@/types'
 
 // ─── Formulaire d'ajout de séance ────────────────────────────────────────────
@@ -172,7 +174,7 @@ function SessionList({
                   <div className="text-slate-500 text-xs">{new Date(s.date).toLocaleDateString('fr-FR')}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <SourceBadge source={s.source} />
+                  <SourceBadge source={s.source} id={s.id} />
                   <button onClick={() => onRemove(s.id)} className="text-slate-600 hover:text-red-400 transition-colors text-xs">✕</button>
                 </div>
               </div>
@@ -226,7 +228,7 @@ function SessionList({
                   <td className="py-2 pr-3 text-right text-rose-300">
                     {s.avgHeartRate ? `${Math.round(s.avgHeartRate)} bpm` : '—'}
                   </td>
-                  <td className="py-2 pr-3 text-right"><SourceBadge source={s.source} /></td>
+                  <td className="py-2 pr-3 text-right"><SourceBadge source={s.source} id={s.id} /></td>
                   <td className="py-2 text-right">
                     <button onClick={() => onRemove(s.id)} className="text-slate-600 hover:text-red-400 transition-colors">✕</button>
                   </td>
@@ -363,6 +365,8 @@ export function HistoryPanel() {
   return (
     <div className="w-full flex flex-col gap-6">
       <StravaConnect />
+      <GarminConnect />
+      <FitImport />
       <CalibrationPanel />
       <SessionForm onAdd={addSession} />
       <SessionList sessions={sessions} onRemove={removeSession} />
@@ -420,7 +424,24 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function SourceBadge({ source }: { source: TrainingSession['source'] }) {
+function SourceBadge({ source, id }: { source: TrainingSession['source']; id?: string }) {
+  const isGarminConnect = source === 'gpx' && id?.startsWith('garmin-')
+  const isGarminFit = source === 'gpx' && id?.startsWith('fit-')
+
+  if (isGarminConnect) {
+    return (
+      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-900/50 text-sky-400">
+        🏔️ Garmin
+      </span>
+    )
+  }
+  if (isGarminFit) {
+    return (
+      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-900/30 text-sky-500">
+        📂 FIT
+      </span>
+    )
+  }
   const styles: Record<TrainingSession['source'], string> = {
     manual: 'bg-slate-700 text-slate-300',
     strava: 'bg-orange-900/50 text-orange-400',

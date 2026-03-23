@@ -83,6 +83,8 @@ export function RunnerProfileForm() {
   const [restingHR, setRestingHR] = useState(profile.heartRateModel.restingHR)
   const [walkingThreshold, setWalkingThreshold] = useState(profile.speedModel.walkingThresholdGrade)
   const [saved, setSaved] = useState(false)
+  const [recalibrated, setRecalibrated] = useState(false)
+  const [isRecalibrating, setIsRecalibrating] = useState(false)
 
   const hasHistory = sessions.length > 0
 
@@ -146,16 +148,33 @@ export function RunnerProfileForm() {
   }
 
   function handleRecalibrate() {
-    const recalibrated = calibrateRunner(sessions, {
+    if (sessions.length === 0) return
+    setIsRecalibrating(true)
+
+    // Construire le profil de base avec les valeurs manuelles actuelles
+    const baseForCalibration = {
       ...profile,
       name,
       energyModel: { ...profile.energyModel, weightKg },
       heartRateModel: { ...profile.heartRateModel, restingHR },
       speedModel: { ...profile.speedModel, walkingThresholdGrade: walkingThreshold },
-    })
-    setProfile(recalibrated)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    }
+
+    // Lancer la calibration (légèrement différé pour laisser le spinner s'afficher)
+    setTimeout(() => {
+      const recalibratedProfile = calibrateRunner(sessions, baseForCalibration)
+      setProfile(recalibratedProfile)
+
+      // Resynchroniser les états locaux avec le profil recalibré
+      setName(recalibratedProfile.name)
+      setWeightKg(recalibratedProfile.energyModel.weightKg)
+      setRestingHR(recalibratedProfile.heartRateModel.restingHR)
+      setWalkingThreshold(recalibratedProfile.speedModel.walkingThresholdGrade)
+
+      setIsRecalibrating(false)
+      setRecalibrated(true)
+      setTimeout(() => setRecalibrated(false), 3000)
+    }, 50)
   }
 
   return (
@@ -286,10 +305,26 @@ export function RunnerProfileForm() {
             {hasHistory && (
               <button
                 onClick={handleRecalibrate}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold bg-orange-600 hover:bg-orange-500
-                           text-white transition-colors"
+                disabled={isRecalibrating}
+                className={[
+                  'w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2',
+                  recalibrated
+                    ? 'bg-emerald-600 text-white'
+                    : isRecalibrating
+                      ? 'bg-orange-800 text-orange-200 opacity-80 cursor-wait'
+                      : 'bg-orange-600 hover:bg-orange-500 text-white',
+                ].join(' ')}
               >
-                🔁 Recalibrer depuis l'historique
+                {isRecalibrating ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Calibration…
+                  </>
+                ) : recalibrated ? (
+                  '✅ Profil recalibré !'
+                ) : (
+                  `🔁 Recalibrer depuis l'historique (${sessions.length} séances)`
+                )}
               </button>
             )}
             <button
