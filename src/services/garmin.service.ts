@@ -88,6 +88,7 @@ export async function garminLogin(
     displayName?: string
     profileImageUrl?: string | null
     error?: string
+    debug?: string
   }
 
   if (data.error) throw new Error(data.debug ? `${data.error} — ${data.debug}` : data.error)
