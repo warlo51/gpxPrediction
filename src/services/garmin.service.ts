@@ -90,7 +90,7 @@ export async function garminLogin(
     error?: string
   }
 
-  if (data.error) throw new Error(data.error)
+  if (data.error) throw new Error(data.debug ? `${data.error} — ${data.debug}` : data.error)
   if (data.mfa_required) return { mfa_required: true, state: data.state }
 
   return {
