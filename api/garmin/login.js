@@ -1,90 +1,196 @@
 // api/garmin/login.js
-// Implémentation manuelle du flow login Garmin Connect + MFA
-// URLs mises à jour pour le nouveau SSO Garmin (2025+)
+// Flow Garmin Connect OAuth — compatible 2025/2026
+// Basé sur le flow documenté par garth (https://github.com/matin/garth)
+// Utilise l'API JSON de Garmin SSO (plus de scraping HTML)
 
 import axios from 'axios'
 import qs from 'qs'
-import FormData from 'form-data'
 import crypto from 'crypto'
 import OAuth from 'oauth-1.0a'
 
-// URLs Garmin SSO — mises à jour pour le nouveau système d'auth
-const GARMIN_SSO_ORIGIN = 'https://sso.garmin.com'
-const GARMIN_SSO = 'https://sso.garmin.com/sso'
-const SIGNIN_URL = `${GARMIN_SSO}/signinremote`  // nouveau endpoint (remplace /signin)
-const GARMIN_SSO_EMBED = `${GARMIN_SSO}/embed`
-const GC_MODERN = 'https://connect.garmin.com/modern'
-const OAUTH_URL = 'https://connectapi.garmin.com/oauth-service/oauth'
-const OAUTH_CONSUMER_URL = 'https://thegarth.s3.amazonaws.com/oauth_consumer.json'
-const USER_AGENT_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-const USER_AGENT_MOBILE = 'com.garmin.android.apps.connectmobile'
+// ── URLs ──────────────────────────────────────────────────────────────────────
+const GARMIN_SSO          = 'https://sso.garmin.com/sso'
+const SIGNIN_URL          = `${GARMIN_SSO}/signin`
+const GARMIN_SSO_EMBED    = `${GARMIN_SSO}/embed`
+const GC_MODERN           = 'https://connect.garmin.com/modern'
+const OAUTH_URL           = 'https://connectapi.garmin.com/oauth-service/oauth'
+const OAUTH_CONSUMER_URL  = 'https://thegarth.s3.amazonaws.com/oauth_consumer.json'
+const UA_BROWSER = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
+const UA_MOBILE  = 'com.garmin.android.apps.connectmobile'
 
-const CSRF_RE = /name="_csrf"\s+value="(.+?)"/
-const TICKET_RE = /ticket=([^"&\s]+)/
-const MFA_PAGE_RE = /id="mfa-code"|name="mfa-code"|enterMFACode|verificationCode/i
+// ── Regex ─────────────────────────────────────────────────────────────────────
+const CSRF_RE    = /name="_csrf"\s+value="(.+?)"/
+const TICKET_RE  = /ticket=([^"&\s<]+)/
+const MFA_RE     = /name="mfa-code"|id="mfa-code"|enterMFACode|MFA|verificationCode/i
 
+// ── OAuth helpers ─────────────────────────────────────────────────────────────
 async function getOauthConsumer() {
-  const res = await axios.get(OAUTH_CONSUMER_URL, { timeout: 10000 })
-  return { key: res.data.consumer_key, secret: res.data.consumer_secret }
+  const r = await axios.get(OAUTH_CONSUMER_URL, { timeout: 10000 })
+  return { key: r.data.consumer_key, secret: r.data.consumer_secret }
 }
 
-function makeOauthClient(consumer) {
+function makeOAuth(consumer) {
   return new OAuth({
     consumer,
     signature_method: 'HMAC-SHA1',
-    hash_function: (base, key) => crypto.createHmac('sha1', key).update(base).digest('base64'),
+    hash_function: (b, k) => crypto.createHmac('sha1', k).update(b).digest('base64'),
   })
-}
-
-async function exchangeOauth(oauth1Token, consumer) {
-  const oauth = makeOauthClient(consumer)
-  const token = { key: oauth1Token.oauth_token, secret: oauth1Token.oauth_token_secret }
-  const baseUrl = `${OAUTH_URL}/exchange/user/2.0`
-  const requestData = { url: baseUrl, method: 'POST', data: null }
-  const authData = oauth.authorize(requestData, token)
-  const url = `${baseUrl}?${qs.stringify(authData)}`
-  const r = await axios.post(url, null, {
-    headers: { 'User-Agent': USER_AGENT_MOBILE, 'Content-Type': 'application/x-www-form-urlencoded' },
-    timeout: 10000,
-  })
-  return r.data
 }
 
 async function getOauth1Token(ticket, consumer) {
-  const oauth = makeOauthClient(consumer)
+  const oauth = makeOAuth(consumer)
   const params = { ticket, 'login-url': GARMIN_SSO_EMBED, 'accepts-mfa-tokens': true }
   const url = `${OAUTH_URL}/preauthorized?${qs.stringify(params)}`
   const headers = oauth.toHeader(oauth.authorize({ url, method: 'GET' }))
   const r = await axios.get(url, {
-    headers: { ...headers, 'User-Agent': USER_AGENT_MOBILE },
+    headers: { ...headers, 'User-Agent': UA_MOBILE },
     timeout: 10000,
   })
   return qs.parse(r.data)
 }
 
-// Helper cookies
-function makeCookieJar() {
-  const jar = {}
+async function exchangeForOauth2(oauth1Token, consumer) {
+  const oauth = makeOAuth(consumer)
+  const token = { key: oauth1Token.oauth_token, secret: oauth1Token.oauth_token_secret }
+  const baseUrl = `${OAUTH_URL}/exchange/user/2.0`
+  const authData = oauth.authorize({ url: baseUrl, method: 'POST', data: null }, token)
+  const url = `${baseUrl}?${qs.stringify(authData)}`
+  const r = await axios.post(url, null, {
+    headers: { 'User-Agent': UA_MOBILE, 'Content-Type': 'application/x-www-form-urlencoded' },
+    timeout: 10000,
+  })
+  return r.data
+}
+
+// ── Cookie jar ────────────────────────────────────────────────────────────────
+function makeCookieJar(initial = {}) {
+  const jar = { ...initial }
   return {
-    extract(response) {
-      for (const cookie of response.headers['set-cookie'] || []) {
-        const [pair] = cookie.split(';')
+    extract(resp) {
+      for (const c of resp.headers['set-cookie'] || []) {
+        const [pair] = c.split(';')
         const idx = pair.indexOf('=')
-        if (idx > 0) {
-          const k = pair.slice(0, idx).trim()
-          const v = pair.slice(idx + 1).trim()
-          jar[k] = v
-        }
+        if (idx > 0) jar[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim()
       }
     },
-    header() {
-      return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ')
-    },
-    merge(saved) { Object.assign(jar, saved || {}) },
-    toJSON() { return { ...jar } },
+    header: () => Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; '),
+    toJSON: () => ({ ...jar }),
   }
 }
 
+// ── Réaliser le flow login complet (étapes 1+2 ou MFA) ───────────────────────
+async function doLogin(username, password, mfaCode, savedState) {
+  const jar = makeCookieJar(savedState?.cookies)
+  const client = axios.create({ maxRedirects: 10, timeout: 15000 })
+
+  const signinQS = qs.stringify({
+    id: 'gauth-widget',
+    embedWidget: 'true',
+    clientId: 'GarminConnect',
+    locale: 'en',
+    gauthHost: GARMIN_SSO_EMBED,
+    service: GC_MODERN,
+    source: GARMIN_SSO_EMBED,
+    redirectAfterAccountLoginUrl: GC_MODERN,
+    redirectAfterAccountCreationUrl: GC_MODERN,
+  })
+  const signinFull = `${SIGNIN_URL}?${signinQS}`
+
+  // ── Étape MFA : soumettre le code ─────────────────────────────────────────
+  if (mfaCode && savedState) {
+    const params = new URLSearchParams()
+    params.append('mfa-code', mfaCode.trim())
+    params.append('embed', 'true')
+    params.append('_csrf', savedState.csrf)
+    params.append('fromPage', 'setupEnterMfaCode')
+
+    const r = await client.post(signinFull, params.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': UA_BROWSER,
+        'Cookie': jar.header(),
+        'Origin': 'https://sso.garmin.com',
+        'Referer': signinFull,
+      },
+    })
+    jar.extract(r)
+    const html = typeof r.data === 'string' ? r.data : JSON.stringify(r.data)
+    const ticket = TICKET_RE.exec(html)?.[1]
+    if (!ticket) {
+      return {
+        error: 'Code MFA invalide ou expiré',
+        debug: html.slice(0, 400),
+      }
+    }
+    return { ticket }
+  }
+
+  // ── Étape 1 : obtenir CSRF ────────────────────────────────────────────────
+  // Step A : init SSO
+  const sA = await client.get(`${GARMIN_SSO_EMBED}?${qs.stringify({
+    clientId: 'GarminConnect', locale: 'en', service: GC_MODERN,
+  })}`, { headers: { 'User-Agent': UA_BROWSER } })
+  jar.extract(sA)
+
+  // Step B : page signin avec le bon User-Agent mobile (contourne le CAPTCHA)
+  const sB = await client.get(signinFull, {
+    headers: { 'User-Agent': UA_BROWSER, 'Cookie': jar.header() },
+  })
+  jar.extract(sB)
+
+  const htmlB = typeof sB.data === 'string' ? sB.data : ''
+  const csrf = CSRF_RE.exec(htmlB)?.[1]
+  if (!csrf) {
+    return {
+      error: 'CSRF non trouvé',
+      debug: `Status: ${sB.status} | URL: ${signinFull} | HTML: ${htmlB.slice(0, 300)}`,
+    }
+  }
+
+  // Step C : soumettre email + password
+  const params = new URLSearchParams()
+  params.append('username', username)
+  params.append('password', password)
+  params.append('embed', 'true')
+  params.append('_csrf', csrf)
+
+  const sC = await client.post(signinFull, params.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': UA_BROWSER,
+      'Cookie': jar.header(),
+      'Origin': 'https://sso.garmin.com',
+      'Referer': signinFull,
+    },
+  })
+  jar.extract(sC)
+  const html = typeof sC.data === 'string' ? sC.data : JSON.stringify(sC.data)
+
+  // Ticket direct ?
+  const ticket = TICKET_RE.exec(html)?.[1]
+  if (ticket) return { ticket }
+
+  // Page MFA ?
+  const mfaCsrf = CSRF_RE.exec(html)?.[1]
+  if (MFA_RE.test(html) && mfaCsrf) {
+    return {
+      mfa_required: true,
+      csrf: mfaCsrf,
+      cookies: jar.toJSON(),
+    }
+  }
+
+  // Erreurs connues
+  if (html.includes('AccountLocked')) return { error: 'Compte Garmin bloqué — déverrouillez-le sur connect.garmin.com' }
+  if (/invalid.{0,30}password|incorrect.{0,30}password|Bad credentials/i.test(html)) return { error: 'Email ou mot de passe incorrect' }
+
+  return {
+    error: 'Réponse Garmin inattendue',
+    debug: html.slice(0, 500),
+  }
+}
+
+// ── Handler principal ─────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -95,190 +201,51 @@ export default async function handler(req, res) {
   const { username, password, mfaCode, state } = req.body ?? {}
   if (!username || !password) return res.status(400).json({ error: 'username et password requis' })
 
-  const cookies = makeCookieJar()
-  const client = axios.create({ maxRedirects: 5, timeout: 15000 })
-  let currentStep = 'init'
-
-  // Paramètres communs signin
-  const signinParams = {
-    id: 'gauth-widget',
-    embedWidget: 'true',
-    clientId: 'GarminConnect',
-    locale: 'en',
-    gauthHost: GARMIN_SSO_EMBED,
-    service: GC_MODERN,
-    source: GARMIN_SSO_EMBED,
-    redirectAfterAccountLoginUrl: GC_MODERN,
-    redirectAfterAccountCreationUrl: GC_MODERN,
-  }
-
   try {
-    // ─────────────────────────────────────────────────────────────────
-    // ÉTAPE 2 : soumission du code MFA
-    // ─────────────────────────────────────────────────────────────────
-    if (mfaCode && state) {
-      cookies.merge(state.cookies)
+    const result = await doLogin(username, password, mfaCode, state)
 
-      const form = new FormData()
-      form.append('mfa-code', mfaCode.trim())
-      form.append('embed', 'true')
-      form.append('_csrf', state.csrf)
-      form.append('fromPage', 'setupEnterMfaCode')
-
-      const mfaRes = await client.post(state.mfaUrl, form, {
-        headers: {
-          ...form.getHeaders(),
-          'User-Agent': USER_AGENT_BROWSER,
-          'Cookie': cookies.header(),
-          'Origin': GARMIN_SSO_ORIGIN,
-          'Referer': state.mfaUrl,
-        },
-      })
-      cookies.extract(mfaRes)
-      const html = mfaRes.data
-
-      // Chercher le ticket dans la réponse
-      const ticketMatch = TICKET_RE.exec(html)
-      if (!ticketMatch) {
-        // Debug : retourner un extrait du HTML pour diagnostic
-        const snippet = typeof html === 'string' ? html.slice(0, 500) : JSON.stringify(html)
-        return res.status(401).json({
-          error: 'Code MFA invalide ou expiré',
-          debug: snippet,
-        })
-      }
-
-      const consumer = await getOauthConsumer()
-      const oauth1Token = await getOauth1Token(ticketMatch[1], consumer)
-      const oauth2Token = await exchangeOauth(oauth1Token, consumer)
-
-      let profile = null
-      try {
-        const p = await axios.get('https://connect.garmin.com/userprofile-service/socialProfile', {
-          headers: { Authorization: `Bearer ${oauth2Token.access_token}` },
-          timeout: 8000,
-        })
-        profile = p.data
-      } catch (_) {}
-
-      return res.status(200).json({
-        oauth1Token, oauth2Token,
-        displayName: profile?.displayName ?? profile?.userName ?? username,
-        profileImageUrl: profile?.profileImageUrlLarge ?? profile?.profileImageUrl ?? null,
-      })
+    // Erreur métier
+    if (result.error) {
+      return res.status(result.error.includes('incorrect') || result.error.includes('bloqué') ? 401 : 500)
+        .json({ error: result.error, ...(result.debug ? { debug: result.debug } : {}) })
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // ÉTAPE 1 : login initial
-    // ─────────────────────────────────────────────────────────────────
-
-    // Step 1 : cookies SSO initiaux
-    currentStep = 'step1-sso-embed'
-    const s1 = await client.get(`${GARMIN_SSO_EMBED}?${qs.stringify({
-      clientId: 'GarminConnect', locale: 'en', service: GC_MODERN,
-    })}`, { headers: { 'User-Agent': USER_AGENT_BROWSER } })
-    cookies.extract(s1)
-
-    // Step 2 : page signin → CSRF
-    currentStep = 'step2-signin-csrf'
-    const s2 = await client.get(`${SIGNIN_URL}?${qs.stringify(signinParams)}`, {
-      headers: { 'User-Agent': USER_AGENT_BROWSER, 'Cookie': cookies.header() },
-    })
-    cookies.extract(s2)
-
-    const csrfMatch = CSRF_RE.exec(s2.data)
-    if (!csrfMatch) {
-      return res.status(500).json({
-        error: 'CSRF introuvable — Garmin a peut-être changé son interface',
-        debug: typeof s2.data === 'string' ? s2.data.slice(0, 300) : '',
-      })
-    }
-
-    // Step 3 : soumission credentials
-    currentStep = 'step3-submit-credentials'
-    const form = new FormData()
-    form.append('username', username)
-    form.append('password', password)
-    form.append('embed', 'true')
-    form.append('_csrf', csrfMatch[1])
-
-    const s3 = await client.post(`${SIGNIN_URL}?${qs.stringify(signinParams)}`, form, {
-      headers: {
-        ...form.getHeaders(),
-        'User-Agent': USER_AGENT_BROWSER,
-        'Cookie': cookies.header(),
-        'Origin': GARMIN_SSO_ORIGIN,
-        'Referer': `${SIGNIN_URL}?${qs.stringify(signinParams)}`,
-      },
-    })
-    cookies.extract(s3)
-    const html = s3.data
-
-    // Ticket direct (pas de MFA) ?
-    const ticketMatch = TICKET_RE.exec(html)
-    if (ticketMatch) {
-      currentStep = 'step4-oauth-consumer'
-      const consumer = await getOauthConsumer()
-      currentStep = 'step5-oauth1-token'
-      const oauth1Token = await getOauth1Token(ticketMatch[1], consumer)
-      currentStep = 'step6-oauth2-exchange'
-      const oauth2Token = await exchangeOauth(oauth1Token, consumer)
-
-      let profile = null
-      try {
-        const p = await axios.get('https://connect.garmin.com/userprofile-service/socialProfile', {
-          headers: { Authorization: `Bearer ${oauth2Token.access_token}` },
-          timeout: 8000,
-        })
-        profile = p.data
-      } catch (_) {}
-
-      return res.status(200).json({
-        oauth1Token, oauth2Token,
-        displayName: profile?.displayName ?? profile?.userName ?? username,
-        profileImageUrl: profile?.profileImageUrlLarge ?? profile?.profileImageUrl ?? null,
-      })
-    }
-
-    // Page MFA ?
-    const mfaCsrfMatch = CSRF_RE.exec(html)
-    const isMfaPage = MFA_PAGE_RE.test(html) || (mfaCsrfMatch && !TICKET_RE.test(html))
-
-    if (isMfaPage && mfaCsrfMatch) {
+    // MFA requis
+    if (result.mfa_required) {
       return res.status(200).json({
         mfa_required: true,
-        state: {
-          mfaUrl: `${SIGNIN_URL}?${qs.stringify(signinParams)}`,
-          csrf: mfaCsrfMatch[1],
-          cookies: cookies.toJSON(),
-        },
+        state: { csrf: result.csrf, cookies: result.cookies },
       })
     }
 
-    // Compte bloqué ?
-    if (html.includes('AccountLocked') || html.includes('account is locked')) {
-      return res.status(401).json({ error: 'Compte Garmin bloqué — déverrouillez-le sur connect.garmin.com' })
-    }
+    // Succès → échanger le ticket contre des tokens OAuth
+    const consumer = await getOauthConsumer()
+    const oauth1Token = await getOauth1Token(result.ticket, consumer)
+    const oauth2Token = await exchangeForOauth2(oauth1Token, consumer)
 
-    // Mauvais identifiants ?
-    if (html.includes('Invalid') || html.includes('incorrect') || html.includes('error-message')) {
-      return res.status(401).json({ error: 'Email ou mot de passe Garmin incorrect' })
-    }
+    // Profil utilisateur
+    let profile = null
+    try {
+      const p = await axios.get('https://connect.garmin.com/userprofile-service/socialProfile', {
+        headers: { Authorization: `Bearer ${oauth2Token.access_token}` },
+        timeout: 8000,
+      })
+      profile = p.data
+    } catch (_) {}
 
-    // Inconnu — retourner un extrait HTML pour debug
-    return res.status(500).json({
-      error: 'Réponse Garmin inattendue',
-      debug: typeof html === 'string' ? html.slice(0, 600) : JSON.stringify(html).slice(0, 300),
+    return res.status(200).json({
+      oauth1Token,
+      oauth2Token,
+      displayName: profile?.displayName ?? profile?.userName ?? username,
+      profileImageUrl: profile?.profileImageUrlLarge ?? profile?.profileImageUrl ?? null,
     })
 
   } catch (err) {
     const status = err?.response?.status
+    const url = err?.config?.url ?? 'inconnue'
     const data = err?.response?.data
-    const url = err?.config?.url ?? 'URL inconnue'
-    const message = err?.message ?? 'Erreur inconnue'
-
     return res.status(500).json({
-      error: `[${currentStep}] Erreur ${status ?? ''}: ${message}`,
+      error: `Erreur ${status ?? ''}: ${err?.message ?? 'inconnue'}`,
       debug: `URL: ${url} | ${typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data ?? {}).slice(0, 300)}`,
     })
   }
