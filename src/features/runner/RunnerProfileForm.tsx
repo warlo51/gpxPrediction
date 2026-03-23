@@ -86,11 +86,49 @@ export function RunnerProfileForm() {
 
   const hasHistory = sessions.length > 0
 
-  // Détecter si le seuil de marche a été calibré automatiquement
-  // (différent de la valeur par défaut = 25)
+  // ── Grade max réellement observé dans les streams
+  const maxObservedGrade = (() => {
+    let max = 0
+    for (const s of sessions) {
+      // Priorité 1 : grade_smooth (stream Strava lissé, le plus fiable)
+      if (s.streams?.grade_smooth?.length) {
+        for (const g of s.streams.grade_smooth) {
+          const abs = Math.abs(g)
+          if (abs < 60 && abs > max) max = abs
+        }
+        continue
+      }
+      // Priorité 2 : calcul depuis altitude + distance
+      const { distance: dist, altitude: alt } = s.streams ?? {}
+      if (dist && alt && dist.length > 5) {
+        for (let i = 5; i < dist.length; i++) {
+          const dDist = dist[i]! - dist[i - 5]!
+          const dAlt = alt[i]! - alt[i - 5]!
+          if (dDist < 2) continue
+          const g = Math.abs((dAlt / dDist) * 100)
+          if (g < 60 && g > max) max = g
+        }
+        continue
+      }
+      // Priorité 3 : estimation grossière depuis D+/distance (si pas de streams)
+      if (s.elevationGain > 0 && s.distance > 0) {
+        // D+/distance * 2 ≈ pente max estimée (hypothèse : montée concentrée sur la moitié du parcours)
+        const estimated = (s.elevationGain / (s.distance / 2)) * 100
+        if (estimated < 60 && estimated > max) max = estimated
+      }
+    }
+    return Math.round(max)
+  })()
+
+  // ── Confiance dans le seuil de marche
   const DEFAULT_WALKING_THRESHOLD = 25
-  const walkingThresholdCalibrated =
-    hasHistory && profile.speedModel.walkingThresholdGrade !== DEFAULT_WALKING_THRESHOLD
+  const currentThreshold = profile.speedModel.walkingThresholdGrade
+  const thresholdDiffersFromDefault = currentThreshold !== DEFAULT_WALKING_THRESHOLD
+  const sessionsWithStreams = sessions.filter(s => s.streams?.grade_smooth?.length || s.streams?.altitude?.length).length
+  const hasEnoughGrade = maxObservedGrade >= 12 && sessionsWithStreams >= 2
+  const walkingThresholdCalibrated = hasHistory && thresholdDiffersFromDefault && hasEnoughGrade
+  const walkingThresholdUnreliable = hasHistory && thresholdDiffersFromDefault && !hasEnoughGrade
+
   const sessionsWithElevation = sessions.filter(s => s.streams?.altitude && s.elevationGain > 50).length
   const paceMin = Math.floor(profile.basePaceSecPerKm / 60)
   const paceSec = profile.basePaceSecPerKm % 60
@@ -172,23 +210,57 @@ export function RunnerProfileForm() {
           </Field>
 
           {walkingThresholdCalibrated ? (
+            /* ── Calibré et fiable ── */
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
                 Seuil de marche <span className="ml-1 text-slate-600 normal-case font-normal">(% pente)</span>
               </label>
               <Calibrated
-                label="Seuil de marche détecté"
-                value={`${profile.speedModel.walkingThresholdGrade} %`}
-                sub={`Depuis ${sessionsWithElevation} séance${sessionsWithElevation > 1 ? 's' : ''} avec D+`}
+                label="Seuil détecté automatiquement"
+                value={`${currentThreshold} %`}
+                sub={`Depuis ${sessionsWithElevation} séance${sessionsWithElevation > 1 ? 's' : ''} · pente max observée ${maxObservedGrade}%`}
                 color="text-orange-300"
                 source="strava"
               />
             </div>
+          ) : walkingThresholdUnreliable ? (
+            /* ── Valeur présente mais pas assez de données GPS pour confirmer ── */
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+                Seuil de marche <span className="ml-1 text-slate-600 normal-case font-normal">(% pente)</span>
+              </label>
+              <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-400 font-bold text-sm">{currentThreshold} %</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-900/40 text-amber-500 border border-amber-800/40">
+                    ⚠️ Non confirmé
+                  </span>
+                </div>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  {sessionsWithStreams === 0
+                    ? <>Aucun stream GPS détaillé dans vos séances — la détection point par point est impossible. Valeur estimée depuis le D+ moyen ({maxObservedGrade > 0 ? `~${maxObservedGrade}% max estimé` : 'D+ insuffisant'}).</>
+                    : <>Pente max observée : <strong className="text-amber-500">{maxObservedGrade}%</strong> — pas assez raide pour confirmer le seuil de marche ({sessionsWithStreams} séance{sessionsWithStreams > 1 ? 's' : ''} avec streams).</>
+                  }
+                  {' '}Ajustez manuellement si nécessaire.
+                </p>
+                <NumberInput
+                  value={walkingThreshold} min={5} max={50} step={1}
+                  onChange={setWalkingThreshold}
+                />
+              </div>
+            </div>
           ) : (
+            /* ── Non calibré → input éditable ── */
             <Field
               label="Seuil de marche"
               unit="% pente"
-              hint="Pente à partir de laquelle vous marchez (sera auto-détecté avec plus d'historique)"
+              hint={
+                hasHistory && sessionsWithStreams === 0 && maxObservedGrade > 0
+                  ? `Pente max estimée depuis votre D+ : ~${maxObservedGrade}% — streams GPS requis pour la détection automatique`
+                  : hasHistory && maxObservedGrade > 0
+                    ? `Pente max observée : ${maxObservedGrade}% — insuffisant pour auto-détecter (besoin de ≥12% avec streams)`
+                    : 'Pente à partir de laquelle vous marchez — sera auto-détecté avec des séances avec D+ et streams GPS'
+              }
             >
               <NumberInput
                 value={walkingThreshold} min={5} max={50} step={1}

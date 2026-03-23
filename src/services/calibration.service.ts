@@ -54,7 +54,7 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
     return null
   }
 
-  const { distance: distStream, altitude: altStream, heartrate, velocity_smooth } =
+  const { distance: distStream, altitude: altStream, heartrate, velocity_smooth, grade_smooth } =
     session.streams
 
   const speedGradeSamples: SessionMetrics['speedGradeSamples'] = []
@@ -64,11 +64,16 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
   const windowSize = 5
   for (let i = windowSize; i < distStream.length; i++) {
     const dDist = distStream[i]! - distStream[i - windowSize]!
-    const dAlt = altStream[i]! - altStream[i - windowSize]!
-
     if (dDist < 1) continue
 
-    const grade = (dAlt / dDist) * 100
+    // Priorité : grade_smooth Strava (déjà lissé, plus précis que le calcul brut)
+    const grade = grade_smooth?.[i] !== undefined
+      ? grade_smooth[i]!
+      : (() => {
+          const dAlt = altStream[i]! - altStream[i - windowSize]!
+          return (dAlt / dDist) * 100
+        })()
+
     const speedMs = velocity_smooth
       ? velocity_smooth[i] ?? dDist / windowSize
       : dDist / windowSize
@@ -97,10 +102,10 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
     .map((s) => s.speedMs)
   const flatAvgSpeedMs = flatSamples.length > 0 ? mean(removeOutliers(flatSamples)) : 0
 
-  // Vitesse médiane par tranche de pente de 5% (pour détecter le seuil de marche)
-  const BUCKETS = [5, 10, 15, 20, 25, 30, 35, 40]
+  // Vitesse médiane par tranche de pente de 2% (granularité fine pour détecter la transition)
+  const BUCKETS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 30, 35, 40]
   const speedByGradeBucket = BUCKETS.map((gradeMin) => {
-    const gradeMax = gradeMin + 5
+    const gradeMax = gradeMin + 2
     const samples = speedGradeSamples
       .filter(s => s.grade >= gradeMin && s.grade < gradeMax)
       .map(s => s.speedMs)
@@ -125,42 +130,89 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
 /**
  * Détecte automatiquement le seuil de pente à partir duquel le coureur marche.
  *
- * Méthode : pour chaque tranche de 5% de pente, on calcule la vitesse médiane.
- * Le seuil de marche est la première tranche où la vitesse médiane passe
- * en dessous du seuil de marche défini (~1.5 m/s ≈ 5.4 km/h).
+ * Deux méthodes combinées :
  *
- * On agrège les buckets de toutes les séances pour plus de robustesse.
+ * 1. Seuil absolu : première tranche où la vitesse médiane < WALKING_SPEED_MS (1.6 m/s)
+ *
+ * 2. Rupture de régime : détecte une chute brutale de vitesse entre deux buckets
+ *    consécutifs (> DROP_THRESHOLD = 35%). Cela capture le passage course→marche
+ *    même si la vitesse absolue ne descend pas encore sous 1.6 m/s.
+ *    Exemple : 10 km/h à 8% puis 5 km/h à 10% → chute de 50% → seuil = 9%.
+ *
+ * Retourne null si trop peu de données (< 3 buckets avec données).
+ * Prend aussi en compte le grade max réellement observé dans les séances.
  */
 function calibrateWalkingThreshold(
   allMetrics: SessionMetrics[],
 ): number | null {
-  const WALKING_SPEED_MS = 1.6 // ~5.8 km/h — vitesse max considérée comme "marche"
+  const WALKING_SPEED_MS = 1.6   // ~5.8 km/h — vitesse clairement de marche
+  const DROP_THRESHOLD = 0.35    // chute de vitesse de 35% entre deux buckets = transition course→marche
 
-  // Agréger tous les buckets de toutes les séances
+  // ── Agréger tous les buckets inter-séances
   const bucketMap = new Map<number, number[]>()
   for (const m of allMetrics) {
     for (const b of m.speedByGradeBucket) {
+      if (b.medianSpeedMs <= 0) continue
       const arr = bucketMap.get(b.gradeMin) ?? []
-      // On pousse la vitesse médiane de cette séance pour ce bucket
-      if (b.medianSpeedMs > 0) arr.push(b.medianSpeedMs)
+      arr.push(b.medianSpeedMs)
       bucketMap.set(b.gradeMin, arr)
     }
   }
 
-  // Pour chaque tranche, calculer la médiane inter-séances
-  // Trouver la première tranche où la médiane < seuil marche
+  // ── Construire la courbe vitesse médiane par grade (triée par grade croissant)
+  const curve: { grade: number; speed: number; count: number }[] = []
   const sortedGrades = [...bucketMap.keys()].sort((a, b) => a - b)
-  for (const gradeMin of sortedGrades) {
-    const speeds = bucketMap.get(gradeMin)!
-    if (speeds.length < 2) continue // pas assez de données
-    const medSpeed = median(speeds)
-    if (medSpeed < WALKING_SPEED_MS) {
-      // Le seuil est au milieu de cette tranche (gradeMin + 2.5), arrondi à l'entier
-      return Math.round(gradeMin + 2.5)
+
+  for (const grade of sortedGrades) {
+    const speeds = bucketMap.get(grade)!
+    if (speeds.length < 2) continue // minimum 2 séances pour ce bucket
+    curve.push({ grade, speed: median(speeds), count: speeds.length })
+  }
+
+  if (curve.length < 2) return null // pas assez de données
+
+  // ── Grade max observé dans les données réelles
+  const maxObservedGrade = curve[curve.length - 1]!.grade
+
+  // ── Méthode 1 : seuil absolu (vitesse < 1.6 m/s)
+  let absoluteThreshold: number | null = null
+  for (const point of curve) {
+    if (point.speed < WALKING_SPEED_MS) {
+      absoluteThreshold = point.grade
+      break
     }
   }
 
-  return null // pas assez de données pour détecter
+  // ── Méthode 2 : rupture de régime (chute > 35% entre deux buckets consécutifs)
+  let dropThreshold: number | null = null
+  for (let i = 1; i < curve.length; i++) {
+    const prev = curve[i - 1]!
+    const curr = curve[i]!
+    const drop = (prev.speed - curr.speed) / prev.speed
+    if (drop > DROP_THRESHOLD) {
+      // Le seuil se situe entre le bucket précédent et le bucket courant
+      // On prend le milieu des deux gradeMin
+      dropThreshold = Math.round((prev.grade + curr.grade) / 2)
+      break
+    }
+  }
+
+  // ── Combiner les deux méthodes
+  if (absoluteThreshold !== null && dropThreshold !== null) {
+    // Prendre le plus bas (conservative) — si le coureur marche déjà à 10%
+    // selon la rupture de régime, on ne va pas dire qu'il marche à 20%
+    return Math.min(absoluteThreshold, dropThreshold)
+  }
+
+  if (dropThreshold !== null) return dropThreshold
+  if (absoluteThreshold !== null) return absoluteThreshold
+
+  // ── Fallback : si le grade max observé est < 15%, on ne peut pas détecter
+  // le seuil de marche (on n'a jamais été assez raide).
+  // On retourne null plutôt que de donner une valeur erronée.
+  if (maxObservedGrade < 15) return null
+
+  return null
 }
 
 // ─── Calibration du modèle vitesse ───────────────────────────────────────────
