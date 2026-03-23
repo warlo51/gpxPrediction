@@ -97,6 +97,7 @@ export default async function handler(req, res) {
 
   const cookies = makeCookieJar()
   const client = axios.create({ maxRedirects: 5, timeout: 15000 })
+  let currentStep = 'init'
 
   // Paramètres communs signin
   const signinParams = {
@@ -172,12 +173,14 @@ export default async function handler(req, res) {
     // ─────────────────────────────────────────────────────────────────
 
     // Step 1 : cookies SSO initiaux
+    currentStep = 'step1-sso-embed'
     const s1 = await client.get(`${GARMIN_SSO_EMBED}?${qs.stringify({
       clientId: 'GarminConnect', locale: 'en', service: GC_MODERN,
     })}`, { headers: { 'User-Agent': USER_AGENT_BROWSER } })
     cookies.extract(s1)
 
     // Step 2 : page signin → CSRF
+    currentStep = 'step2-signin-csrf'
     const s2 = await client.get(`${SIGNIN_URL}?${qs.stringify(signinParams)}`, {
       headers: { 'User-Agent': USER_AGENT_BROWSER, 'Cookie': cookies.header() },
     })
@@ -192,6 +195,7 @@ export default async function handler(req, res) {
     }
 
     // Step 3 : soumission credentials
+    currentStep = 'step3-submit-credentials'
     const form = new FormData()
     form.append('username', username)
     form.append('password', password)
@@ -213,8 +217,11 @@ export default async function handler(req, res) {
     // Ticket direct (pas de MFA) ?
     const ticketMatch = TICKET_RE.exec(html)
     if (ticketMatch) {
+      currentStep = 'step4-oauth-consumer'
       const consumer = await getOauthConsumer()
+      currentStep = 'step5-oauth1-token'
       const oauth1Token = await getOauth1Token(ticketMatch[1], consumer)
+      currentStep = 'step6-oauth2-exchange'
       const oauth2Token = await exchangeOauth(oauth1Token, consumer)
 
       let profile = null
@@ -267,12 +274,12 @@ export default async function handler(req, res) {
   } catch (err) {
     const status = err?.response?.status
     const data = err?.response?.data
+    const url = err?.config?.url ?? 'URL inconnue'
     const message = err?.message ?? 'Erreur inconnue'
 
-    // Retourner le max de détails pour aider au debug
     return res.status(500).json({
-      error: `Erreur ${status ?? ''}: ${message}`.trim(),
-      debug: typeof data === 'string' ? data.slice(0, 400) : JSON.stringify(data ?? {}).slice(0, 400),
+      error: `[${currentStep}] Erreur ${status ?? ''}: ${message}`,
+      debug: `URL: ${url} | ${typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data ?? {}).slice(0, 300)}`,
     })
   }
 }
