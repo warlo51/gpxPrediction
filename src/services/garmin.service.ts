@@ -59,11 +59,15 @@ function garminHeaders(oauth1: GarminOAuth1Token, oauth2: GarminOAuth2Token): He
 export async function garminLogin(
   username: string,
   password: string,
-): Promise<{ oauth1: GarminOAuth1Token; oauth2: GarminOAuth2Token; profile: GarminProfile }> {
+  mfaCode?: string,
+): Promise<
+  | { mfa_required: true }
+  | { oauth1: GarminOAuth1Token; oauth2: GarminOAuth2Token; profile: GarminProfile }
+> {
   const res = await fetch(`${API_BASE}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, ...(mfaCode ? { mfaCode } : {}) }),
   })
 
   if (!res.ok) {
@@ -72,18 +76,23 @@ export async function garminLogin(
   }
 
   const data = await res.json() as {
-    oauth1Token: GarminOAuth1Token
-    oauth2Token: GarminOAuth2Token
-    displayName: string
-    profileImageUrl: string | null
+    mfa_required?: boolean
+    oauth1Token?: GarminOAuth1Token
+    oauth2Token?: GarminOAuth2Token
+    displayName?: string
+    profileImageUrl?: string | null
+    error?: string
   }
 
+  if (data.error) throw new Error(data.error)
+  if (data.mfa_required) return { mfa_required: true }
+
   return {
-    oauth1: data.oauth1Token,
-    oauth2: data.oauth2Token,
+    oauth1: data.oauth1Token!,
+    oauth2: data.oauth2Token!,
     profile: {
-      displayName: data.displayName,
-      profileImageUrl: data.profileImageUrl,
+      displayName: data.displayName ?? username,
+      profileImageUrl: data.profileImageUrl ?? null,
     },
   }
 }
