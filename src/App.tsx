@@ -1,5 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import './App.css'
+import { NavBar } from '@/components/layout/NavBar'
+import { SideBar } from '@/components/layout/SideBar'
+import type { Page } from '@/components/layout/NavBar'
 import { AccueilPage } from '@/features/home/AccueilPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { GpxImport } from '@/features/gpx/GpxImport'
@@ -11,16 +14,6 @@ import { RunnerProfileForm } from '@/features/runner/RunnerProfileForm'
 import { HistoryPanel } from '@/features/history/HistoryPanel'
 import { useAppStore } from '@/stores/appStore'
 import type { GpxTrack } from '@/types'
-
-type Page = 'accueil' | 'dashboard' | 'planificateur' | 'strategie' | 'profil'
-
-const PAGES: { id: Page; label: string; icon: string }[] = [
-  { id: 'accueil',       label: 'Accueil',       icon: '🏠' },
-  { id: 'dashboard',     label: 'Dashboard',     icon: '📊' },
-  { id: 'planificateur', label: 'Planificateur', icon: '🗺️' },
-  { id: 'strategie',     label: 'Stratégie',     icon: '⚖️' },
-  { id: 'profil',        label: 'Profil Runner', icon: '🏃' },
-]
 
 function App() {
   const [activePage, setActivePage] = useState<Page>('accueil')
@@ -43,7 +36,7 @@ function App() {
   )
 
   return (
-    <div className="min-h-screen flex flex-col items-center pb-24 sm:pb-10 px-3 sm:px-6 gap-5 sm:gap-7">
+    <div className="min-h-screen">
 
       {/* ── Bande de fond décorative ── */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
@@ -53,75 +46,44 @@ function App() {
                         rounded-full bg-violet-900/15 blur-3xl" />
       </div>
 
-      {/* ── Header ── */}
-      <header className="w-full max-w-4xl text-center pt-6 sm:pt-10 animate-fade-up">
-        <div className="inline-flex items-center gap-2 text-xs font-medium text-indigo-400
-                        bg-indigo-950/60 border border-indigo-800/40 px-3 py-1 rounded-full mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-          Trail Running Analytics
-        </div>
-        <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-3">
-          <span className="text-gradient">GPX Trail</span>
-          <span className="text-white"> Predictor</span>
-        </h1>
-        <p className="text-slate-400 text-sm sm:text-base max-w-md mx-auto hidden sm:block">
-          Analysez votre parcours, calibrez votre profil et simulez votre performance.
-        </p>
-      </header>
+      {/* ── Sidebar (desktop lg+) ── */}
+      <SideBar activePage={activePage} onNavigate={setActivePage} />
 
-      {/* ── Navigation sticky bas (mobile) / inline (desktop) ── */}
-      <div className="fixed sm:static bottom-0 left-0 right-0 z-50 sm:z-auto
-                      sm:w-full sm:max-w-2xl">
-        <div className="glass sm:rounded-2xl border-t border-slate-800 sm:border
-                        px-2 py-2 sm:p-1.5 flex gap-1 sm:gap-1.5">
-          {PAGES.map((page) => (
-            <button
-              key={page.id}
-              onClick={() => setActivePage(page.id)}
-              className={[
-                'flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5',
-                'px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-medium',
-                'transition-all duration-200',
-                activePage === page.id
-                  ? 'bg-indigo-600 text-white glow-indigo'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5',
-              ].join(' ')}
-            >
-              <span className="text-base sm:text-sm">{page.icon}</span>
-              <span className="text-[10px] sm:text-sm leading-tight">{page.label}</span>
-            </button>
-          ))}
-        </div>
+      {/* ── Top NavBar (sm → lg) + mobile bottom nav ── */}
+      <NavBar activePage={activePage} onNavigate={setActivePage} />
+
+      {/* ── Zone de contenu ── */}
+      <div className="lg:pl-[220px] flex flex-col items-center
+                      pt-[60px] lg:pt-0 pb-20 sm:pb-10 lg:pb-10
+                      px-3 sm:px-6 lg:px-10 gap-5 sm:gap-7">
+        <main className="w-full max-w-4xl animate-fade-up delay-1 pt-6 lg:pt-8">
+          {activePage === 'accueil' && (
+            <AccueilPage onNavigate={(p) => setActivePage(p as Page)} />
+          )}
+          {activePage === 'dashboard' && (
+            <DashboardPage onNavigate={(p) => setActivePage(p as Page)} />
+          )}
+          {activePage === 'planificateur' && (
+            <div className="flex flex-col gap-5">
+              <GpxImport onTrackLoaded={handleTrackLoaded} />
+              {track && (
+                <>
+                  <TrackMap track={track} />
+                  <ElevationChart track={track} />
+                  <SimulationPanel />
+                </>
+              )}
+            </div>
+          )}
+          {activePage === 'strategie' && <StrategyComparison />}
+          {activePage === 'profil' && (
+            <div className="flex flex-col gap-5">
+              <HistoryPanel />
+              <RunnerProfileForm />
+            </div>
+          )}
+        </main>
       </div>
-
-      {/* ── Contenu ── */}
-      <main className="w-full max-w-4xl animate-fade-up delay-1">
-        {activePage === 'accueil' && (
-          <AccueilPage onNavigate={(p) => setActivePage(p as Page)} />
-        )}
-        {activePage === 'dashboard' && (
-          <DashboardPage onNavigate={(p) => setActivePage(p as Page)} />
-        )}
-        {activePage === 'planificateur' && (
-          <div className="flex flex-col gap-5">
-            <GpxImport onTrackLoaded={handleTrackLoaded} />
-            {track && (
-              <>
-                <TrackMap track={track} />
-                <ElevationChart track={track} />
-                <SimulationPanel />
-              </>
-            )}
-          </div>
-        )}
-        {activePage === 'strategie' && <StrategyComparison />}
-        {activePage === 'profil' && (
-          <div className="flex flex-col gap-5">
-            <HistoryPanel />
-            <RunnerProfileForm />
-          </div>
-        )}
-      </main>
     </div>
   )
 }
