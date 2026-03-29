@@ -1,23 +1,17 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import { NavBar } from '@/components/layout/NavBar'
 import { SideBar } from '@/components/layout/SideBar'
 import type { Page } from '@/components/layout/NavBar'
 import { AccueilPage } from '@/features/home/AccueilPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
-import { GpxImport } from '@/features/gpx/GpxImport'
-import { ElevationChart } from '@/features/gpx/ElevationChart'
-import { TrackMap } from '@/features/gpx/TrackMap'
-import { SimulationPanel } from '@/features/analysis/SimulationPanel'
+import { PlanificateurPage } from '@/features/gpx/PlanificateurPage'
 import { StrategyComparison } from '@/features/strategy/StrategyComparison'
-import { RunnerProfileForm } from '@/features/runner/RunnerProfileForm'
-import { HistoryPanel } from '@/features/history/HistoryPanel'
-import { useAppStore } from '@/stores/appStore'
-import type { GpxTrack } from '@/types'
+import { ProfilPage } from '@/features/runner/ProfilPage'
 
 function App() {
   const [activePage, setActivePage] = useState<Page>('accueil')
-  const { track, setTrack } = useAppStore()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Retour du callback OAuth → aller sur le profil (import historique)
   useEffect(() => {
@@ -26,14 +20,6 @@ function App() {
       setActivePage('profil')
     }
   }, [])
-
-  const handleTrackLoaded = useCallback(
-    (t: GpxTrack) => {
-      setTrack(t)
-      setActivePage('planificateur')
-    },
-    [setTrack],
-  )
 
   return (
     <div className="min-h-screen">
@@ -46,44 +32,47 @@ function App() {
                         rounded-full bg-violet-900/15 blur-3xl" />
       </div>
 
-      {/* ── Sidebar (desktop lg+) ── */}
-      <SideBar activePage={activePage} onNavigate={setActivePage} />
+      {/* ── SideBar — drawer, s'ouvre au clic TopBar ── */}
+      <SideBar
+        activePage={activePage}
+        onNavigate={setActivePage}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-      {/* ── Top NavBar (sm → lg) + mobile bottom nav ── */}
-      <NavBar activePage={activePage} onNavigate={setActivePage} />
+      {/* ── TopBar — toujours visible ── */}
+      <NavBar
+        activePage={activePage}
+        onNavigate={setActivePage}
+        onSidebarOpen={() => setSidebarOpen(true)}
+      />
 
-      {/* ── Zone de contenu ── */}
-      <div className="lg:pl-[220px] flex flex-col items-center
-                      pt-[60px] lg:pt-0 pb-20 sm:pb-10 lg:pb-10
-                      px-3 sm:px-6 lg:px-10 gap-5 sm:gap-7">
-        <main className="w-full max-w-4xl animate-fade-up delay-1 pt-6 lg:pt-8">
-          {activePage === 'accueil' && (
-            <AccueilPage onNavigate={(p) => setActivePage(p as Page)} />
-          )}
-          {activePage === 'dashboard' && (
-            <DashboardPage onNavigate={(p) => setActivePage(p as Page)} />
-          )}
-          {activePage === 'planificateur' && (
-            <div className="flex flex-col gap-5">
-              <GpxImport onTrackLoaded={handleTrackLoaded} />
-              {track && (
-                <>
-                  <TrackMap track={track} />
-                  <ElevationChart track={track} />
-                  <SimulationPanel />
-                </>
-              )}
-            </div>
-          )}
-          {activePage === 'strategie' && <StrategyComparison />}
-          {activePage === 'profil' && (
-            <div className="flex flex-col gap-5">
-              <HistoryPanel />
-              <RunnerProfileForm />
-            </div>
-          )}
-        </main>
-      </div>
+      {/* ── Page Accueil : full-width, pas de contrainte max-w ── */}
+      {activePage === 'accueil' && (
+        <div className="pt-[60px] pb-20 sm:pb-10 animate-fade-up">
+          <AccueilPage onNavigate={(p) => setActivePage(p as Page)} />
+        </div>
+      )}
+
+      {/* ── Autres pages : layout centré ── */}
+      {activePage !== 'accueil' && (
+        <div className="flex flex-col items-center
+                        pt-[60px] pb-20 sm:pb-10
+                        px-3 sm:px-6 lg:px-10 gap-5 sm:gap-7">
+          <main className="w-full max-w-4xl animate-fade-up delay-1 pt-6 lg:pt-8">
+            {activePage === 'dashboard' && (
+              <DashboardPage onNavigate={(p) => setActivePage(p as Page)} />
+            )}
+            {activePage === 'planificateur' && (
+              <PlanificateurPage
+                onNavigateToStrategy={() => setActivePage('strategie')}
+              />
+            )}
+            {activePage === 'strategie' && <StrategyComparison />}
+            {activePage === 'profil' && <ProfilPage />}
+          </main>
+        </div>
+      )}
     </div>
   )
 }

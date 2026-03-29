@@ -28,10 +28,12 @@ export const DEFAULT_RUNNER_PROFILE: RunnerProfile = {
   },
 
   fatigueModel: {
-    hourlyDecayFactor: 0.015,      // -1.5% par heure (réaliste sur 2-4h)
-    downhillRecoveryFactor: 0.5,
-    fatigueThresholdKm: 35,        // fatigue accrue après 35 km
+    hourlyDecayFactor: 0.015,           // -1.5% par heure (réaliste sur 2-4h)
+    downhillRecoveryFactor: 0.5,        // récupération cardiovasculaire en descente
+    fatigueThresholdKm: 35,             // fatigue accrue après 35 km
     lateFatigueMultiplier: 1.4,
+    elevationFatigueFactorPer1000m: 0.008,  // +0.8% de fatigue par 1000m D+ cumulé
+    downhillFatigueFactorPer1000m: 0.012,   // +1.2% de fatigue quad par 1000m D- cumulé
   },
 
   heartRateModel: {
@@ -106,6 +108,7 @@ export const useAppStore = create<AppState>()(
         sessions: state.sessions,
       }),
       // Migration : corriger les anciens profils avec uphillDecayFactor trop élevé (modèle linéaire)
+      // et injecter les nouveaux champs manquants pour les profils existants.
       onRehydrateStorage: () => (state) => {
         if (!state) return
         if (state.profile.speedModel.uphillDecayFactor >= 0.07) {
@@ -120,6 +123,17 @@ export const useAppStore = create<AppState>()(
             fatigueModel: {
               ...state.profile.fatigueModel,
               hourlyDecayFactor: Math.min(state.profile.fatigueModel.hourlyDecayFactor, 0.02),
+            },
+          }
+        }
+        // Injecter les nouveaux champs de fatigue si absents (migration v2)
+        if (state.profile.fatigueModel.elevationFatigueFactorPer1000m === undefined) {
+          state.profile = {
+            ...state.profile,
+            fatigueModel: {
+              ...state.profile.fatigueModel,
+              elevationFatigueFactorPer1000m: DEFAULT_RUNNER_PROFILE.fatigueModel.elevationFatigueFactorPer1000m,
+              downhillFatigueFactorPer1000m: DEFAULT_RUNNER_PROFILE.fatigueModel.downhillFatigueFactorPer1000m,
             },
           }
         }

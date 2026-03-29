@@ -1,6 +1,6 @@
 /**
- * NavBar — barre de navigation principale
- * Design adapté depuis Figma (MMA-13)
+ * NavBar — TopBar principale (MMA-13)
+ * Toujours visible. Cliquer un lien ouvre la SideBar depuis la gauche.
  */
 
 import { useStravaStore } from '@/stores/stravaStore'
@@ -10,57 +10,67 @@ export type Page = 'accueil' | 'dashboard' | 'planificateur' | 'strategie' | 'pr
 interface NavBarProps {
   activePage: Page
   onNavigate: (page: Page) => void
+  onSidebarOpen: () => void
 }
 
 const NAV_LINKS: { id: Page; label: string }[] = [
-  { id: 'accueil',       label: 'Accueil' },
   { id: 'dashboard',     label: 'Dashboard' },
-  { id: 'planificateur', label: 'Planificateur' },
-  { id: 'strategie',     label: 'Stratégie' },
+  { id: 'planificateur', label: 'Planner' },
+  { id: 'strategie',     label: 'Strategies' },
   { id: 'profil',        label: 'Profil' },
 ]
 
-export function NavBar({ activePage, onNavigate }: NavBarProps) {
+export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
   const { athlete } = useStravaStore()
+
+  const handleNavClick = (page: Page) => {
+    onNavigate(page)
+    onSidebarOpen()
+  }
 
   return (
     <>
-      {/* ── Top navbar (sm → lg) — masquée sur lg+ où la sidebar prend le relais ── */}
+      {/* ── TopBar — toujours visible ── */}
       <nav
-        className="hidden sm:flex lg:hidden fixed top-0 left-0 right-0 z-50
+        className="flex fixed top-0 left-0 right-0 z-50
                    items-center justify-between px-8 h-[60px]
-                   bg-[rgba(7,13,26,0.85)] backdrop-blur-[12px]
+                   bg-[rgba(11,19,38,0.8)] backdrop-blur-[12px]
                    border-b border-white/[0.06]
-                   shadow-[0_4px_32px_rgba(0,0,0,0.5)]"
+                   shadow-[0_20px_40px_rgba(0,0,0,0.4)]"
       >
         {/* Left: logo + links */}
         <div className="flex items-center gap-8">
           {/* Logo */}
           <button
             onClick={() => onNavigate('accueil')}
-            className="font-black text-xl tracking-tight text-gradient leading-none"
+            className="font-black text-[20px] tracking-[-0.05em] leading-none"
+            style={{
+              background: 'linear-gradient(168deg, #ffb692 0%, #ff6d00 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
           >
-            GPX Trail
+            PacePrecision
           </button>
 
-          {/* Nav links */}
-          <div className="flex items-center gap-6">
+          {/* Nav links — masqués sur mobile */}
+          <div className="hidden sm:flex items-center gap-6">
             {NAV_LINKS.map((link) => {
               const isActive = activePage === link.id
               return (
                 <button
                   key={link.id}
-                  onClick={() => onNavigate(link.id)}
+                  onClick={() => handleNavClick(link.id)}
                   className={[
-                    'relative text-[13px] font-medium pb-[6px] transition-colors duration-200',
+                    'relative text-[12px] font-normal pb-[6px] transition-colors duration-200',
                     isActive
-                      ? 'text-indigo-300'
-                      : 'text-slate-400 hover:text-slate-200',
+                      ? 'text-[#ffb692]'
+                      : 'text-[rgba(218,226,253,0.6)] hover:text-[rgba(218,226,253,0.9)]',
                   ].join(' ')}
                 >
                   {link.label}
                   {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-indigo-500" />
+                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#ff6d00]" />
                   )}
                 </button>
               )
@@ -70,72 +80,55 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
 
         {/* Right: action buttons + avatar */}
         <div className="flex items-center gap-3">
-          {/* Simuler */}
+          {/* Analyze */}
           <button
             onClick={() => onNavigate('planificateur')}
-            className="px-4 py-1.5 rounded-xl bg-slate-800 border border-indigo-900/30
-                       text-indigo-300 text-[12px] font-semibold
-                       hover:bg-slate-700 transition-colors"
+            className="hidden sm:block px-5 py-[7px] rounded-[12px]
+                       bg-[#2d3449] border border-[rgba(89,65,54,0.15)]
+                       text-[#ffb692] text-[12px] font-semibold
+                       hover:bg-[#363d55] transition-colors"
           >
-            Simuler
+            Analyze
           </button>
 
           {/* Sync Strava */}
           <button
             onClick={() => onNavigate('profil')}
-            className="px-4 py-1.5 rounded-xl text-[12px] font-semibold
-                       bg-gradient-to-br from-[#fc4c02] to-[#e03d00]
-                       text-white shadow-[0_4px_12px_rgba(252,76,2,0.35)]
+            className="px-5 py-[7px] rounded-[12px] text-[12px] font-semibold text-[#341100]
+                       shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1)]
                        hover:brightness-110 transition-all"
+            style={{
+              background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)',
+            }}
           >
-            {athlete ? `${athlete.firstname}` : 'Sync Strava'}
+            {athlete ? athlete.firstname : 'Sync Strava'}
           </button>
 
-          {/* Avatar / profil */}
+          {/* Avatar */}
           <button
             onClick={() => onNavigate('profil')}
-            className="w-9 h-9 rounded-xl bg-slate-800 border border-white/10
+            className="w-[40px] h-[40px] rounded-[12px]
+                       bg-[#171f33] border border-[rgba(89,65,54,0.2)]
                        flex items-center justify-center overflow-hidden
-                       hover:border-indigo-700/50 transition-colors"
+                       hover:border-[rgba(89,65,54,0.4)] transition-colors"
           >
             {athlete?.profile ? (
-              <img
-                src={athlete.profile}
-                alt={athlete.firstname}
-                className="w-full h-full object-cover"
-              />
+              <img src={athlete.profile} alt={athlete.firstname} className="w-full h-full object-cover" />
             ) : (
               <span className="text-base leading-none">🏃</span>
             )}
           </button>
-        </div>
-      </nav>
 
-      {/* ── Mobile bottom navbar ── */}
-      <nav
-        className="sm:hidden fixed bottom-0 left-0 right-0 z-50
-                   bg-[rgba(7,13,26,0.92)] backdrop-blur-[12px]
-                   border-t border-white/[0.06]"
-      >
-        <div className="flex px-2 py-2 gap-1">
-          {NAV_LINKS.map((link) => {
-            const isActive = activePage === link.id
-            return (
-              <button
-                key={link.id}
-                onClick={() => onNavigate(link.id)}
-                className={[
-                  'flex-1 flex flex-col items-center justify-center py-1.5 rounded-xl',
-                  'text-[10px] font-medium leading-tight transition-all duration-200',
-                  isActive
-                    ? 'bg-indigo-600 text-white glow-indigo'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5',
-                ].join(' ')}
-              >
-                {link.label}
-              </button>
-            )
-          })}
+          {/* Menu burger — mobile uniquement */}
+          <button
+            className="sm:hidden flex flex-col gap-[5px] p-1"
+            onClick={onSidebarOpen}
+            aria-label="Menu"
+          >
+            <span className="w-5 h-[2px] bg-[rgba(218,226,253,0.6)] rounded-full" />
+            <span className="w-5 h-[2px] bg-[rgba(218,226,253,0.6)] rounded-full" />
+            <span className="w-5 h-[2px] bg-[rgba(218,226,253,0.6)] rounded-full" />
+          </button>
         </div>
       </nav>
     </>

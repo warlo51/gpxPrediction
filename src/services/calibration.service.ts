@@ -59,6 +59,7 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
 
   const speedGradeSamples: SessionMetrics['speedGradeSamples'] = []
   const hrSpeedSamples: SessionMetrics['hrSpeedSamples'] = []
+  const hrGradeSamples: SessionMetrics['hrGradeSamples'] = []
 
   // Fenêtre glissante sur les streams pour calculer pente et vitesse locale
   const windowSize = 5
@@ -83,6 +84,7 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
 
       if (heartrate?.[i]) {
         hrSpeedSamples.push({ speedMs, hr: heartrate[i]! })
+        hrGradeSamples.push({ grade, hr: heartrate[i]! })
       }
     }
   }
@@ -95,6 +97,49 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
     startSpeeds.length > 0 && endSpeeds.length > 0
       ? mean(endSpeeds) / mean(startSpeeds)
       : 1
+
+  // Dérive cardiaque : comparaison FC début vs fin sur les tiers du parcours,
+  // uniquement si la séance dure au moins 1h (stream time requis pour plus de précision).
+  let cardiacDrift: number | undefined
+  if (heartrate && heartrate.length > 0) {
+    const timeStream = session.streams?.time
+    if (timeStream && timeStream.length > 10) {
+      const totalTime = timeStream[timeStream.length - 1]! - timeStream[0]!
+      if (totalTime > 3600) {
+        const t0 = timeStream[0]!
+        const firstThirdEnd = t0 + totalTime / 3
+        const lastThirdStart = t0 + (2 * totalTime) / 3
+        const firstThirdIdx = timeStream.findIndex((t) => t >= firstThirdEnd)
+        const lastThirdIdx = timeStream.findIndex((t) => t >= lastThirdStart)
+        if (firstThirdIdx > 5 && lastThirdIdx > 0 && lastThirdIdx < heartrate.length) {
+          const firstHRs = heartrate.slice(0, firstThirdIdx).filter((h) => h > 40)
+          const lastHRs = heartrate.slice(lastThirdIdx).filter((h) => h > 40)
+          if (firstHRs.length > 10 && lastHRs.length > 10) {
+            const hrDiff = mean(lastHRs) - mean(firstHRs)
+            // Durée approximative entre milieux des deux tiers
+            const hoursDiff = (totalTime * (2 / 3)) / 3600
+            cardiacDrift = hrDiff / hoursDiff
+          }
+        }
+      }
+    } else {
+      // Fallback : utiliser les tiers de l'index (moins précis)
+      const startHRs = heartrate.slice(0, third).filter((h) => h > 40)
+      const endHRs = heartrate.slice(2 * third).filter((h) => h > 40)
+      if (startHRs.length > 5 && endHRs.length > 5 && session.duration > 3600) {
+        const hrDiff = mean(endHRs) - mean(startHRs)
+        const hoursDiff = (session.duration * (2 / 3)) / 3600
+        cardiacDrift = hrDiff / hoursDiff
+      }
+    }
+  }
+
+  // Vitesse de marche réelle : médiane des vitesses sur les segments très raides (> 15%),
+  // seuil conservateur pour capturer uniquement la marche forcée.
+  const walkingSamples = speedGradeSamples
+    .filter((s) => s.grade > 15 && s.speedMs < 2.5)
+    .map((s) => s.speedMs)
+  const walkingSpeedMs = walkingSamples.length >= 5 ? median(walkingSamples) : undefined
 
   // Vitesse sur plat (segments avec |grade| < 2%)
   const flatSamples = speedGradeSamples
@@ -122,8 +167,11 @@ function extractSessionMetrics(session: TrainingSession): SessionMetrics | null 
     flatAvgSpeedMs,
     speedGradeSamples,
     hrSpeedSamples,
+    hrGradeSamples,
     performanceDrift,
     speedByGradeBucket,
+    cardiacDrift,
+    walkingSpeedMs,
   }
 }
 
@@ -267,6 +315,8 @@ function calibrateSpeedModel(
 
 function calibrateHeartRateModel(
   allHrSamples: SessionMetrics['hrSpeedSamples'],
+  allHrGradeSamples: SessionMetrics['hrGradeSamples'],
+  allMetrics: SessionMetrics[],
   sessions: TrainingSession[],
 ): Partial<RunnerProfile['heartRateModel']> {
   const sessionsWithHR = sessions.filter((s) => s.avgHeartRate && s.avgHeartRate > 0)
@@ -276,25 +326,67 @@ function calibrateHeartRateModel(
   const avgHRs = sessionsWithHR.map((s) => s.avgHeartRate!)
   const maxHRs = sessionsWithHR.map((s) => s.maxHeartRate ?? s.avgHeartRate! * 1.1)
 
+  const calibratedBaseHR = avgHRs.length > 0 ? Math.round(median(removeOutliers(avgHRs))) : undefined
+  const calibratedMaxHR =
+    maxHRs.length > 0 ? Math.round(Math.max(...removeOutliers(maxHRs))) : undefined
+
+  // ── gradeHRFactor : régression linéaire FC ~ pente sur les segments montants
+  // Modèle : FC = a + b × grade → b est le gradeHRFactor
+  let gradeHRFactor: number | undefined
+  const uphillHrGrade = allHrGradeSamples.filter((s) => s.grade > 3 && s.grade < 25 && s.hr > 60)
+  if (uphillHrGrade.length >= 15) {
+    const grades = uphillHrGrade.map((s) => s.grade)
+    const hrs = uphillHrGrade.map((s) => s.hr)
+    const gradeMean = mean(grades)
+    const hrMean = mean(hrs)
+    const numerator = uphillHrGrade.reduce((acc, s) => acc + (s.grade - gradeMean) * (s.hr - hrMean), 0)
+    const denominator = uphillHrGrade.reduce((acc, s) => acc + (s.grade - gradeMean) ** 2, 0)
+    if (denominator > 0) {
+      const slope = numerator / denominator
+      gradeHRFactor = Math.max(0.3, Math.min(3.0, slope))
+    }
+  }
+
+  // ── cardiacDriftBpmPerHour : médiane des dérives mesurées par séance
+  const drifts = allMetrics
+    .map((m) => m.cardiacDrift)
+    .filter((d): d is number => d !== undefined && d > -1 && d < 12)
+  const cardiacDriftBpmPerHour =
+    drifts.length >= 2 ? Math.max(0, Math.round(median(removeOutliers(drifts)) * 10) / 10) : undefined
+
+  // ── lactateThresholdHR : estimation classique FCR repos + 85% FCR
+  // Plus fiable que le breakpoint de régression avec peu de données.
+  let lactateThresholdHR: number | undefined
+  if (calibratedBaseHR && calibratedMaxHR) {
+    const restingHREstimate = calibratedBaseHR * 0.55 // approximation si FCR repos inconnue
+    lactateThresholdHR = Math.round(restingHREstimate + 0.85 * (calibratedMaxHR - restingHREstimate))
+  }
+
   return {
-    baseHR: avgHRs.length > 0 ? Math.round(median(removeOutliers(avgHRs))) : undefined,
-    maxHR:
-      maxHRs.length > 0
-        ? Math.round(Math.max(...removeOutliers(maxHRs)))
-        : undefined,
+    baseHR: calibratedBaseHR,
+    maxHR: calibratedMaxHR,
+    ...(gradeHRFactor !== undefined && { gradeHRFactor }),
+    ...(cardiacDriftBpmPerHour !== undefined && { cardiacDriftBpmPerHour }),
+    ...(lactateThresholdHR !== undefined && { lactateThresholdHR }),
   }
 }
 
 // ─── Calibration fatigue / endurance ─────────────────────────────────────────
 
 /**
- * Estime le score d'endurance et le facteur de fatigue horaire
- * à partir de la dérive de performance moyenne sur les longues séances.
+ * Estime le score d'endurance, le facteur de fatigue horaire et les facteurs
+ * de fatigue liés à l'élévation à partir de la dérive de performance.
  */
 function calibrateFatigueModel(
   metrics: SessionMetrics[],
   sessions: TrainingSession[],
-): { enduranceScore: number; hourlyDecayFactor: number; fatigueThresholdKm: number } {
+): {
+  enduranceScore: number
+  hourlyDecayFactor: number
+  fatigueThresholdKm: number
+  elevationFatigueFactorPer1000m: number
+  downhillFatigueFactorPer1000m: number
+} {
   // Séances longues (> 1h)
   const longSessions = sessions.filter((s) => s.duration > 3600)
   const drifts = metrics.map((m) => m.performanceDrift).filter((d) => d > 0.5 && d < 1.5)
@@ -302,10 +394,11 @@ function calibrateFatigueModel(
   const avgDrift = drifts.length > 0 ? mean(drifts) : 1
 
   // Score d'endurance : 1 = pas de dérive, 0 = forte dérive
-  const enduranceScore = Math.min(1, Math.max(0.1, avgDrift * 0.9))
+  // Note : suppression du facteur ×0.9 systématique qui pénalisait les bons coureurs
+  const enduranceScore = Math.min(1, Math.max(0.1, avgDrift))
 
   // Facteur de fatigue horaire calibré sur la dérive
-  const hourlyDecay = drifts.length > 0 ? (1 - avgDrift) / 2 : 0.03
+  const hourlyDecay = drifts.length > 0 ? (1 - avgDrift) / 2 : 0.015
   const hourlyDecayFactor = Math.max(0.005, Math.min(0.1, hourlyDecay))
 
   // Seuil de fatigue tardive : distance médiane des longues séances
@@ -315,7 +408,56 @@ function calibrateFatigueModel(
       ? Math.round(median(longDistances) * 0.6)
       : DEFAULT_RUNNER_PROFILE.fatigueModel.fatigueThresholdKm
 
-  return { enduranceScore, hourlyDecayFactor, fatigueThresholdKm }
+  // ── Facteur de fatigue par élévation
+  // Principe : séances avec plus de D+/km tendent à produire plus de dérive,
+  // au-delà de ce qu'explique le temps seul.
+  // On mesure (1 - drift) / elevPer1000m sur les séances avec D+ significatif.
+  const elevPairs = sessions
+    .map((s) => {
+      const m = metrics.find((mm) => mm.sessionId === s.id)
+      if (!m || m.performanceDrift <= 0 || s.elevationGain < 300 || s.distance < 8000) return null
+      const elevPer1000m = s.elevationGain / 1000
+      // Dérive résiduelle après soustraction de la part temporelle estimée
+      const hoursElapsed = s.duration / 3600
+      const temporalDrift = hoursElapsed * hourlyDecayFactor
+      const residualDrift = Math.max(0, (1 - m.performanceDrift) - temporalDrift)
+      return { elevPer1000m, residualDrift }
+    })
+    .filter((p): p is { elevPer1000m: number; residualDrift: number } => p !== null)
+
+  let elevationFatigueFactorPer1000m = DEFAULT_RUNNER_PROFILE.fatigueModel.elevationFatigueFactorPer1000m
+  if (elevPairs.length >= 3) {
+    const factors = elevPairs
+      .map((p) => (p.elevPer1000m > 0 ? p.residualDrift / p.elevPer1000m : null))
+      .filter((f): f is number => f !== null && f >= 0 && f < 0.05)
+    if (factors.length >= 3) {
+      elevationFatigueFactorPer1000m = Math.max(0.002, Math.min(0.025, median(factors)))
+    }
+  }
+
+  // Facteur descente : défaut à 1.5× le facteur montée (dommages quad > charge cardio)
+  const downhillFatigueFactorPer1000m = Math.min(0.03, elevationFatigueFactorPer1000m * 1.5)
+
+  return {
+    enduranceScore,
+    hourlyDecayFactor,
+    fatigueThresholdKm,
+    elevationFatigueFactorPer1000m,
+    downhillFatigueFactorPer1000m,
+  }
+}
+
+// ─── Calibration vitesse de marche ───────────────────────────────────────────
+
+/**
+ * Extrait la vitesse de marche réelle depuis les séances avec streams.
+ * Prend la médiane des vitesses mesurées sur les segments raides.
+ */
+function calibrateWalkingSpeed(allMetrics: SessionMetrics[]): number | null {
+  const walkingSpeeds = allMetrics
+    .map((m) => m.walkingSpeedMs)
+    .filter((v): v is number => v !== undefined && v > 0.4 && v < 2.2)
+  return walkingSpeeds.length >= 3 ? median(walkingSpeeds) : null
 }
 
 // ─── Fonction principale ──────────────────────────────────────────────────────
@@ -379,12 +521,16 @@ export function calibrateRunner(
 
   // ── 4. Calibration FC
   const allHrSamples = metrics.flatMap((m) => m.hrSpeedSamples)
-  const hrCalibration = calibrateHeartRateModel(allHrSamples, history)
+  const allHrGradeSamples = metrics.flatMap((m) => m.hrGradeSamples)
+  const hrCalibration = calibrateHeartRateModel(allHrSamples, allHrGradeSamples, metrics, history)
 
   // ── 5. Calibration fatigue
   const fatigueCalibration = calibrateFatigueModel(metrics, history)
 
-  // ── 6. Assemblage du profil calibré
+  // ── 6. Vitesse de marche réelle
+  const calibratedWalkingSpeed = calibrateWalkingSpeed(metrics)
+
+  // ── 7. Assemblage du profil calibré
   return {
     ...baseProfile,
     calibratedAt: new Date(),
@@ -402,18 +548,27 @@ export function calibrateRunner(
       ...(speedModelCalibration.walkingThresholdGrade !== null && {
         walkingThresholdGrade: speedModelCalibration.walkingThresholdGrade,
       }),
+      // Vitesse de marche réelle mesurée (si données suffisantes)
+      ...(calibratedWalkingSpeed !== null && {
+        walkingSpeed: calibratedWalkingSpeed,
+      }),
     },
 
     heartRateModel: {
       ...baseProfile.heartRateModel,
       ...(hrCalibration.baseHR && { baseHR: hrCalibration.baseHR }),
       ...(hrCalibration.maxHR && { maxHR: hrCalibration.maxHR }),
+      ...(hrCalibration.gradeHRFactor !== undefined && { gradeHRFactor: hrCalibration.gradeHRFactor }),
+      ...(hrCalibration.cardiacDriftBpmPerHour !== undefined && { cardiacDriftBpmPerHour: hrCalibration.cardiacDriftBpmPerHour }),
+      ...(hrCalibration.lactateThresholdHR !== undefined && { lactateThresholdHR: hrCalibration.lactateThresholdHR }),
     },
 
     fatigueModel: {
       ...baseProfile.fatigueModel,
       hourlyDecayFactor: fatigueCalibration.hourlyDecayFactor,
       fatigueThresholdKm: fatigueCalibration.fatigueThresholdKm,
+      elevationFatigueFactorPer1000m: fatigueCalibration.elevationFatigueFactorPer1000m,
+      downhillFatigueFactorPer1000m: fatigueCalibration.downhillFatigueFactorPer1000m,
     },
   }
 }

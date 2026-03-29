@@ -28,12 +28,16 @@ export type SpeedGradeModel = {
 export type FatigueModel = {
   /** Facteur de dérive par heure (ex: 0.03 = 3% de ralentissement/h) */
   hourlyDecayFactor: number
-  /** Facteur de récupération sur descente (réduit la fatigue) */
+  /** Facteur de récupération sur descente (réduit la fatigue temporelle) */
   downhillRecoveryFactor: number
   /** Seuil de distance (km) à partir duquel la fatigue s'accélère */
   fatigueThresholdKm: number
   /** Coefficient de fatigue supplémentaire au-delà du seuil */
   lateFatigueMultiplier: number
+  /** Surcoût de fatigue musculaire par 1000m D+ cumulé (charge montée) */
+  elevationFatigueFactorPer1000m: number
+  /** Fatigue musculaire (dommages quad) par 1000m D- cumulé */
+  downhillFatigueFactorPer1000m: number
 }
 
 /** Modèle FC (fréquence cardiaque) */
@@ -44,10 +48,12 @@ export type HeartRateModel = {
   maxHR: number
   /** FC à l'allure de base sur plat en bpm */
   baseHR: number
-  /** Coefficient de hausse FC avec la pente */
+  /** Coefficient de hausse FC avec la pente (bpm par % de pente) */
   gradeHRFactor: number
   /** Dérive cardiaque progressive en bpm/heure */
   cardiacDriftBpmPerHour: number
+  /** FC au seuil lactate estimée (≈ FCR repos + 85% FCR) */
+  lactateThresholdHR?: number
 }
 
 /** Modèle énergétique */
@@ -80,6 +86,8 @@ export type RunnerProfile = {
   baseHeartRate: number
   /** Score d'endurance (0 à 1) — capacité à maintenir l'effort dans le temps */
   enduranceScore: number
+  /** VO2max estimé en mL/kg/min */
+  vo2Max?: number
 }
 
 /** Stats agrégées calculées depuis l'historique */

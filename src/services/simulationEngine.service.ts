@@ -71,20 +71,40 @@ function computeBaseSpeed(
 
 /**
  * Facteur de fatigue cumulé (0 = aucune, 1 = épuisement total).
- * Augmente progressivement avec le temps et s'accélère après le seuil.
+ *
+ * Trois composantes :
+ * 1. Temporelle : décroissance horaire (cardiovasculaire/glycogène)
+ * 2. D+ cumulé : surcharge musculaire montée (elevationFatigueFactorPer1000m)
+ * 3. D- cumulé : dommages quad descente (downhillFatigueFactorPer1000m)
+ *
+ * En descente, la fatigue temporelle est partiellement récupérée
+ * (downhillRecoveryFactor réduit le hourlyDecay effectif).
  */
 function computeFatigueFactor(
   elapsedHours: number,
   cumulativeDistanceKm: number,
+  cumulativeElevGainM: number,
+  cumulativeElevLossM: number,
   profile: RunnerProfile,
   applyFatigue: boolean,
+  isDownhill: boolean,
 ): number {
   if (!applyFatigue) return 0
 
-  const { hourlyDecayFactor, fatigueThresholdKm, lateFatigueMultiplier } =
-    profile.fatigueModel
+  const {
+    hourlyDecayFactor,
+    downhillRecoveryFactor,
+    fatigueThresholdKm,
+    lateFatigueMultiplier,
+    elevationFatigueFactorPer1000m,
+    downhillFatigueFactorPer1000m,
+  } = profile.fatigueModel
 
-  let fatigue = elapsedHours * hourlyDecayFactor
+  // Composante temporelle — réduite en descente (récupération cardiovasculaire)
+  const effectiveHourlyDecay = isDownhill
+    ? hourlyDecayFactor * (1 - downhillRecoveryFactor * 0.4)
+    : hourlyDecayFactor
+  let fatigue = elapsedHours * effectiveHourlyDecay
 
   // Fatigue accrue au-delà du seuil kilométrique
   if (cumulativeDistanceKm > fatigueThresholdKm) {
@@ -92,6 +112,12 @@ function computeFatigueFactor(
     const extraHours = extraKm / (profile.speedModel.flatSpeed * 3.6) // estimation
     fatigue += extraHours * hourlyDecayFactor * (lateFatigueMultiplier - 1)
   }
+
+  // Composante élévation — charge musculaire montée
+  fatigue += (cumulativeElevGainM / 1000) * elevationFatigueFactorPer1000m
+
+  // Composante descente — dommages quad
+  fatigue += (cumulativeElevLossM / 1000) * downhillFatigueFactorPer1000m
 
   return clamp(fatigue, 0, 0.5) // max 50% de perte de perf
 }
@@ -191,11 +217,14 @@ export function runSimulation(
 
   let cumulativeTime = 0   // secondes
   let cumulativeCalories = 0
+  let cumulativeElevGain = 0  // D+ cumulé en mètres
+  let cumulativeElevLoss = 0  // D- cumulé en mètres
 
   const segmentResults: SegmentSimulation[] = track.segments.map((seg) => {
     const progress = seg.cumulativeDistance / track.totalDistance
     const elapsedHours = cumulativeTime / 3600
     const cumulativeKm = seg.cumulativeDistance / 1000
+    const isDownhill = seg.avgGrade < -3
 
     // ── Facteur d'effort de la phase
     let effortFactor = getPhaseEffortFactor(progress, strategy, params.effortFactor)
@@ -216,12 +245,15 @@ export function runSimulation(
 
     effortFactor = clamp(effortFactor, 0.6, 1.1)
 
-    // ── Fatigue
+    // ── Fatigue (inclut D+ et D- cumulés)
     const fatigueFactor = computeFatigueFactor(
       elapsedHours,
       cumulativeKm,
+      cumulativeElevGain,
+      cumulativeElevLoss,
       profile,
       params.applyFatigue,
+      isDownhill,
     )
 
     // ── Vitesse effective (après fatigue)
@@ -250,6 +282,8 @@ export function runSimulation(
     const calories = computeCalories(seg.distance, seg.elevationGain, profile)
     cumulativeCalories += calories
     cumulativeTime += duration
+    cumulativeElevGain += seg.elevationGain
+    cumulativeElevLoss += seg.elevationLoss
 
     return {
       segment: seg,

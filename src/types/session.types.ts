@@ -50,6 +50,8 @@ export type SessionMetrics = {
   speedGradeSamples: Array<{ grade: number; speedMs: number }>
   /** Corrélations FC/vitesse échantillonnées */
   hrSpeedSamples: Array<{ speedMs: number; hr: number }>
+  /** Corrélations FC/pente (pour calibrer gradeHRFactor) */
+  hrGradeSamples: Array<{ grade: number; hr: number }>
   /** Dérive de performance (ratio fin/début) */
   performanceDrift: number
   /**
@@ -57,4 +59,8 @@ export type SessionMetrics = {
    * Utilisé pour détecter le seuil de passage à la marche.
    */
   speedByGradeBucket: Array<{ gradeMin: number; gradeMax: number; medianSpeedMs: number; count: number }>
+  /** Dérive cardiaque mesurée sur la séance en bpm/heure (null si données insuffisantes) */
+  cardiacDrift?: number
+  /** Vitesse de marche réelle mesurée sur les segments raides (m/s) */
+  walkingSpeedMs?: number
 }
