@@ -3,7 +3,9 @@
  * Toujours visible. Cliquer un lien ouvre la SideBar depuis la gauche.
  */
 
+import { useState } from 'react'
 import { useStravaStore } from '@/stores/stravaStore'
+import { StravaConnect } from '@/features/strava/StravaConnect'
 
 export type Page = 'accueil' | 'dashboard' | 'planificateur' | 'strategie' | 'profil'
 
@@ -22,6 +24,7 @@ const NAV_LINKS: { id: Page; label: string }[] = [
 
 export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
   const { athlete } = useStravaStore()
+  const [stravaOpen, setStravaOpen] = useState(false)
 
   const handleNavClick = (page: Page) => {
     onNavigate(page)
@@ -93,7 +96,7 @@ export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
 
           {/* Sync Strava */}
           <button
-            onClick={() => onNavigate('profil')}
+            onClick={() => setStravaOpen(true)}
             className="px-5 py-[7px] rounded-[12px] text-[12px] font-semibold text-[#341100]
                        shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1)]
                        hover:brightness-110 transition-all"
@@ -131,6 +134,32 @@ export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
           </button>
         </div>
       </nav>
+
+      {/* ── Modal Strava ── */}
+      {stravaOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setStravaOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Bouton fermer */}
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={() => setStravaOpen(false)}
+                className="text-slate-400 hover:text-white text-xs px-3 py-1 rounded-lg
+                           bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                ✕ Fermer
+              </button>
+            </div>
+            <StravaConnect />
+          </div>
+        </div>
+      )}
     </>
   )
 }

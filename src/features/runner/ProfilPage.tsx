@@ -5,7 +5,6 @@
 
 import { useAppStore } from '@/stores/appStore'
 import { useStravaStore } from '@/stores/stravaStore'
-import { StravaConnect } from '@/features/strava/StravaConnect'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -520,9 +519,6 @@ export function ProfilPage() {
         <PersonalBestsCard sessions={sessions} />
         <GearCard />
       </div>
-
-      {/* ── Sync Strava ── */}
-      <StravaConnect />
 
       {/* ── Footer stats bar ── */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-px rounded-2xl overflow-hidden"
