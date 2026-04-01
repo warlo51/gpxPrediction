@@ -13,6 +13,7 @@ export type UserProfile = {
   email: string | null
   weight_kg: number | null
   age: number | null
+  resting_hr: number | null
   is_premium: boolean
 }
 
@@ -29,7 +30,7 @@ export async function upsertUserProfile(
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('email, weight_kg, age, is_premium')
+    .select('email, weight_kg, age, resting_hr, is_premium')
     .eq('id', userId)
     .single()
   if (error && error.code !== 'PGRST116') throw error

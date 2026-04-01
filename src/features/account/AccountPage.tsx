@@ -163,6 +163,7 @@ function AccountContent({
 
   const [weight, setWeight] = useState(profile.energyModel.weightKg.toString())
   const [age, setAge] = useState(profile.age?.toString() ?? '')
+  const [restingHR, setRestingHR] = useState(profile.heartRateModel.restingHR.toString())
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -180,6 +181,12 @@ function AccountContent({
         setAge(dbProfile.age.toString())
         updateProfile({ age: dbProfile.age })
       }
+      if (dbProfile.resting_hr != null) {
+        setRestingHR(dbProfile.resting_hr.toString())
+        updateProfile({
+          heartRateModel: { ...profile.heartRateModel, restingHR: dbProfile.resting_hr },
+        })
+      }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id])
@@ -187,12 +194,17 @@ function AccountContent({
   async function handleSavePersonalInfo() {
     const w = parseFloat(weight)
     const a = parseInt(age, 10)
+    const r = parseInt(restingHR, 10)
     const weightKg = isNaN(w) ? profile.energyModel.weightKg : w
     const ageVal = isNaN(a) ? undefined : a
+    const restingHRVal = isNaN(r) ? undefined : r
 
     updateProfile({
       energyModel: { ...profile.energyModel, weightKg },
       age: ageVal,
+      ...(restingHRVal != null && {
+        heartRateModel: { ...profile.heartRateModel, restingHR: restingHRVal },
+      }),
     })
 
     setSaving(true)
@@ -201,6 +213,7 @@ function AccountContent({
         email: user.email ?? null,
         weight_kg: weightKg,
         age: ageVal ?? null,
+        resting_hr: restingHRVal ?? null,
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -247,7 +260,7 @@ function AccountContent({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-medium tracking-[1px] uppercase text-[rgba(218,226,253,0.4)]">
               Poids (kg)
@@ -280,6 +293,23 @@ function AccountContent({
                          focus:outline-none focus:border-[#ff6d00] focus:ring-1 focus:ring-[#ff6d00]/40
                          hover:border-white/20 transition-colors placeholder:text-slate-600"
               placeholder="30"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-medium tracking-[1px] uppercase text-[rgba(218,226,253,0.4)]">
+              FC Repos (bpm)
+            </label>
+            <input
+              type="number"
+              min={30}
+              max={100}
+              value={restingHR}
+              onChange={e => { setRestingHR(e.target.value); setSaved(false) }}
+              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
+                         focus:outline-none focus:border-[#ff6d00] focus:ring-1 focus:ring-[#ff6d00]/40
+                         hover:border-white/20 transition-colors placeholder:text-slate-600"
+              placeholder="50"
             />
           </div>
         </div>

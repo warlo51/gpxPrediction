@@ -7,8 +7,10 @@
 import { useState, useCallback } from 'react'
 import { useGarminStore } from '@/stores/garminStore'
 import { useAppStore } from '@/stores/appStore'
+import { useAuthStore } from '@/stores/authStore'
 import { calibrateRunner } from '@/services/calibration.service'
 import { garminLogin, importGarminActivities } from '@/services/garmin.service'
+import { saveSessions, saveRunnerProfile, saveGarminConnection } from '@/services/supabase.service'
 import type { GarminImportProgress } from '@/services/garmin.service'
 
 // ─── Formulaire de connexion ──────────────────────────────────────────────────
@@ -51,6 +53,15 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
       }
 
       setTokens(result.oauth1, result.oauth2, result.profile)
+      // Sauvegarder la connexion en DB pour les premium
+      const { user, isPremium } = useAuthStore.getState()
+      if (user && isPremium) {
+        saveGarminConnection(user.id, {
+          oauth1: result.oauth1,
+          oauth2: result.oauth2,
+          profile: result.profile,
+        }).catch(() => {})
+      }
       onConnected()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de connexion')
@@ -209,6 +220,17 @@ function GarminImportPanel() {
         const allSessions = [...sessions, ...newSessions]
         const calibrated = calibrateRunner(allSessions, runnerProfile)
         setProfile(calibrated)
+
+        // Sauvegarder en DB pour les utilisateurs premium
+        const { user, isPremium } = useAuthStore.getState()
+        if (user && isPremium) {
+          saveSessions(user.id, newSessions).catch((err) =>
+            console.error('Erreur sauvegarde sessions DB:', err),
+          )
+          saveRunnerProfile(user.id, calibrated).catch((err) =>
+            console.error('Erreur sauvegarde profil DB:', err),
+          )
+        }
       }
 
       setLastResult({ imported: newSessions.length, skipped, withFit })

@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStravaStore } from '@/stores/stravaStore'
 import { useAppStore } from '@/stores/appStore'
+import { useAuthStore } from '@/stores/authStore'
 import {
   buildStravaAuthUrl,
   exchangeCodeForToken,
@@ -18,6 +19,7 @@ import {
   mapActivityToSession,
 } from '@/services/strava.service'
 import { calibrateRunner } from '@/services/calibration.service'
+import { saveSessions, saveRunnerProfile, saveStravaConnection } from '@/services/supabase.service'
 
 // ─── Hook : gestion du callback OAuth ────────────────────────────────────────
 
@@ -51,6 +53,11 @@ function useStravaCallback() {
       .then(({ token, athlete }) => {
         setToken(token)
         setAthlete(athlete)
+        // Sauvegarder la connexion en DB pour les premium
+        const { user, isPremium } = useAuthStore.getState()
+        if (user && isPremium) {
+          saveStravaConnection(user.id, { credentials, token, athlete }).catch(() => {})
+        }
       })
       .catch((err: unknown) => {
         setCallbackError(err instanceof Error ? err.message : 'Erreur OAuth Strava')
@@ -357,6 +364,17 @@ function StravaImportPanel() {
       const allSessions = [...sessions, ...newSessions]
       const calibrated = calibrateRunner(allSessions, profile)
       setProfile(calibrated)
+
+      // 4. Sauvegarder en DB pour les utilisateurs premium
+      const { user, isPremium } = useAuthStore.getState()
+      if (user && isPremium) {
+        saveSessions(user.id, newSessions).catch((err) =>
+          console.error('Erreur sauvegarde sessions DB:', err),
+        )
+        saveRunnerProfile(user.id, calibrated).catch((err) =>
+          console.error('Erreur sauvegarde profil DB:', err),
+        )
+      }
 
       setImportState({
         phase: 'done',
