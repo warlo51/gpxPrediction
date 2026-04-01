@@ -12,6 +12,7 @@
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@supabase/supabase-js": "^2.101.1",
     "axios": "^1.13.6",
     "d3": "^7.9.0",
     "fit-file-parser": "^2.3.3",
