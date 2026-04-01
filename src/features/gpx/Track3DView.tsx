@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Line, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import type { GpxTrack, GpxSegment, SegmentType } from '@/types'
