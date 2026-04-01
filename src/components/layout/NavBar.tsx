@@ -5,7 +5,9 @@
 
 import { useState } from 'react'
 import { useStravaStore } from '@/stores/stravaStore'
+import { useGarminStore } from '@/stores/garminStore'
 import { StravaConnect } from '@/features/strava/StravaConnect'
+import { GarminConnect } from '@/features/history/GarminConnect'
 
 export type Page = 'accueil' | 'planificateur' | 'strategie' | 'profil'
 
@@ -21,9 +23,16 @@ const NAV_LINKS: { id: Page; label: string }[] = [
 ]
 
 export function NavBar({ activePage, onNavigate }: NavBarProps) {
-  const { athlete } = useStravaStore()
-  const [stravaOpen, setStravaOpen] = useState(false)
+  const { athlete, token } = useStravaStore()
+  const garminOauth1 = useGarminStore(s => s.oauth1)
+  const garminOauth2 = useGarminStore(s => s.oauth2)
+  const [connectOpen, setConnectOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const stravaConnected = !!(athlete && token)
+  const garminConnected = !!(garminOauth1 && garminOauth2)
+  const anyConnected = stravaConnected || garminConnected
+  const allConnected = stravaConnected && garminConnected
 
   const handleNavClick = (page: Page) => {
     onNavigate(page)
@@ -80,43 +89,35 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
           </div>
         </div>
 
-        {/* Right: action buttons + avatar */}
+        {/* Right: connection button + burger */}
         <div className="flex items-center gap-3">
-          {/* Analyze */}
+          {/* Connexion */}
           <button
-            onClick={() => handleNavClick('planificateur')}
-            className="hidden sm:block px-5 py-[7px] rounded-[12px]
-                       bg-[#2d3449] border border-[rgba(89,65,54,0.15)]
-                       text-[#ffb692] text-[12px] font-semibold
-                       hover:bg-[#363d55] transition-colors"
+            onClick={() => setConnectOpen(true)}
+            className="flex items-center gap-2 px-4 py-[7px] rounded-[12px] text-[12px] font-semibold
+                       transition-all hover:brightness-110"
+            style={anyConnected ? {
+              background: '#2d3449',
+              border: '1px solid rgba(89,65,54,0.15)',
+              color: '#dae2fd',
+            } : {
+              background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)',
+              color: '#341100',
+              boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+            }}
           >
-            Analyze
-          </button>
-
-          {/* Sync Strava */}
-          <button
-            onClick={() => setStravaOpen(true)}
-            className="px-5 py-[7px] rounded-[12px] text-[12px] font-semibold text-[#341100]
-                       shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1)]
-                       hover:brightness-110 transition-all"
-            style={{ background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)' }}
-          >
-            {athlete ? athlete.firstname : 'Sync Strava'}
-          </button>
-
-          {/* Avatar */}
-          <button
-            onClick={() => handleNavClick('profil')}
-            className="hidden sm:flex w-[40px] h-[40px] rounded-[12px]
-                       bg-[#171f33] border border-[rgba(89,65,54,0.2)]
-                       items-center justify-center overflow-hidden
-                       hover:border-[rgba(89,65,54,0.4)] transition-colors"
-          >
-            {athlete?.profile ? (
-              <img src={athlete.profile} alt={athlete.firstname} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-base leading-none">🏃</span>
+            {/* Status dots */}
+            {anyConnected && (
+              <div className="flex items-center gap-1.5">
+                <span className={`w-[6px] h-[6px] rounded-full ${stravaConnected ? 'bg-[#22c55e]' : 'bg-[rgba(218,226,253,0.2)]'}`} />
+                <span className={`w-[6px] h-[6px] rounded-full ${garminConnected ? 'bg-[#22c55e]' : 'bg-[rgba(218,226,253,0.2)]'}`} />
+              </div>
             )}
+            {allConnected
+              ? 'Connecté'
+              : anyConnected
+                ? (stravaConnected ? 'Strava connecté' : 'Garmin connecté')
+                : 'Se connecter'}
           </button>
 
           {/* Menu burger — mobile uniquement */}
@@ -172,21 +173,22 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
         </>
       )}
 
-      {/* ── Modal Strava ── */}
-      {stravaOpen && (
+      {/* ── Modal Connexions ── */}
+      {connectOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4"
+          className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4 pb-8 overflow-y-auto"
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setStravaOpen(false)}
+          onClick={() => setConnectOpen(false)}
         >
           <div
-            className="w-full max-w-lg"
+            className="w-full max-w-lg flex flex-col gap-4"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Bouton fermer */}
-            <div className="flex justify-end mb-2">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-bold text-sm tracking-wide uppercase">Connexions</h2>
               <button
-                onClick={() => setStravaOpen(false)}
+                onClick={() => setConnectOpen(false)}
                 className="text-slate-400 hover:text-white text-xs px-3 py-1 rounded-lg
                            bg-white/5 hover:bg-white/10 transition-colors"
               >
@@ -194,6 +196,7 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
               </button>
             </div>
             <StravaConnect />
+            <GarminConnect />
           </div>
         </div>
       )}

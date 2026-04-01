@@ -9,26 +9,14 @@ import type { DragEvent } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { parseGpxFile } from '@/services/gpxParser.service'
 import { TrackMap } from './TrackMap'
+import { Track3DView } from './Track3DView'
+import { ElevationChart } from './ElevationChart'
 import type { GpxTrack } from '@/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatNum(n: number, decimals = 1) {
   return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: decimals }).format(n)
-}
-
-/** Groupe les segments du track en N macro-segments pour le breakdown */
-function buildMacroSegments(track: GpxTrack, count = 12) {
-  const n = track.segments.length
-  if (n === 0) return []
-  const size = Math.max(1, Math.ceil(n / count))
-  return Array.from({ length: Math.ceil(n / size) }, (_, i) => {
-    const slice = track.segments.slice(i * size, (i + 1) * size)
-    const distM  = slice.reduce((a, s) => a + s.distance, 0)
-    const elev   = slice.reduce((a, s) => a + s.elevationGain, 0)
-    const startKm = (slice[0]?.cumulativeDistance ?? 0) / 1000
-    return { index: i + 1, startKm, distKm: distM / 1000, elevM: Math.round(elev) }
-  })
 }
 
 /** Construit les barres du mini graphique altimétrique (10 barres) */
@@ -159,7 +147,7 @@ function EmptyIndicators() {
 
 // ─── Right panel — track chargé ───────────────────────────────────────────────
 
-function TrackIndicators({ track, onNavigateToStrategy }: { track: GpxTrack; onNavigateToStrategy: () => void }) {
+function TrackIndicators({ track }: { track: GpxTrack }) {
   const distKm    = track.totalDistance / 1000
   const ascentM   = Math.round(track.totalElevationGain)
   const avgGrade  = ((track.totalElevationGain / track.totalDistance) * 100).toFixed(1)
@@ -167,8 +155,6 @@ function TrackIndicators({ track, onNavigateToStrategy }: { track: GpxTrack; onN
 
   const elevBars  = buildElevBars(track, 10)
   const barMax    = Math.max(...elevBars)
-  const macros    = buildMacroSegments(track, 12)
-  const first3    = macros.slice(0, 3)
 
   return (
     <div className="flex flex-col gap-4">
@@ -222,45 +208,6 @@ function TrackIndicators({ track, onNavigateToStrategy }: { track: GpxTrack; onN
         </div>
       </div>
 
-      {/* ── Segment Breakdown ── */}
-      <div className="rounded-2xl p-5" style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <p className="text-[9px] font-medium tracking-[1.5px] uppercase text-[rgba(218,226,253,0.4)] mb-4">
-          Segment Breakdown
-        </p>
-
-        <div className="flex flex-col">
-          {first3.map((seg) => (
-            <div
-              key={seg.index}
-              className="flex items-center gap-3 py-3 border-b border-white/[0.05] last:border-0
-                         hover:bg-white/[0.02] rounded-lg px-2 -mx-2 cursor-pointer transition-colors"
-            >
-              <span className="text-[10px] font-bold text-[rgba(218,226,253,0.3)] w-5 shrink-0">
-                {String(seg.index).padStart(2, '0')}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-bold text-white uppercase tracking-[0.5px] truncate">
-                  Segment {seg.index}
-                </p>
-                <p className="text-[9px] text-[rgba(218,226,253,0.4)]">
-                  {seg.distKm.toFixed(1)}km • +{seg.elevM}m
-                </p>
-              </div>
-              <svg width="6" height="10" viewBox="0 0 6 10" fill="none" className="shrink-0">
-                <path d="M1 1l4 4-4 4" stroke="rgba(218,226,253,0.3)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          ))}
-        </div>
-
-        <button
-          className="w-full mt-3 py-2 text-[9px] font-bold tracking-[1.5px] uppercase
-                     text-[rgba(218,226,253,0.5)] hover:text-[#ff6d00] transition-colors"
-          onClick={onNavigateToStrategy}
-        >
-          View All {macros.length} Segments
-        </button>
-      </div>
     </div>
   )
 }
@@ -277,6 +224,7 @@ export function PlanificateurPage({ onNavigateToStrategy }: PlanificateurPagePro
   const [isDragging, setIsDragging] = useState(false)
   const [isParsing,  setIsParsing]  = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
+  const [viewMode, setViewMode]     = useState<'map' | '3d'>('map')
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.name.endsWith('.gpx')) {
@@ -362,15 +310,47 @@ export function PlanificateurPage({ onNavigateToStrategy }: PlanificateurPagePro
               )}
             </>
           ) : (
-            <div className="relative rounded-2xl overflow-hidden" style={{ height: '420px' }}>
-              {/* Live badge */}
-              <div className="absolute top-4 left-4 z-[1000] flex items-center gap-2 px-3 py-1.5 rounded-full"
-                style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
-                <span className="text-[10px] font-bold tracking-[1px] uppercase text-white">Live Trace Active</span>
+            <>
+              {/* View mode tabs */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                    viewMode === 'map'
+                      ? 'bg-[#ff6d00]/15 border-[#ff6d00]/40 text-[#ffb692]'
+                      : 'bg-white/[0.03] border-white/[0.06] text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Carte 2D
+                </button>
+                <button
+                  onClick={() => setViewMode('3d')}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                    viewMode === '3d'
+                      ? 'bg-[#ff6d00]/15 border-[#ff6d00]/40 text-[#ffb692]'
+                      : 'bg-white/[0.03] border-white/[0.06] text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Vue 3D
+                </button>
               </div>
-              <TrackMap track={track} />
-            </div>
+
+              {viewMode === 'map' ? (
+                <div className="relative rounded-2xl overflow-hidden" style={{ height: '420px' }}>
+                  <div className="absolute top-4 left-4 z-[1000] flex items-center gap-2 px-3 py-1.5 rounded-full"
+                    style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
+                    <span className="text-[10px] font-bold tracking-[1px] uppercase text-white">Live Trace Active</span>
+                  </div>
+                  <TrackMap track={track} />
+                </div>
+              ) : (
+                <Track3DView track={track} height="420px" />
+              )}
+
+              {/* Elevation profile */}
+              <ElevationChart track={track} />
+            </>
           )}
 
           {/* Bouton Generate */}
@@ -404,7 +384,7 @@ export function PlanificateurPage({ onNavigateToStrategy }: PlanificateurPagePro
         {/* ── Colonne droite ── */}
         <div className="w-full lg:w-[280px] xl:w-[320px] shrink-0">
           {track
-            ? <TrackIndicators track={track} onNavigateToStrategy={onNavigateToStrategy} />
+            ? <TrackIndicators track={track} />
             : <EmptyIndicators />
           }
         </div>

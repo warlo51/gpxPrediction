@@ -14,7 +14,6 @@ import {
   ReferenceLine,
 } from 'recharts'
 import type { GpxTrack, SegmentType } from '@/types'
-import { useAppStore } from '@/stores/appStore'
 
 // ─── Couleurs par type de segment ────────────────────────────────────────────
 
@@ -116,7 +115,6 @@ function Legend() {
 // ─── Composant principal ─────────────────────────────────────────────────────
 
 export function ElevationChart({ track }: ElevationChartProps) {
-  const { hoveredSegmentId, setHoveredSegmentId } = useAppStore()
   // Construire les points du graphique depuis les segments
   const data: ChartPoint[] = []
 
@@ -241,96 +239,6 @@ export function ElevationChart({ track }: ElevationChartProps) {
         <Legend />
       </div>
 
-      {/* Tableau des segments */}
-      <div className="mt-4 bg-slate-800/60 rounded-2xl p-4">
-        <h3 className="text-slate-300 font-semibold mb-3 text-sm uppercase tracking-wide">
-          Détail des segments ({track.segments.length})
-        </h3>
-
-        {/* Cartes mobile */}
-        <div className="flex flex-col gap-2 sm:hidden">
-          {track.segments.map((seg) => (
-            <div
-              key={seg.id}
-              onTouchStart={() => setHoveredSegmentId(seg.id)}
-              onTouchEnd={() => setHoveredSegmentId(null)}
-              className={[
-                'rounded-xl p-3 border transition-colors',
-                hoveredSegmentId === seg.id ? 'border-indigo-500/50 bg-indigo-900/10' : 'border-slate-700 bg-slate-900/40',
-              ].join(' ')}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                  style={{ backgroundColor: `${SEGMENT_COLORS[seg.type]}20`, color: SEGMENT_COLORS[seg.type] }}
-                >
-                  {SEGMENT_LABELS[seg.type]}
-                </span>
-                <span className="text-slate-600 text-xs">#{seg.index + 1}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs text-center">
-                <div>
-                  <div className="text-slate-500">Distance</div>
-                  <div className="text-white font-medium">{(seg.distance / 1000).toFixed(2)} km</div>
-                </div>
-                <div>
-                  <div className="text-slate-500">Pente</div>
-                  <div className="font-semibold" style={{ color: SEGMENT_COLORS[seg.type] }}>{seg.avgGrade.toFixed(1)} %</div>
-                </div>
-                <div>
-                  <div className="text-slate-500">D+</div>
-                  <div className="text-orange-400 font-medium">+{Math.round(seg.elevationGain)} m</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Tableau desktop */}
-        <div className="hidden sm:block overflow-x-auto">
-          <table className="w-full text-xs text-slate-400">
-            <thead>
-              <tr className="text-slate-500 border-b border-white/6">
-                <th className="text-left pb-2 pr-4">#</th>
-                <th className="text-left pb-2 pr-4">Type</th>
-                <th className="text-right pb-2 pr-4">Distance</th>
-                <th className="text-right pb-2 pr-4">Pente moy.</th>
-                <th className="text-right pb-2 pr-4">D+</th>
-                <th className="text-right pb-2">D-</th>
-              </tr>
-            </thead>
-            <tbody>
-              {track.segments.map((seg) => (
-                <tr
-                  key={seg.id}
-                  onMouseEnter={() => setHoveredSegmentId(seg.id)}
-                  onMouseLeave={() => setHoveredSegmentId(null)}
-                  className={[
-                    'border-b border-white/4 transition-colors cursor-pointer',
-                    hoveredSegmentId === seg.id ? 'bg-indigo-900/20' : 'hover:bg-white/3',
-                  ].join(' ')}
-                >
-                  <td className="py-1.5 pr-4 text-slate-600">{seg.index + 1}</td>
-                  <td className="py-1.5 pr-4">
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                      style={{ backgroundColor: `${SEGMENT_COLORS[seg.type]}20`, color: SEGMENT_COLORS[seg.type] }}
-                    >
-                      {SEGMENT_LABELS[seg.type]}
-                    </span>
-                  </td>
-                  <td className="py-1.5 pr-4 text-right">{(seg.distance / 1000).toFixed(2)} km</td>
-                  <td className="py-1.5 pr-4 text-right font-semibold" style={{ color: SEGMENT_COLORS[seg.type] }}>
-                    {seg.avgGrade.toFixed(1)} %
-                  </td>
-                  <td className="py-1.5 pr-4 text-right text-orange-400">+{Math.round(seg.elevationGain)} m</td>
-                  <td className="py-1.5 text-right text-blue-400">-{Math.round(seg.elevationLoss)} m</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   )
 }

@@ -3,6 +3,7 @@
  * Design fidèle à la maquette Figma.
  */
 
+import { useMemo } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { useStravaStore } from '@/stores/stravaStore'
 import { RunnerAnalysisPanel } from '@/features/runner/RunnerAnalysis'
@@ -105,105 +106,281 @@ function Vo2Card({
 }
 
 
-function AiStatsCard({
-  lactatePaceSec,
-  marathonSec,
-  recoveryPct,
-  insightText,
-}: {
-  lactatePaceSec: number
-  marathonSec: number
-  recoveryPct: number
-  insightText: string
+// ─── Calculs dynamiques pour AiStatsCard ─────────────────────────────────────
+
+type AiStats = {
+  /** Allure estimée au seuil lactique (s/km) */
+  lactateThresholdPace: number
+  /** Delta allure seuil vs période précédente (négatif = amélioration) */
+  lactateDelta: number | null
+  /** Temps marathon prédit via Riegel (secondes) */
+  marathonPrediction: number | null
+  /** Source de la prédiction ("10K", "Semi", etc.) */
+  marathonSource: string | null
+  /** Économie de course : allure relative à la FC (s/km par bpm) — plus bas = meilleur */
+  runningEconomy: number | null
+  /** Delta économie vs période précédente (négatif = amélioration) */
+  economyDelta: number | null
+  /** Volume hebdo moyen (km) sur les 4 dernières semaines */
+  weeklyVolume: number
+  /** Delta volume vs 4 semaines précédentes (%) */
+  volumeDelta: number | null
+  /** Texte insight dynamique */
+  insight: string
+}
+
+function computeAiStats(
+  sessions: Array<{ distance: number; duration: number; date: Date; avgPace: number; avgHeartRate?: number; elevationGain: number }>,
+  profile: { basePaceSecPerKm: number; heartRateModel: { restingHR: number; maxHR: number }; enduranceScore: number },
+): AiStats {
+  const sorted = [...sessions]
+    .filter(s => s.avgPace > 0 && s.distance > 0)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+  // ── Seuil lactique : allure à ~85% FCR (zone 4 Karvonen) ──
+  // On cherche les séances dont la FC moyenne est proche de 83-87% FCR
+  const { restingHR, maxHR } = profile.heartRateModel
+  const fcReserve = maxHR - restingHR
+  const z4TargetHR = restingHR + fcReserve * 0.85
+
+  let lactateThresholdPace = profile.basePaceSecPerKm * 0.88 // fallback
+  let lactateDelta: number | null = null
+
+  const sessionsWithHR = sorted.filter(s => s.avgHeartRate)
+  if (sessionsWithHR.length >= 4) {
+    // Séances dont FC est entre 80-90% FCR = effort seuil
+    const thresholdSessions = sessionsWithHR.filter(s => {
+      const pctFCR = (s.avgHeartRate! - restingHR) / fcReserve
+      return pctFCR >= 0.78 && pctFCR <= 0.92
+    })
+
+    if (thresholdSessions.length >= 2) {
+      // Normaliser l'allure par la FC (ajustement linéaire) pour comparer à iso-effort
+      const normalizedPaces = thresholdSessions.map(s => {
+        const hrRatio = z4TargetHR / s.avgHeartRate!
+        return s.avgPace * hrRatio
+      })
+      lactateThresholdPace = normalizedPaces.reduce((a, b) => a + b, 0) / normalizedPaces.length
+
+      // Delta : dernière moitié vs première moitié
+      const half = Math.floor(normalizedPaces.length / 2)
+      const oldAvg = normalizedPaces.slice(0, half).reduce((a, b) => a + b, 0) / half
+      const newAvg = normalizedPaces.slice(half).reduce((a, b) => a + b, 0) / (normalizedPaces.length - half)
+      lactateDelta = Math.round(newAvg - oldAvg) // négatif = amélioration
+    }
+  }
+
+  // ── Marathon prédit : formule de Riegel (T2 = T1 × (D2/D1)^1.06) ──
+  // Chercher le meilleur effort récent entre 5km et 25km (course "plate" : D+/km < 30m)
+  let marathonPrediction: number | null = null
+  let marathonSource: string | null = null
+
+  const recentFlat = sorted
+    .filter(s => {
+      const distKm = s.distance / 1000
+      const elevPerKm = s.elevationGain / distKm
+      return distKm >= 4.5 && distKm <= 25 && elevPerKm < 30
+    })
+    .slice(-20)
+
+  if (recentFlat.length > 0) {
+    // Meilleure performance = plus rapide avgPace parmi les courses > 5km
+    let bestSession = recentFlat[0]!
+    for (const s of recentFlat) {
+      if (s.avgPace < bestSession.avgPace) bestSession = s
+    }
+    const refDistKm = bestSession.distance / 1000
+    const refTimeSec = bestSession.duration
+    // Riegel: T_marathon = T_ref × (42.195 / D_ref)^1.06
+    marathonPrediction = refTimeSec * Math.pow(42.195 / refDistKm, 1.06)
+
+    if (refDistKm <= 6) marathonSource = '5K'
+    else if (refDistKm <= 12) marathonSource = '10K'
+    else if (refDistKm <= 22) marathonSource = 'Semi'
+    else marathonSource = `${refDistKm.toFixed(0)}K`
+  }
+
+  // ── Économie de course : allure normalisée par FC ──
+  // Plus la valeur est basse, meilleure est l'économie (vite pour peu de battements)
+  let runningEconomy: number | null = null
+  let economyDelta: number | null = null
+
+  if (sessionsWithHR.length >= 4) {
+    const economies = sessionsWithHR.map(s => s.avgPace / s.avgHeartRate!)
+    const half = Math.floor(economies.length / 2)
+    const oldEco = economies.slice(0, half).reduce((a, b) => a + b, 0) / half
+    const recentEco = economies.slice(half).reduce((a, b) => a + b, 0) / (economies.length - half)
+    runningEconomy = recentEco
+    economyDelta = ((recentEco - oldEco) / oldEco) * 100 // négatif = amélioration
+  }
+
+  // ── Volume hebdo (4 dernières vs 4 précédentes) ──
+  const now = Date.now()
+  const ms4w = 28 * 86400000
+  const recent4w = sorted.filter(s => now - new Date(s.date).getTime() < ms4w)
+  const prev4w = sorted.filter(s => {
+    const age = now - new Date(s.date).getTime()
+    return age >= ms4w && age < ms4w * 2
+  })
+  const weeklyVolume = (recent4w.reduce((a, s) => a + s.distance / 1000, 0)) / 4
+  const prevVolume = (prev4w.reduce((a, s) => a + s.distance / 1000, 0)) / 4
+  const volumeDelta = prevVolume > 0 ? ((weeklyVolume - prevVolume) / prevVolume) * 100 : null
+
+  // ── Insight dynamique ──
+  let insight: string
+  if (sorted.length < 3) {
+    insight = 'Ajoutez des séances pour générer des insights personnalisés.'
+  } else {
+    const last3 = sorted.slice(-3)
+    const prev3 = sorted.slice(-6, -3)
+    if (prev3.length >= 3) {
+      const avgPaceLast = last3.reduce((a, s) => a + s.avgPace, 0) / 3
+      const avgPacePrev = prev3.reduce((a, s) => a + s.avgPace, 0) / 3
+      const paceChange = ((avgPacePrev - avgPaceLast) / avgPacePrev) * 100
+
+      if (economyDelta !== null && economyDelta < -2) {
+        insight = `Votre économie de course s'est améliorée de ${Math.abs(economyDelta).toFixed(1)}% — vous courez plus vite pour le même effort cardiaque.`
+      } else if (paceChange > 2) {
+        insight = `Allure moyenne en progression de ${paceChange.toFixed(1)}% sur vos 3 dernières sorties vs les 3 précédentes.`
+      } else if (paceChange < -2) {
+        insight = `Allure en léger recul (${Math.abs(paceChange).toFixed(1)}%) — pensez à intégrer plus de récupération.`
+      } else if (volumeDelta !== null && volumeDelta > 15) {
+        insight = `Volume en hausse de ${volumeDelta.toFixed(0)}% — bonne montée en charge, attention à la surcharge.`
+      } else {
+        insight = `Performances stables sur vos dernières séances. Allure moyenne : ${formatPaceSec(avgPaceLast)}/km.`
+      }
+    } else {
+      const avgPace = last3.reduce((a, s) => a + s.avgPace, 0) / 3
+      insight = `Allure moyenne récente : ${formatPaceSec(avgPace)}/km sur ${sorted.length} séances enregistrées.`
+    }
+  }
+
+  return {
+    lactateThresholdPace,
+    lactateDelta,
+    marathonPrediction,
+    marathonSource,
+    runningEconomy,
+    economyDelta,
+    weeklyVolume,
+    volumeDelta,
+    insight,
+  }
+}
+
+function AiStatsCard({ sessions, profile }: {
+  sessions: Array<{ distance: number; duration: number; date: Date; avgPace: number; avgHeartRate?: number; elevationGain: number }>
+  profile: { basePaceSecPerKm: number; heartRateModel: { restingHR: number; maxHR: number }; enduranceScore: number }
 }) {
+  const stats = useMemo(() => computeAiStats(sessions, profile), [sessions, profile])
+
+  const DeltaBadge = ({ value, unit, inverted = false }: { value: number | null; unit?: string; inverted?: boolean }) => {
+    if (value === null) return null
+    // inverted: pour l'allure, négatif = bon ; pour le volume, positif = bon
+    const isGood = inverted ? value < 0 : value > 0
+    const color = isGood ? '#22c55e' : value === 0 ? 'rgba(218,226,253,0.4)' : '#f59e0b'
+    const arrow = isGood ? 'M4 6V2M2 4l2-2 2 2' : 'M4 2V6M2 4l2 2 2-2'
+    const label = `${value > 0 ? '+' : ''}${Math.abs(value) < 1 ? value.toFixed(1) : Math.round(value)}${unit ?? ''}`
+    return (
+      <p className="text-[9px] mt-1 flex items-center gap-1" style={{ color }}>
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+          <path d={arrow} stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+        {label}
+      </p>
+    )
+  }
+
   return (
-    <div className="flex flex-col p-6 rounded-2xl h-full relative"
+    <div className="flex flex-col p-6 rounded-2xl h-full"
       style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}>
       <div className="flex items-center gap-2 mb-5">
         <div className="w-2 h-2 rounded-full bg-[#ff6d00]" />
         <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-white">
-          Statistiques IA
+          Statistiques avancées
         </span>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
-        {/* Lactate threshold */}
+        {/* Seuil lactique */}
         <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-[9px] tracking-[1px] uppercase text-[rgba(218,226,253,0.4)] mb-2">
-            Lactate Threshold
+            Seuil Lactique
           </p>
           <p className="text-[22px] font-black text-white leading-none">
-            {formatPaceSec(lactatePaceSec)}
+            {formatPaceSec(stats.lactateThresholdPace)}
             <span className="text-[11px] font-medium text-[rgba(218,226,253,0.5)] ml-1">/KM</span>
           </p>
-          <p className="text-[9px] text-[#22c55e] mt-1 flex items-center gap-1">
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-              <path d="M4 6V2M2 4l2-2 2 2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-            </svg>
-            -8s from last test
-          </p>
+          <DeltaBadge value={stats.lactateDelta} unit="s" inverted />
         </div>
 
-        {/* Predicted marathon */}
+        {/* Prédiction marathon */}
         <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-[9px] tracking-[1px] uppercase text-[rgba(218,226,253,0.4)] mb-2">
-            Predicted Marathon
+            Marathon prédit
           </p>
-          <p className="text-[22px] font-black text-white leading-none">
-            {formatDuration(marathonSec)}
-          </p>
-          <p className="text-[9px] text-[#3b82f6] mt-1 flex items-center gap-1">
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-              <circle cx="4" cy="4" r="3" stroke="currentColor" strokeWidth="1"/>
-              <path d="M4 2.5V4l1 1" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-            </svg>
-            New PB Projection
-          </p>
+          {stats.marathonPrediction ? (
+            <>
+              <p className="text-[22px] font-black text-white leading-none">
+                {formatDuration(stats.marathonPrediction)}
+              </p>
+              <p className="text-[9px] text-[#3b82f6] mt-1 flex items-center gap-1">
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                  <circle cx="4" cy="4" r="3" stroke="currentColor" strokeWidth="1" />
+                  <path d="M4 2.5V4l1 1" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+                </svg>
+                Riegel depuis {stats.marathonSource}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[16px] font-black text-[rgba(218,226,253,0.2)] leading-none">—</p>
+              <p className="text-[9px] text-[rgba(218,226,253,0.3)] mt-1">Besoin d'un effort 5K+</p>
+            </>
+          )}
         </div>
 
-        {/* Recovery */}
+        {/* Économie de course */}
         <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-[9px] tracking-[1px] uppercase text-[rgba(218,226,253,0.4)] mb-2">
-            Recovery Efficiency
+            Économie de course
           </p>
-          <p className="text-[22px] font-black text-white leading-none">
-            {recoveryPct}
-            <span className="text-[11px] font-medium text-[rgba(218,226,253,0.5)] ml-0.5">%</span>
-          </p>
-          <p className="text-[9px] text-[rgba(218,226,253,0.4)] mt-1">Optimal HRV readiness</p>
+          {stats.runningEconomy !== null ? (
+            <>
+              <p className="text-[22px] font-black text-white leading-none">
+                {(stats.runningEconomy * 100).toFixed(0)}
+                <span className="text-[11px] font-medium text-[rgba(218,226,253,0.5)] ml-0.5">idx</span>
+              </p>
+              <DeltaBadge value={stats.economyDelta} unit="%" inverted />
+            </>
+          ) : (
+            <>
+              <p className="text-[16px] font-black text-[rgba(218,226,253,0.2)] leading-none">—</p>
+              <p className="text-[9px] text-[rgba(218,226,253,0.3)] mt-1">Données FC nécessaires</p>
+            </>
+          )}
         </div>
 
-        {/* AI insight placeholder */}
-        <div className="p-3 rounded-xl flex flex-col items-center justify-center gap-2"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M10 2L12 7h5l-4 3 1.5 5L10 12l-4.5 3L7 10 3 7h5L10 2z"
-              stroke="#ff6d00" strokeWidth="1.2" fill="rgba(255,109,0,0.15)" strokeLinejoin="round"/>
-          </svg>
-          <p className="text-[9px] tracking-[0.5px] uppercase text-[#ff6d00] text-center">
-            Generating Insight...
+        {/* Volume hebdomadaire */}
+        <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <p className="text-[9px] tracking-[1px] uppercase text-[rgba(218,226,253,0.4)] mb-2">
+            Volume / Semaine
           </p>
+          <p className="text-[22px] font-black text-white leading-none">
+            {stats.weeklyVolume.toFixed(0)}
+            <span className="text-[11px] font-medium text-[rgba(218,226,253,0.5)] ml-1">KM</span>
+          </p>
+          <DeltaBadge value={stats.volumeDelta} unit="%" />
         </div>
       </div>
 
-      {/* Quote */}
+      {/* Insight */}
       <div className="mt-auto p-3 rounded-xl"
         style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
         <p className="text-[10px] italic text-[rgba(218,226,253,0.4)] leading-relaxed">
-          "{insightText}"
+          "{stats.insight}"
         </p>
       </div>
-
-      {/* FAB */}
-      <button
-        className="absolute bottom-4 right-4 w-9 h-9 rounded-full flex items-center justify-center
-                   shadow-[0_4px_20px_rgba(255,109,0,0.4)] hover:brightness-110 transition-all"
-        style={{ background: '#ff6d00' }}
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M7 2v10M2 7h10" stroke="#1a0500" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
-      </button>
     </div>
   )
 }
@@ -265,58 +442,6 @@ function PersonalBestsCard({ sessions }: { sessions: Array<{ distance: number; d
   )
 }
 
-function GearCard() {
-  return (
-    <div className="flex flex-col p-6 rounded-2xl h-full"
-      style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}>
-      <p className="text-[9px] tracking-[1.5px] uppercase text-[rgba(218,226,253,0.4)] mb-1">
-        Mes Chaussures
-      </p>
-      <p className="text-[20px] font-black text-white leading-tight mb-0.5">Nike Alphafly 3</p>
-      <p className="text-[10px] text-[rgba(218,226,253,0.4)] mb-5">Electric Orange Edition</p>
-
-      {/* Shoe placeholder */}
-      <div className="flex-1 rounded-xl mb-5 flex items-center justify-center"
-        style={{ background: 'rgba(255,109,0,0.08)', border: '1px solid rgba(255,109,0,0.15)' }}>
-        <svg width="80" height="48" viewBox="0 0 80 48" fill="none">
-          <path d="M8 36 C8 36 16 28 30 26 C44 24 55 30 66 28 C74 26 78 32 76 36 C74 38 8 40 8 36Z"
-            fill="rgba(255,109,0,0.3)" stroke="#ff6d00" strokeWidth="1.2"/>
-          <path d="M12 36 C16 32 24 28 36 28 C42 28 50 30 58 30"
-            stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeLinecap="round"/>
-        </svg>
-      </div>
-
-      {/* Usage */}
-      <div className="mb-4">
-        <div className="flex justify-between mb-1.5">
-          <span className="text-[9px] tracking-[0.5px] uppercase text-[rgba(218,226,253,0.4)]">Usage</span>
-          <span className="text-[9px] tracking-[0.5px] uppercase text-[rgba(218,226,253,0.4)]">Lifespan</span>
-        </div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[20px] font-black text-white">342 <span className="text-[10px] font-medium text-[rgba(218,226,253,0.5)]">/ 800 KM</span></span>
-        </div>
-        <div className="h-[4px] rounded-full bg-white/10 mb-2">
-          <div className="h-full rounded-full" style={{ width: '42.75%', background: '#ff6d00' }} />
-        </div>
-        <p className="text-[9px] text-[#22c55e] flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
-          Performance optimale restante
-        </p>
-      </div>
-
-      <button className="w-full py-2.5 rounded-xl text-[10px] font-bold tracking-[1px] uppercase
-                         text-white text-center flex items-center justify-center gap-2
-                         hover:bg-white/8 transition-colors"
-        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-        Gear Details
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path d="M2 5h6M5 2l3 3-3 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-    </div>
-  )
-}
-
 function ConnectionBadge({ label, connected }: { label: string; connected: boolean }) {
   return (
     <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
@@ -336,9 +461,9 @@ function ConnectionBadge({ label, connected }: { label: string; connected: boole
 
 export function ProfilPage() {
   const { profile, sessions } = useAppStore()
-  const { athlete, connectionState } = useStravaStore()
+  const { athlete, token } = useStravaStore()
 
-  const stravaConnected = connectionState.status === 'connected'
+  const stravaConnected = !!(athlete && token)
   const garminConnected = sessions.some(s => s.id.startsWith('garmin-'))
 
   const currentYear = new Date().getFullYear()
@@ -360,13 +485,6 @@ export function ProfilPage() {
   const vo2max = Math.round(30 + profile.enduranceScore * 40)
   const vo2trend = 2.4
 
-  const lactatePaceSec = profile.basePaceSecPerKm * 0.88
-  const marathonSec = profile.basePaceSecPerKm * 42.195 * (1 + profile.fatigueModel.hourlyDecayFactor * 4)
-  const recoveryPct = Math.round(70 + profile.enduranceScore * 28)
-
-  const insightText = sessions.length >= 3
-    ? `Basé sur vos ${Math.min(sessions.length, 3)} dernières sorties, votre économie de course s'est améliorée de 3.2%.`
-    : 'Ajoutez des séances pour générer des insights personnalisés sur vos performances.'
 
   return (
     <div className="w-full flex flex-col gap-5 pb-8">
@@ -437,16 +555,10 @@ export function ProfilPage() {
         <Vo2Card vo2max={vo2max} trend={vo2trend} />
       </div>
 
-      {/* ── AI Stats + Personal Bests + Gear ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <AiStatsCard
-          lactatePaceSec={lactatePaceSec}
-          marathonSec={marathonSec}
-          recoveryPct={recoveryPct}
-          insightText={insightText}
-        />
+      {/* ── AI Stats + Personal Bests ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <AiStatsCard sessions={sessions} profile={profile} />
         <PersonalBestsCard sessions={sessions} />
-        <GearCard />
       </div>
 
       {/* ── Analyse détaillée (scores, charts, zones FC, terrain) ── */}
