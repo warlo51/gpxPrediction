@@ -5,6 +5,7 @@
 
 import { useAppStore } from '@/stores/appStore'
 import { useStravaStore } from '@/stores/stravaStore'
+import { RunnerAnalysisPanel } from '@/features/runner/RunnerAnalysis'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -103,58 +104,6 @@ function Vo2Card({
   )
 }
 
-const HR_ZONES = [
-  { name: 'Zone 1: Récupération', pctMin: 0.60, pctMax: 0.70, color: '#4b5563' },
-  { name: 'Zone 2: Endurance',    pctMin: 0.70, pctMax: 0.80, color: '#3b82f6' },
-  { name: 'Zone 3: Aérobie',      pctMin: 0.80, pctMax: 0.90, color: '#22c55e' },
-  { name: 'Zone 4: Seuil',        pctMin: 0.90, pctMax: 0.95, color: '#f97316' },
-  { name: 'Zone 5: Anaérobie',    pctMin: 0.95, pctMax: 1.00, color: '#ef4444' },
-]
-
-function HrZonesCard({ maxHR, restingHR }: { maxHR: number; restingHR: number }) {
-  const hrr = maxHR - restingHR
-  return (
-    <div className="flex flex-col p-6 rounded-2xl h-full"
-      style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M1 7h2l2-4 2 8 2-6 1 2h3" stroke="#ef4444" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-white">
-            Zones de Fréquence Cardiaque
-          </span>
-        </div>
-        <span className="text-[10px] text-[rgba(218,226,253,0.5)]">MAX HR: {maxHR} BPM</span>
-      </div>
-
-      <div className="flex flex-col gap-4 flex-1 justify-between">
-        {HR_ZONES.map((zone) => {
-          const lo = Math.round(restingHR + hrr * zone.pctMin)
-          const hi = Math.round(restingHR + hrr * zone.pctMax)
-          const barWidth = (zone.pctMax - zone.pctMin) * 5 * 100 // relative width
-          return (
-            <div key={zone.name}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-medium tracking-[0.5px] uppercase"
-                  style={{ color: zone.color }}>
-                  {zone.name}
-                </span>
-                <span className="text-[10px] text-[rgba(218,226,253,0.4)]">
-                  {lo} – {hi} BPM ({Math.round(zone.pctMin * 100)}-{Math.round(zone.pctMax * 100)}%)
-                </span>
-              </div>
-              <div className="h-[4px] rounded-full bg-white/8">
-                <div className="h-full rounded-full"
-                  style={{ width: `${barWidth}%`, background: zone.color, maxWidth: '100%' }} />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 function AiStatsCard({
   lactatePaceSec,
@@ -415,21 +364,6 @@ export function ProfilPage() {
   const marathonSec = profile.basePaceSecPerKm * 42.195 * (1 + profile.fatigueModel.hourlyDecayFactor * 4)
   const recoveryPct = Math.round(70 + profile.enduranceScore * 28)
 
-  const { maxHR, restingHR } = profile.heartRateModel
-
-  const avgWeeklyHrs = (() => {
-    if (sessions.length < 2) return 0
-    const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    const firstDate = new Date(sorted[0]!.date)
-    const lastDate  = new Date(sorted[sorted.length - 1]!.date)
-    const weeks = Math.max(1, (lastDate.getTime() - firstDate.getTime()) / (7 * 86400000))
-    const totalSec = sessions.reduce((acc, s) => acc + s.duration, 0)
-    return parseFloat((totalSec / 3600 / weeks).toFixed(1))
-  })()
-
-  const paceMin = Math.floor(profile.basePaceSecPerKm / 60)
-  const paceSec = Math.round(profile.basePaceSecPerKm % 60)
-
   const insightText = sessions.length >= 3
     ? `Basé sur vos ${Math.min(sessions.length, 3)} dernières sorties, votre économie de course s'est améliorée de 3.2%.`
     : 'Ajoutez des séances pour générer des insights personnalisés sur vos performances.'
@@ -503,43 +437,20 @@ export function ProfilPage() {
         <Vo2Card vo2max={vo2max} trend={vo2trend} />
       </div>
 
-      {/* ── HR Zones + AI Stats ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <HrZonesCard maxHR={maxHR} restingHR={restingHR} />
+      {/* ── AI Stats + Personal Bests + Gear ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <AiStatsCard
           lactatePaceSec={lactatePaceSec}
           marathonSec={marathonSec}
           recoveryPct={recoveryPct}
           insightText={insightText}
         />
-      </div>
-
-      {/* ── Personal Bests + Gear ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <PersonalBestsCard sessions={sessions} />
         <GearCard />
       </div>
 
-      {/* ── Footer stats bar ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-px rounded-2xl overflow-hidden"
-        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-        {[
-          { label: 'Average Pace',        value: `${paceMin}'${String(paceSec).padStart(2,'0')}"`, unit: '/KM' },
-          { label: 'Resting Heart Rate',  value: String(restingHR),  unit: 'BPM' },
-          { label: 'Weekly Training Vol', value: String(avgWeeklyHrs || '—'), unit: 'HRS' },
-          { label: 'Cadence Avg',         value: '—',                unit: 'SPM' },
-          { label: 'Power Output',        value: 'Enabled',          unit: '' },
-        ].map(({ label, value, unit }) => (
-          <div key={label} className="flex flex-col items-center justify-center py-4 px-3"
-            style={{ background: '#0b1326' }}>
-            <p className="text-[8px] tracking-[1px] uppercase text-[rgba(218,226,253,0.35)] mb-1">{label}</p>
-            <p className="text-[16px] font-black text-white leading-none">
-              {value}
-              {unit && <span className="text-[9px] font-medium text-[rgba(218,226,253,0.4)] ml-1">{unit}</span>}
-            </p>
-          </div>
-        ))}
-      </div>
+      {/* ── Analyse détaillée (scores, charts, zones FC, terrain) ── */}
+      {sessions.length > 0 && <RunnerAnalysisPanel />}
 
     </div>
   )

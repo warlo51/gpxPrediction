@@ -7,28 +7,27 @@ import { useState } from 'react'
 import { useStravaStore } from '@/stores/stravaStore'
 import { StravaConnect } from '@/features/strava/StravaConnect'
 
-export type Page = 'accueil' | 'dashboard' | 'planificateur' | 'strategie' | 'profil'
+export type Page = 'accueil' | 'planificateur' | 'strategie' | 'profil'
 
 interface NavBarProps {
   activePage: Page
   onNavigate: (page: Page) => void
-  onSidebarOpen: () => void
 }
 
 const NAV_LINKS: { id: Page; label: string }[] = [
-  { id: 'dashboard',     label: 'Dashboard' },
+  { id: 'profil',        label: 'Dashboard' },
   { id: 'planificateur', label: 'Planner' },
   { id: 'strategie',     label: 'Strategies' },
-  { id: 'profil',        label: 'Profil' },
 ]
 
-export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
+export function NavBar({ activePage, onNavigate }: NavBarProps) {
   const { athlete } = useStravaStore()
   const [stravaOpen, setStravaOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleNavClick = (page: Page) => {
     onNavigate(page)
-    onSidebarOpen()
+    setMobileMenuOpen(false)
   }
 
   return (
@@ -36,7 +35,7 @@ export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
       {/* ── TopBar — toujours visible ── */}
       <nav
         className="flex fixed top-0 left-0 right-0 z-50
-                   items-center justify-between px-8 h-[60px]
+                   items-center justify-between px-6 sm:px-8 h-[60px]
                    bg-[rgba(11,19,38,0.8)] backdrop-blur-[12px]
                    border-b border-white/[0.06]
                    shadow-[0_20px_40px_rgba(0,0,0,0.4)]"
@@ -45,7 +44,7 @@ export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
         <div className="flex items-center gap-8">
           {/* Logo */}
           <button
-            onClick={() => onNavigate('accueil')}
+            onClick={() => handleNavClick('accueil')}
             className="font-black text-[20px] tracking-[-0.05em] leading-none"
             style={{
               background: 'linear-gradient(168deg, #ffb692 0%, #ff6d00 100%)',
@@ -85,7 +84,7 @@ export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
         <div className="flex items-center gap-3">
           {/* Analyze */}
           <button
-            onClick={() => onNavigate('planificateur')}
+            onClick={() => handleNavClick('planificateur')}
             className="hidden sm:block px-5 py-[7px] rounded-[12px]
                        bg-[#2d3449] border border-[rgba(89,65,54,0.15)]
                        text-[#ffb692] text-[12px] font-semibold
@@ -100,19 +99,17 @@ export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
             className="px-5 py-[7px] rounded-[12px] text-[12px] font-semibold text-[#341100]
                        shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1)]
                        hover:brightness-110 transition-all"
-            style={{
-              background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)',
-            }}
+            style={{ background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)' }}
           >
             {athlete ? athlete.firstname : 'Sync Strava'}
           </button>
 
           {/* Avatar */}
           <button
-            onClick={() => onNavigate('profil')}
-            className="w-[40px] h-[40px] rounded-[12px]
+            onClick={() => handleNavClick('profil')}
+            className="hidden sm:flex w-[40px] h-[40px] rounded-[12px]
                        bg-[#171f33] border border-[rgba(89,65,54,0.2)]
-                       flex items-center justify-center overflow-hidden
+                       items-center justify-center overflow-hidden
                        hover:border-[rgba(89,65,54,0.4)] transition-colors"
           >
             {athlete?.profile ? (
@@ -125,15 +122,55 @@ export function NavBar({ activePage, onNavigate, onSidebarOpen }: NavBarProps) {
           {/* Menu burger — mobile uniquement */}
           <button
             className="sm:hidden flex flex-col gap-[5px] p-1"
-            onClick={onSidebarOpen}
+            onClick={() => setMobileMenuOpen(v => !v)}
             aria-label="Menu"
           >
-            <span className="w-5 h-[2px] bg-[rgba(218,226,253,0.6)] rounded-full" />
-            <span className="w-5 h-[2px] bg-[rgba(218,226,253,0.6)] rounded-full" />
-            <span className="w-5 h-[2px] bg-[rgba(218,226,253,0.6)] rounded-full" />
+            <span className={`w-5 h-[2px] bg-[rgba(218,226,253,0.7)] rounded-full transition-transform duration-200 origin-center ${mobileMenuOpen ? 'translate-y-[7px] rotate-45' : ''}`} />
+            <span className={`w-5 h-[2px] bg-[rgba(218,226,253,0.7)] rounded-full transition-opacity duration-200 ${mobileMenuOpen ? 'opacity-0' : ''}`} />
+            <span className={`w-5 h-[2px] bg-[rgba(218,226,253,0.7)] rounded-full transition-transform duration-200 origin-center ${mobileMenuOpen ? '-translate-y-[7px] -rotate-45' : ''}`} />
           </button>
         </div>
       </nav>
+
+      {/* ── Overlay + Menu mobile ── */}
+      {mobileMenuOpen && (
+        <>
+          {/* Overlay — ferme le menu au clic extérieur et bloque le contenu */}
+          <div
+            className="sm:hidden fixed inset-0 z-30 top-[60px]"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Menu */}
+          <div
+            className="sm:hidden fixed top-[60px] left-0 right-0 z-40
+                       bg-[rgba(11,19,38,0.97)] backdrop-blur-[12px]
+                       border-b border-white/[0.06]
+                       shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+          >
+            <div className="flex flex-col py-2">
+              {NAV_LINKS.map((link) => {
+                const isActive = activePage === link.id
+                return (
+                  <button
+                    key={link.id}
+                    onClick={() => handleNavClick(link.id)}
+                    className={[
+                      'flex items-center px-6 py-3.5 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'text-[#ffb692] bg-white/[0.04]'
+                        : 'text-[rgba(218,226,253,0.6)] hover:text-[rgba(218,226,253,0.9)] hover:bg-white/[0.03]',
+                    ].join(' ')}
+                  >
+                    {isActive && <span className="w-1 h-4 rounded-full bg-[#ff6d00] mr-3 shrink-0" />}
+                    {!isActive && <span className="w-1 h-4 mr-3 shrink-0" />}
+                    {link.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Modal Strava ── */}
       {stravaOpen && (

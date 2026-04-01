@@ -18,8 +18,8 @@ interface SideBarProps {
 
 const NAV_ITEMS: { id: Page; label: string; icon: ReactNode }[] = [
   {
-    id: 'dashboard',
-    label: 'Overview',
+    id: 'profil',
+    label: 'Dashboard',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <rect x="1"    y="1"    width="6.5" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
@@ -46,18 +46,6 @@ const NAV_ITEMS: { id: Page; label: string; icon: ReactNode }[] = [
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.4"/>
         <path d="M9 5V9.5L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'profil',
-    label: 'Sync Data',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <path d="M3 9C3 5.686 5.686 3 9 3c1.8 0 3.42.756 4.58 1.97"  stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        <path d="M15 9c0 3.314-2.686 6-6 6-1.8 0-3.42-.756-4.58-1.97" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        <path d="M12.5 1.5L14.5 4 12 5"   stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M5.5 16.5L3.5 14l2.5-1"  stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
