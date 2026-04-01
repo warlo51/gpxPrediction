@@ -1,7 +1,7 @@
 /**
  * Hook de synchronisation automatique store → Supabase
- * - Utilisateur connecte : charge et sauvegarde profil + GPX + sessions + connexions
- * - Utilisateur anonyme : charge le profil demo + sessions demo
+ * - Premium : charge et sauvegarde profil + GPX + sessions + connexions
+ * - Non-premium ou anonyme : charge le profil demo + sessions demo
  */
 
 import { useEffect, useRef } from 'react'
@@ -26,6 +26,7 @@ import {
 export function useSupabaseSync() {
   const user = useAuthStore((s) => s.user)
   const loading = useAuthStore((s) => s.loading)
+  const isPremium = useAuthStore((s) => s.isPremium)
   const profile = useAppStore((s) => s.profile)
   const track = useAppStore((s) => s.track)
   const sessions = useAppStore((s) => s.sessions)
@@ -51,9 +52,13 @@ export function useSupabaseSync() {
   const prevStravaRef = useRef({ stravaCredentials, stravaToken, stravaAthlete })
   const prevGarminRef = useRef({ garminOauth1, garminOauth2, garminProfile })
 
-  // ── Anonyme : charger profil demo + sessions demo ──
+  // ── Non-premium (anonyme ou connecte sans premium) : charger donnees demo ──
   useEffect(() => {
-    if (loading || user || initialLoadDone.current) return
+    if (loading || initialLoadDone.current) return
+    // Attendre que isPremium soit résolu pour les users connectés
+    if (user && isPremium) return
+    // Pour les anonymes, on charge immédiatement
+    // Pour les connectés non-premium, on charge aussi les demo
     initialLoadDone.current = true
 
     Promise.all([
@@ -65,11 +70,11 @@ export function useSupabaseSync() {
     }).catch((err) =>
       console.error('Erreur chargement donnees demo:', err),
     )
-  }, [loading, user, setProfile, addSession])
+  }, [loading, user, isPremium, setProfile, addSession])
 
-  // ── Connecte : charger profil + sessions + connexions ──
+  // ── Premium : charger profil + sessions + connexions ──
   useEffect(() => {
-    if (!user) return
+    if (!user || !isPremium) return
     initialLoadDone.current = true
 
     Promise.all([
@@ -89,11 +94,13 @@ export function useSupabaseSync() {
         setGarminTokens(garmin.oauth1, garmin.oauth2, garmin.profile)
       }
     })
-  }, [user, setProfile, addSession, setStravaCredentials, setStravaToken, setStravaAthlete, setGarminTokens])
+  }, [user, isPremium, setProfile, addSession, setStravaCredentials, setStravaToken, setStravaAthlete, setGarminTokens])
+
+  // ── Les sync ci-dessous ne s'exécutent que pour les premium ──
 
   // ── Sync runner profile ──
   useEffect(() => {
-    if (!user || !initialLoadDone.current) return
+    if (!user || !isPremium || !initialLoadDone.current) return
     if (prevProfileRef.current === profile) return
     prevProfileRef.current = profile
     if (profile.id === 'default' && profile.sessionCount === 0) return
@@ -101,22 +108,22 @@ export function useSupabaseSync() {
     saveRunnerProfile(user.id, profile).catch((err) =>
       console.error('Erreur sync runner profile:', err),
     )
-  }, [user, profile])
+  }, [user, isPremium, profile])
 
   // ── Sync GPX track ──
   useEffect(() => {
-    if (!user || !track) return
+    if (!user || !isPremium || !track) return
     if (prevTrackRef.current === track) return
     prevTrackRef.current = track
 
     saveGpxTrack(user.id, track).catch((err) =>
       console.error('Erreur sync GPX track:', err),
     )
-  }, [user, track])
+  }, [user, isPremium, track])
 
   // ── Sync sessions ──
   useEffect(() => {
-    if (!user || !initialLoadDone.current) return
+    if (!user || !isPremium || !initialLoadDone.current) return
     if (sessions.length <= prevSessionsLenRef.current) {
       prevSessionsLenRef.current = sessions.length
       return
@@ -126,11 +133,11 @@ export function useSupabaseSync() {
     saveSessions(user.id, sessions).catch((err) =>
       console.error('Erreur sync sessions:', err),
     )
-  }, [user, sessions])
+  }, [user, isPremium, sessions])
 
   // ── Sync Strava connection ──
   useEffect(() => {
-    if (!user || !initialLoadDone.current) return
+    if (!user || !isPremium || !initialLoadDone.current) return
     const prev = prevStravaRef.current
     if (
       prev.stravaCredentials === stravaCredentials &&
@@ -146,11 +153,11 @@ export function useSupabaseSync() {
         athlete: stravaAthlete,
       }).catch((err) => console.error('Erreur sync Strava:', err))
     }
-  }, [user, stravaCredentials, stravaToken, stravaAthlete])
+  }, [user, isPremium, stravaCredentials, stravaToken, stravaAthlete])
 
   // ── Sync Garmin connection ──
   useEffect(() => {
-    if (!user || !initialLoadDone.current) return
+    if (!user || !isPremium || !initialLoadDone.current) return
     const prev = prevGarminRef.current
     if (
       prev.garminOauth1 === garminOauth1 &&
@@ -166,5 +173,5 @@ export function useSupabaseSync() {
         profile: garminProfile,
       }).catch((err) => console.error('Erreur sync Garmin:', err))
     }
-  }, [user, garminOauth1, garminOauth2, garminProfile])
+  }, [user, isPremium, garminOauth1, garminOauth2, garminProfile])
 }

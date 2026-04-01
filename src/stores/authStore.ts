@@ -37,21 +37,23 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
   initialize: () => {
     // Récupérer la session existante
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      set({ session, user: session?.user ?? null, loading: false })
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        loadPremiumStatus(session.user.id).then((isPremium) => set({ isPremium }))
+        const isPremium = await loadPremiumStatus(session.user.id)
+        set({ session, user: session.user, loading: false, isPremium })
+      } else {
+        set({ session: null, user: null, loading: false, isPremium: false })
       }
     })
 
     // Écouter les changements d'auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        set({ session, user: session?.user ?? null, loading: false })
+      async (_event, session) => {
         if (session?.user) {
-          loadPremiumStatus(session.user.id).then((isPremium) => set({ isPremium }))
+          const isPremium = await loadPremiumStatus(session.user.id)
+          set({ session, user: session.user, loading: false, isPremium })
         } else {
-          set({ isPremium: false })
+          set({ session: null, user: null, loading: false, isPremium: false })
         }
       },
     )
@@ -71,6 +73,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
   signOut: async () => {
     await supabase.auth.signOut()
-    set({ user: null, session: null })
+    set({ user: null, session: null, isPremium: false })
   },
 }))

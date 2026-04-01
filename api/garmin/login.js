@@ -43,10 +43,13 @@ function makeOAuth(consumer) {
 
 async function getOauth1Token(ticket, consumer) {
   const oauth = makeOAuth(consumer)
-  const params = { ticket, 'login-url': GARMIN_SSO_EMBED, 'accepts-mfa-tokens': true }
-  const url = `${OAUTH_URL}/preauthorized?${qs.stringify(params)}`
-  const headers = oauth.toHeader(oauth.authorize({ url, method: 'GET' }))
-  const r = await axios.get(url, {
+  const baseUrl = `${OAUTH_URL}/preauthorized`
+  const params = { ticket, 'login-url': GARMIN_SSO_EMBED, 'accepts-mfa-tokens': 'true' }
+  // OAuth1 signe l'URL de base + les params séparément
+  const authData = oauth.authorize({ url: baseUrl, method: 'GET', data: params })
+  const headers = oauth.toHeader(authData)
+  const fullUrl = `${baseUrl}?${qs.stringify(params)}`
+  const r = await axios.get(fullUrl, {
     headers: { ...headers, 'User-Agent': UA_MOBILE },
     timeout: 10000,
   })
@@ -57,10 +60,10 @@ async function exchangeForOauth2(oauth1Token, consumer) {
   const oauth = makeOAuth(consumer)
   const token = { key: oauth1Token.oauth_token, secret: oauth1Token.oauth_token_secret }
   const baseUrl = `${OAUTH_URL}/exchange/user/2.0`
-  const authData = oauth.authorize({ url: baseUrl, method: 'POST', data: null }, token)
-  const url = `${baseUrl}?${qs.stringify(authData)}`
-  const r = await axios.post(url, null, {
-    headers: { 'User-Agent': UA_MOBILE, 'Content-Type': 'application/x-www-form-urlencoded' },
+  const authData = oauth.authorize({ url: baseUrl, method: 'POST' }, token)
+  const headers = oauth.toHeader(authData)
+  const r = await axios.post(baseUrl, null, {
+    headers: { ...headers, 'User-Agent': UA_MOBILE, 'Content-Type': 'application/x-www-form-urlencoded' },
     timeout: 10000,
   })
   return r.data

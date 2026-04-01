@@ -539,12 +539,13 @@ export function StravaConnect() {
   const { credentials, token, athlete } = useStravaStore()
   const { callbackError, isExchanging } = useStravaCallback()
 
-  const [step, setStep] = useState<'credentials' | 'connect'>(
-    credentials ? 'connect' : 'credentials',
-  )
+  const [forceShowForm, setForceShowForm] = useState(false)
 
   // Si déjà connecté, aller directement à l'import
   const isConnected = !!(token && athlete)
+  // step dérivé du store : si credentials existent → 'connect', sinon → 'credentials'
+  // forceShowForm permet de revenir au formulaire via "Modifier"
+  const step = (!credentials || forceShowForm) ? 'credentials' : 'connect'
 
   if (isExchanging) {
     return (
@@ -584,7 +585,7 @@ export function StravaConnect() {
 
       {/* Étape 1 : credentials */}
       {!isConnected && step === 'credentials' && (
-        <CredentialsForm onSaved={() => setStep('connect')} />
+        <CredentialsForm onSaved={() => setForceShowForm(false)} />
       )}
 
       {/* Étape 2 : bouton OAuth */}
@@ -594,7 +595,7 @@ export function StravaConnect() {
             <span className="text-emerald-400">✓</span>
             Clés enregistrées (Client ID : {credentials.clientId})
             <button
-              onClick={() => setStep('credentials')}
+              onClick={() => setForceShowForm(true)}
               className="underline hover:text-slate-300 ml-1"
             >
               Modifier
