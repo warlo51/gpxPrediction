@@ -70,6 +70,8 @@ export type EnergyModel = {
 export type RunnerProfile = {
   id: string
   name: string
+  /** Âge du coureur */
+  age?: number
   /** Date de dernière calibration */
   calibratedAt: Date
   /** Nombre de séances utilisées pour la calibration */

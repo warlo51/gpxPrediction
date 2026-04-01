@@ -162,7 +162,7 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
           Enregistrer et continuer →
         </button>
         <p className="text-xs text-slate-600 text-center sm:text-left">
-          Ces informations sont stockées uniquement dans votre navigateur.
+          Vos identifiants sont stockes de maniere securisee sur votre compte.
         </p>
       </div>
     </div>

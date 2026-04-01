@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAuthStore } from '@/stores/authStore'
+import { useSupabaseSync } from '@/hooks/useSupabaseSync'
 import './App.css'
 import { Layout } from '@/components/layout/Layout'
 import type { Page } from '@/components/layout/NavBar'
@@ -7,20 +9,52 @@ import { PlanificateurPage } from '@/features/gpx/PlanificateurPage'
 import { StrategyComparison } from '@/features/strategy/StrategyComparison'
 import { RacePlanPage } from '@/features/strategy/RacePlanPage'
 import { ProfilPage } from '@/features/runner/ProfilPage'
+import { AccountPage } from '@/features/account/AccountPage'
 
 type StrategyTab = 'plan' | 'comparison'
 
+// ── Loading screen ───────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  return (
+    <div
+      className="w-full min-h-screen flex items-center justify-center"
+      style={{ background: '#0b1326' }}
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-8 h-8 border-2 border-[#ff6d00] border-t-transparent rounded-full animate-spin" />
+        <span className="text-[13px] text-[rgba(218,226,253,0.5)] tracking-wide">
+          Chargement…
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── App ──────────────────────────────────────────────────────────────────────
+
 function App() {
+  const { loading, initialize } = useAuthStore()
   const [activePage, setActivePage] = useState<Page>('accueil')
   const [strategyTab, setStrategyTab] = useState<StrategyTab>('plan')
 
-  // Retour du callback OAuth → aller sur le profil (import historique)
+  useSupabaseSync()
+
   useEffect(() => {
+    const unsubscribe = initialize()
+    return unsubscribe
+  }, [initialize])
+
+  // Retour du callback OAuth Strava → aller sur le compte (import historique)
+  useEffect(() => {
+    if (!window.location.pathname.includes('/strava/callback')) return
     const params = new URLSearchParams(window.location.search)
     if (params.get('code') || params.get('error')) {
-      setActivePage('profil')
+      setActivePage('compte')
     }
   }, [])
+
+  if (loading) return <LoadingScreen />
 
   const renderPage = () => {
     switch (activePage) {
@@ -59,6 +93,8 @@ function App() {
         )
       case 'profil':
         return <ProfilPage />
+      case 'compte':
+        return <AccountPage />
     }
   }
 

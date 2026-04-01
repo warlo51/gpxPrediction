@@ -65,7 +65,7 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
       <div className="bg-slate-800/60 border border-white/8 rounded-xl p-3 text-xs text-slate-500 flex items-start gap-2">
         <span className="shrink-0 text-slate-400">🔒</span>
         <span>
-          Vos identifiants sont envoyés à votre instance Vercel personnelle uniquement — ils ne sont <strong className="text-slate-400">jamais stockés</strong>, ni sur votre appareil ni sur un serveur tiers. Seuls les tokens OAuth sont conservés dans votre navigateur.
+          Vos identifiants sont envoyes a votre instance Vercel personnelle uniquement. Les tokens OAuth sont stockes de maniere securisee sur votre compte.
         </span>
       </div>
 

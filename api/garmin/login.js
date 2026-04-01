@@ -21,8 +21,9 @@ const UA_MOBILE  = 'com.garmin.android.apps.connectmobile'
 // ── Regex ─────────────────────────────────────────────────────────────────────
 const CSRF_RE       = /name="_csrf"\s+value="(.+?)"/
 const TICKET_RE     = /ticket=([^"&\s<]+)/
-const MFA_RE        = /name="mfa-code"|id="mfa-code"|enterMFACode|verificationCode/i
-const MFA_ACTION_RE = /action="([^"]*mfa[^"]*)"|action="([^"]*signin[^"]*)"/i
+const MFA_RE        = /name="mfa-code"|id="mfa-code"|enterMFACode|verificationCode|name="verificationCode"/i
+const MFA_ACTION_RE = /action="([^"]*(?:mfa|signin|verifyMFA|verification)[^"]*)"/i
+const MFA_FIELD_RE  = /name="(mfa-code|verificationCode|verification-code)"/i
 const TITLE_RE      = /<title>([^<]*)<\/title>/i
 
 // ── OAuth helpers ─────────────────────────────────────────────────────────────
@@ -101,9 +102,10 @@ async function doLogin(username, password, mfaCode, savedState) {
   // ── Étape MFA : soumettre le code ─────────────────────────────────────────
   if (mfaCode && savedState) {
     const mfaSubmitUrl = savedState.mfaUrl ?? signinFull
+    const mfaFieldName = savedState.mfaFieldName ?? 'verificationCode'
 
     const params = new URLSearchParams()
-    params.append('mfa-code', mfaCode.trim())
+    params.append(mfaFieldName, mfaCode.trim())
     params.append('embed', 'true')
     params.append('_csrf', savedState.csrf)
     params.append('fromPage', 'setupEnterMfaCode')
@@ -192,16 +194,21 @@ async function doLogin(username, password, mfaCode, savedState) {
   if (MFA_RE.test(html) && mfaCsrf) {
     // Chercher l'URL d'action du formulaire MFA dans le HTML
     const actionMatch = MFA_ACTION_RE.exec(html)
-    const mfaAction = actionMatch?.[1] ?? actionMatch?.[2] ?? null
+    const mfaAction = actionMatch?.[1] ?? null
     const mfaUrl = mfaAction
       ? (mfaAction.startsWith('http') ? mfaAction : `https://sso.garmin.com${mfaAction}`)
       : signinFull  // fallback
+
+    // Detecter le nom du champ MFA dans le HTML
+    const fieldMatch = MFA_FIELD_RE.exec(html)
+    const mfaFieldName = fieldMatch?.[1] ?? 'verificationCode'
 
     return {
       mfa_required: true,
       csrf: mfaCsrf,
       cookies: jar.toJSON(),
       mfaUrl,
+      mfaFieldName,
     }
   }
 
@@ -239,7 +246,12 @@ export default async function handler(req, res) {
     if (result.mfa_required) {
       return res.status(200).json({
         mfa_required: true,
-        state: { csrf: result.csrf, cookies: result.cookies, mfaUrl: result.mfaUrl },
+        state: {
+          csrf: result.csrf,
+          cookies: result.cookies,
+          mfaUrl: result.mfaUrl,
+          mfaFieldName: result.mfaFieldName,
+        },
       })
     }
 

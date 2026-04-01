@@ -1,15 +1,12 @@
 /**
- * NavBar — TopBar principale (MMA-13)
- * Toujours visible. Cliquer un lien ouvre la SideBar depuis la gauche.
+ * NavBar — TopBar principale
+ * Toujours visible. Avatar avec dropdown pour accès compte / déconnexion.
  */
 
-import { useState } from 'react'
-import { useStravaStore } from '@/stores/stravaStore'
-import { useGarminStore } from '@/stores/garminStore'
-import { StravaConnect } from '@/features/strava/StravaConnect'
-import { GarminConnect } from '@/features/history/GarminConnect'
+import { useState, useRef, useEffect } from 'react'
+import { useAuthStore } from '@/stores/authStore'
 
-export type Page = 'accueil' | 'planificateur' | 'strategie' | 'profil'
+export type Page = 'accueil' | 'planificateur' | 'strategie' | 'profil' | 'compte'
 
 interface NavBarProps {
   activePage: Page
@@ -23,21 +20,30 @@ const NAV_LINKS: { id: Page; label: string }[] = [
 ]
 
 export function NavBar({ activePage, onNavigate }: NavBarProps) {
-  const { athlete, token } = useStravaStore()
-  const garminOauth1 = useGarminStore(s => s.oauth1)
-  const garminOauth2 = useGarminStore(s => s.oauth2)
-  const [connectOpen, setConnectOpen] = useState(false)
+  const { user, signOut } = useAuthStore()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const stravaConnected = !!(athlete && token)
-  const garminConnected = !!(garminOauth1 && garminOauth2)
-  const anyConnected = stravaConnected || garminConnected
-  const allConnected = stravaConnected && garminConnected
+  // Fermer le dropdown au clic extérieur
+  useEffect(() => {
+    if (!dropdownOpen) return
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [dropdownOpen])
 
   const handleNavClick = (page: Page) => {
     onNavigate(page)
     setMobileMenuOpen(false)
   }
+
+  const userEmail = user?.email ?? ''
+  const userInitial = (userEmail[0] ?? '?').toUpperCase()
 
   return (
     <>
@@ -89,36 +95,76 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
           </div>
         </div>
 
-        {/* Right: connection button + burger */}
+        {/* Right: avatar/login + burger */}
         <div className="flex items-center gap-3">
-          {/* Connexion */}
-          <button
-            onClick={() => setConnectOpen(true)}
-            className="flex items-center gap-2 px-4 py-[7px] rounded-[12px] text-[12px] font-semibold
-                       transition-all hover:brightness-110"
-            style={anyConnected ? {
-              background: '#2d3449',
-              border: '1px solid rgba(89,65,54,0.15)',
-              color: '#dae2fd',
-            } : {
-              background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)',
-              color: '#341100',
-              boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-            }}
-          >
-            {/* Status dots */}
-            {anyConnected && (
-              <div className="flex items-center gap-1.5">
-                <span className={`w-[6px] h-[6px] rounded-full ${stravaConnected ? 'bg-[#22c55e]' : 'bg-[rgba(218,226,253,0.2)]'}`} />
-                <span className={`w-[6px] h-[6px] rounded-full ${garminConnected ? 'bg-[#22c55e]' : 'bg-[rgba(218,226,253,0.2)]'}`} />
-              </div>
-            )}
-            {allConnected
-              ? 'Connecté'
-              : anyConnected
-                ? (stravaConnected ? 'Strava connecté' : 'Garmin connecté')
-                : 'Se connecter'}
-          </button>
+          {user ? (
+            /* ── Utilisateur connecte : avatar + dropdown ── */
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(v => !v)}
+                className="flex w-[36px] h-[36px] rounded-full overflow-hidden
+                           border-2 border-transparent hover:border-[rgba(255,109,0,0.4)]
+                           transition-colors"
+              >
+                <div
+                  className="w-full h-full flex items-center justify-center text-[13px] font-bold"
+                  style={{ background: '#2d3449', color: '#ffb692' }}
+                >
+                  {userInitial}
+                </div>
+              </button>
+
+              {dropdownOpen && (
+                <div
+                  className="absolute right-0 top-[calc(100%+8px)] w-52 rounded-xl overflow-hidden
+                             shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+                  style={{ background: '#1a2237', border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  <div className="px-4 py-3 border-b border-white/[0.06]">
+                    <p className="text-[12px] font-semibold text-white truncate">
+                      {userEmail || 'Utilisateur'}
+                    </p>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      onClick={() => { handleNavClick('compte'); setDropdownOpen(false) }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] text-[rgba(218,226,253,0.7)]
+                                 hover:bg-white/[0.04] hover:text-white transition-colors text-left"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <circle cx="7" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.2" />
+                        <path d="M2.5 12.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                      </svg>
+                      Mon compte
+                    </button>
+                    <button
+                      onClick={() => { setDropdownOpen(false); signOut() }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] text-red-400/70
+                                 hover:bg-white/[0.04] hover:text-red-400 transition-colors text-left"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M5 2H3.5a1 1 0 00-1 1v8a1 1 0 001 1H5M9 10l2.5-3L9 4M11.5 7H5.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Se deconnecter
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ── Utilisateur anonyme : bouton Se connecter ── */
+            <button
+              onClick={() => handleNavClick('compte')}
+              className="px-4 py-2 rounded-xl text-[12px] font-semibold tracking-wide
+                         transition-all hover:brightness-110"
+              style={{
+                background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)',
+                color: '#341100',
+              }}
+            >
+              Se connecter
+            </button>
+          )}
 
           {/* Menu burger — mobile uniquement */}
           <button
@@ -136,12 +182,10 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
       {/* ── Overlay + Menu mobile ── */}
       {mobileMenuOpen && (
         <>
-          {/* Overlay — ferme le menu au clic extérieur et bloque le contenu */}
           <div
             className="sm:hidden fixed inset-0 z-30 top-[60px]"
             onClick={() => setMobileMenuOpen(false)}
           />
-          {/* Menu */}
           <div
             className="sm:hidden fixed top-[60px] left-0 right-0 z-40
                        bg-[rgba(11,19,38,0.97)] backdrop-blur-[12px]
@@ -171,34 +215,6 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
             </div>
           </div>
         </>
-      )}
-
-      {/* ── Modal Connexions ── */}
-      {connectOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4 pb-8 overflow-y-auto"
-          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setConnectOpen(false)}
-        >
-          <div
-            className="w-full max-w-lg flex flex-col gap-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <h2 className="text-white font-bold text-sm tracking-wide uppercase">Connexions</h2>
-              <button
-                onClick={() => setConnectOpen(false)}
-                className="text-slate-400 hover:text-white text-xs px-3 py-1 rounded-lg
-                           bg-white/5 hover:bg-white/10 transition-colors"
-              >
-                ✕ Fermer
-              </button>
-            </div>
-            <StravaConnect />
-            <GarminConnect />
-          </div>
-        </div>
       )}
     </>
   )
