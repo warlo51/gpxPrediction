@@ -11,6 +11,7 @@ import OAuth from 'oauth-1.0a'
 // ── URLs ──────────────────────────────────────────────────────────────────────
 const GARMIN_SSO          = 'https://sso.garmin.com/sso'
 const SIGNIN_URL          = `${GARMIN_SSO}/signin`
+const VERIFY_MFA_URL      = `${GARMIN_SSO}/verifyMFA/loginEnterMfaCode`
 const GARMIN_SSO_EMBED    = `${GARMIN_SSO}/embed`
 const GC_MODERN           = 'https://connect.garmin.com/modern'
 const OAUTH_URL           = 'https://connectapi.garmin.com/oauth-service/oauth'
@@ -101,7 +102,8 @@ async function doLogin(username, password, mfaCode, savedState) {
 
   // ── Étape MFA : soumettre le code ─────────────────────────────────────────
   if (mfaCode && savedState) {
-    const mfaSubmitUrl = savedState.mfaUrl ?? signinFull
+    // URL de vérification MFA : utiliser l'URL détectée dans le HTML, sinon le endpoint standard Garmin
+    const mfaSubmitUrl = savedState.mfaUrl ?? `${VERIFY_MFA_URL}?${signinQS}`
     const mfaFieldName = savedState.mfaFieldName ?? 'verificationCode'
 
     const params = new URLSearchParams()
@@ -118,9 +120,8 @@ async function doLogin(username, password, mfaCode, savedState) {
           'User-Agent': UA_BROWSER,
           'Cookie': jar.header(),
           'Origin': 'https://sso.garmin.com',
-          'Referer': mfaSubmitUrl,
+          'Referer': signinFull,
         },
-        // Ne pas lancer d'exception sur les 4xx pour qu'on puisse lire le HTML
         validateStatus: () => true,
       })
     } catch (e) {
@@ -134,11 +135,17 @@ async function doLogin(username, password, mfaCode, savedState) {
     const html = typeof mfaResponse.data === 'string' ? mfaResponse.data : JSON.stringify(mfaResponse.data)
     const title = TITLE_RE.exec(html)?.[1] ?? ''
 
-    const ticket = TICKET_RE.exec(html)?.[1]
+    // Chercher le ticket dans le HTML ou dans l'URL de redirection
+    let ticket = TICKET_RE.exec(html)?.[1]
+    if (!ticket) {
+      const responseUrl = mfaResponse.request?.res?.responseUrl ?? mfaResponse.request?.responseURL ?? ''
+      ticket = TICKET_RE.exec(responseUrl)?.[1]
+    }
+
     if (!ticket) {
       return {
-        error: 'Code MFA invalide ou expiré',
-        debug: `Status: ${mfaResponse.status} | Title: ${title} | URL: ${mfaSubmitUrl} | HTML: ${html.slice(0, 500)}`,
+        error: `MFA échoué (status ${mfaResponse.status})`,
+        debug: `Title: ${title} | Field: ${mfaFieldName} | URL: ${mfaSubmitUrl} | HTML: ${html.slice(0, 800)}`,
       }
     }
     return { ticket }
@@ -195,9 +202,13 @@ async function doLogin(username, password, mfaCode, savedState) {
     // Chercher l'URL d'action du formulaire MFA dans le HTML
     const actionMatch = MFA_ACTION_RE.exec(html)
     const mfaAction = actionMatch?.[1] ?? null
-    const mfaUrl = mfaAction
-      ? (mfaAction.startsWith('http') ? mfaAction : `https://sso.garmin.com${mfaAction}`)
-      : signinFull  // fallback
+    let mfaUrl
+    if (mfaAction) {
+      mfaUrl = mfaAction.startsWith('http') ? mfaAction : `https://sso.garmin.com${mfaAction}`
+    } else {
+      // Fallback : endpoint standard Garmin verifyMFA avec les mêmes query params
+      mfaUrl = `${VERIFY_MFA_URL}?${signinQS}`
+    }
 
     // Detecter le nom du champ MFA dans le HTML
     const fieldMatch = MFA_FIELD_RE.exec(html)

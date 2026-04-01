@@ -320,23 +320,23 @@ function computeTrainingZones(
   sessions: TrainingSession[],
   profile: RunnerProfile,
 ): RunnerAnalysis['trainingZones'] {
-  const { restingHR, maxHR } = profile.heartRateModel
-  const hrReserve = maxHR - restingHR
+  const { maxHR } = profile.heartRateModel
 
+  // Méthode % FC max : FC cible = FC max × % intensité
   const zones = [
-    { zone: 1, label: 'Récupération', color: '#22c55e', pctReserve: [0.50, 0.60] },
-    { zone: 2, label: 'Aérobie de base', color: '#84cc16', pctReserve: [0.60, 0.70] },
-    { zone: 3, label: 'Aérobie seuil', color: '#f59e0b', pctReserve: [0.70, 0.80] },
-    { zone: 4, label: 'Seuil anaérobie', color: '#f97316', pctReserve: [0.80, 0.90] },
-    { zone: 5, label: 'Maximal', color: '#ef4444', pctReserve: [0.90, 1.00] },
+    { zone: 1, label: 'Récupération', color: '#22c55e', pctMin: 0.50, pctMax: 0.60 },
+    { zone: 2, label: 'Aérobie de base', color: '#84cc16', pctMin: 0.60, pctMax: 0.70 },
+    { zone: 3, label: 'Aérobie seuil', color: '#f59e0b', pctMin: 0.70, pctMax: 0.80 },
+    { zone: 4, label: 'Seuil anaérobie', color: '#f97316', pctMin: 0.80, pctMax: 0.90 },
+    { zone: 5, label: 'Maximal', color: '#ef4444', pctMin: 0.90, pctMax: 1.00 },
   ]
 
   // Estimer le % de temps dans chaque zone depuis les FC moyennes
   const sessionsWithHR = sessions.filter(s => s.avgHeartRate)
   const zoneCounts = new Array(5).fill(0)
   for (const s of sessionsWithHR) {
-    const hrPct = (s.avgHeartRate! - restingHR) / hrReserve
-    const zoneIdx = zones.findIndex(z => hrPct >= z.pctReserve[0]! && hrPct < z.pctReserve[1]!)
+    const hrPct = s.avgHeartRate! / maxHR
+    const zoneIdx = zones.findIndex(z => hrPct >= z.pctMin && hrPct < z.pctMax)
     if (zoneIdx >= 0) zoneCounts[zoneIdx]++
   }
   const total = sessionsWithHR.length || 1
@@ -345,8 +345,8 @@ function computeTrainingZones(
     zone: z.zone,
     label: z.label,
     color: z.color,
-    minHR: Math.round(restingHR + hrReserve * z.pctReserve[0]!),
-    maxHR: Math.round(restingHR + hrReserve * z.pctReserve[1]!),
+    minHR: Math.round(maxHR * z.pctMin),
+    maxHR: Math.round(maxHR * z.pctMax),
     pct: Math.round((zoneCounts[i]! / total) * 100),
   }))
 }

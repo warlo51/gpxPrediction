@@ -76,8 +76,9 @@ export async function garminLogin(
   })
 
   if (!res.ok) {
-    const data = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(data.error ?? `Erreur ${res.status}`)
+    const data = await res.json().catch(() => ({})) as { error?: string; debug?: string }
+    const msg = data.error ?? `Erreur ${res.status}`
+    throw new Error(data.debug ? `${msg}\n\n[Debug] ${data.debug}` : msg)
   }
 
   const data = await res.json() as {
