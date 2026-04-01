@@ -9,6 +9,7 @@ import { useStravaStore } from '@/stores/stravaStore'
 import { useGarminStore } from '@/stores/garminStore'
 import { StravaConnect } from '@/features/strava/StravaConnect'
 import { GarminConnect } from '@/features/history/GarminConnect'
+import { PremiumGate } from '@/components/PremiumGate'
 import {
   upsertUserProfile,
   getUserProfile,
@@ -317,8 +318,10 @@ function AccountContent({
           </div>
         </div>
 
-        <StravaConnect />
-        <GarminConnect />
+        <PremiumGate>
+          <StravaConnect />
+          <GarminConnect />
+        </PremiumGate>
       </section>
 
       {/* ── Deconnexion ── */}

@@ -9,6 +9,7 @@ import { formatPace } from '@/services/simulationEngine.service'
 import { StravaConnect } from '@/features/strava/StravaConnect'
 import { FitImport } from './FitImport'
 import { GarminConnect } from './GarminConnect'
+import { PremiumGate } from '@/components/PremiumGate'
 import type { TrainingSession } from '@/types'
 
 // ─── Formulaire d'ajout de séance ────────────────────────────────────────────
@@ -364,8 +365,10 @@ export function HistoryPanel() {
 
   return (
     <div className="w-full flex flex-col gap-6">
-      <StravaConnect />
-      <GarminConnect />
+      <PremiumGate>
+        <StravaConnect />
+        <GarminConnect />
+      </PremiumGate>
       <FitImport />
       <CalibrationPanel />
       <SessionForm onAdd={addSession} />
