@@ -95,6 +95,8 @@ export type RunnerProfile = {
   enduranceScore: number
   /** VO2max estimé en mL/kg/min */
   vo2Max?: number
+  /** Vitesse au seuil lactate en m/s (source Garmin Firstbeat) */
+  lactateThresholdSpeed?: number
 }
 
 /** Stats agrégées calculées depuis l'historique */

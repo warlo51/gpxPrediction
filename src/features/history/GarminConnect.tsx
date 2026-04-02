@@ -9,7 +9,7 @@ import { useGarminStore } from '@/stores/garminStore'
 import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
 import { calibrateRunner } from '@/services/calibration.service'
-import { garminLogin, importGarminActivities } from '@/services/garmin.service'
+import { garminLogin, importGarminActivities, fetchGarminUserStats } from '@/services/garmin.service'
 import { saveSessions, saveRunnerProfile, saveGarminConnection } from '@/services/supabase.service'
 import type { GarminImportProgress } from '@/services/garmin.service'
 
@@ -191,7 +191,7 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
 
 function GarminImportPanel() {
   const { oauth1, oauth2, profile, disconnect } = useGarminStore()
-  const { sessions, addSession, profile: runnerProfile, setProfile } = useAppStore()
+  const { sessions, addSession, clearSessions, profile: runnerProfile, setProfile } = useAppStore()
   const [importState, setImportState] = useState<GarminImportProgress | null>(null)
   const [lastResult, setLastResult] = useState<{
     imported: number; skipped: number; withFit: number
@@ -204,48 +204,91 @@ function GarminImportPanel() {
     setLastResult(null)
 
     try {
-      const existingIds = new Set(sessions.map(s => s.id))
+      // Garder uniquement les sessions Garmin existantes (virer Strava/demo/manual)
+      const garminSessions = sessions.filter(s => s.source === 'garmin')
+      const existingIds = new Set(garminSessions.map(s => s.id))
+
+      console.log('[GarminImport] Starting import — clearing non-Garmin sessions')
+      console.log('[GarminImport] Current sessions:', sessions.length, '(garmin:', garminSessions.length, ', other:', sessions.length - garminSessions.length, ')')
 
       const { sessions: newSessions, withFit, skipped } = await importGarminActivities(
         oauth1, oauth2, existingIds,
         (state) => setImportState(state),
       )
 
-      // Ajouter les sessions
+      console.log('[GarminImport] Import result:', { new: newSessions.length, withFit, skipped })
+
+      // Reset le store : vider tout et remettre uniquement les sessions Garmin
+      clearSessions()
+      console.log('[GarminImport] Store cleared — re-adding Garmin sessions')
+
+      // Re-ajouter les sessions Garmin existantes + les nouvelles
+      for (const s of garminSessions) addSession(s)
       for (const s of newSessions) addSession(s)
 
-      // Recalibrer si nouvelles données
-      if (newSessions.length > 0) {
-        setImportState({ phase: 'calibrating' })
-        const allSessions = [...sessions, ...newSessions]
-        const calibrated = calibrateRunner(allSessions, runnerProfile)
-        setProfile(calibrated)
+      const allGarminSessions = [...garminSessions, ...newSessions]
+      console.log('[GarminImport] Total Garmin sessions in store:', allGarminSessions.length)
 
-        // Sauvegarder en DB pour tout utilisateur authentifié
-        const { user } = useAuthStore.getState()
-        if (user) {
-          try {
-            await saveSessions(user.id, newSessions)
-          } catch (err) {
-            console.error('Erreur sauvegarde sessions DB:', err)
-          }
-          try {
-            await saveRunnerProfile(user.id, calibrated)
-          } catch (err) {
-            console.error('Erreur sauvegarde profil DB:', err)
+      // Recalibrer le profil avec toutes les sessions Garmin
+      setImportState({ phase: 'calibrating' })
+      const calibrated = calibrateRunner(allGarminSessions, runnerProfile)
+
+      // Récupérer la VO2max officielle Garmin et l'injecter dans le profil
+      try {
+        const userStats = await fetchGarminUserStats(oauth1, oauth2)
+        if (userStats.vo2MaxRunning) {
+          console.log('[GarminImport] Garmin VO2max:', userStats.vo2MaxRunning)
+          calibrated.vo2Max = userStats.vo2MaxRunning
+        }
+        if (userStats.lactateThresholdHeartRate) {
+          console.log('[GarminImport] Garmin lactate threshold HR:', userStats.lactateThresholdHeartRate)
+          calibrated.heartRateModel = {
+            ...calibrated.heartRateModel,
+            lactateThresholdHR: userStats.lactateThresholdHeartRate,
           }
         }
+        if (userStats.lactateThresholdSpeed) {
+          console.log('[GarminImport] Garmin lactate threshold speed:', userStats.lactateThresholdSpeed, 'm/s')
+          calibrated.lactateThresholdSpeed = userStats.lactateThresholdSpeed
+        }
+      } catch (err) {
+        console.warn('[GarminImport] Could not fetch Garmin user-stats:', err)
+      }
+
+      setProfile(calibrated)
+      console.log('[GarminImport] Profile recalibrated:', { vo2Max: calibrated.vo2Max, sessionCount: calibrated.sessionCount })
+
+      // Sauvegarder en DB pour tout utilisateur authentifié
+      const { user } = useAuthStore.getState()
+      if (user) {
+        try {
+          console.log('[GarminImport] Saving sessions to DB:', allGarminSessions.length)
+          await saveSessions(user.id, allGarminSessions)
+          console.log('[GarminImport] Sessions saved to DB successfully')
+        } catch (err) {
+          console.error('[GarminImport] Error saving sessions to DB:', err)
+        }
+        try {
+          console.log('[GarminImport] Saving runner profile to DB')
+          await saveRunnerProfile(user.id, calibrated)
+          console.log('[GarminImport] Runner profile saved to DB successfully')
+        } catch (err) {
+          console.error('[GarminImport] Error saving runner profile to DB:', err)
+        }
+      } else {
+        console.warn('[GarminImport] No authenticated user — skipping DB save')
       }
 
       setLastResult({ imported: newSessions.length, skipped, withFit })
       setImportState(null)
     } catch (err) {
+      console.error('[GarminImport] Import failed:', err)
       setImportState({
         phase: 'error',
         message: err instanceof Error ? err.message : 'Erreur import',
       })
     }
-  }, [oauth1, oauth2, sessions, addSession, runnerProfile, setProfile])
+  }, [oauth1, oauth2, sessions, addSession, clearSessions, runnerProfile, setProfile])
 
   const isImporting = importState !== null && importState.phase !== 'error'
 

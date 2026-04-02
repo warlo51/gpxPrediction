@@ -69,14 +69,18 @@ export async function garminLogin(
   if (mfaCode) body.mfaCode = mfaCode
   if (mfaState) body.state = mfaState
 
+  console.log('[Garmin] Login request:', { username, hasMfa: !!mfaCode })
   const res = await fetch(`${API_BASE}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 
+  console.log('[Garmin] Login response status:', res.status)
+
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string; debug?: string }
+    console.error('[Garmin] Login error:', data)
     const msg = data.error ?? `Erreur ${res.status}`
     throw new Error(data.debug ? `${msg}\n\n[Debug] ${data.debug}` : msg)
   }
@@ -91,6 +95,8 @@ export async function garminLogin(
     error?: string
     debug?: string
   }
+
+  console.log('[Garmin] Login response data:', { mfa_required: data.mfa_required, hasOauth1: !!data.oauth1Token, hasOauth2: !!data.oauth2Token, displayName: data.displayName, error: data.error })
 
   if (data.error) throw new Error(data.debug ? `${data.error} — ${data.debug}` : data.error)
   if (data.mfa_required) return { mfa_required: true, state: data.state }
@@ -117,17 +123,25 @@ export async function fetchGarminActivities(
   let start = 0
 
   while (true) {
+    console.log(`[Garmin] Fetching activities: start=${start}, limit=${batchSize}`)
     const res = await fetch(
       `${API_BASE}/activities?start=${start}&limit=${batchSize}`,
       { headers: garminHeaders(oauth1, oauth2) },
     )
 
+    console.log(`[Garmin] Activities response status: ${res.status}`)
+
     if (!res.ok) {
       const data = await res.json().catch(() => ({})) as { error?: string }
+      console.error('[Garmin] Activities error:', data)
       throw new Error(data.error ?? `Erreur ${res.status}`)
     }
 
     const data = await res.json() as { activities: GarminActivity[]; total: number }
+    console.log(`[Garmin] Activities batch: ${data.activities.length} activities, total=${data.total}`)
+    if (data.activities.length > 0) {
+      console.log('[Garmin] Sample activity:', JSON.stringify(data.activities[0], null, 2))
+    }
     all.push(...data.activities)
     onProgress?.(all.length, data.total)
 
@@ -148,18 +162,57 @@ export async function fetchGarminFit(
   oauth1: GarminOAuth1Token,
   oauth2: GarminOAuth2Token,
 ): Promise<ArrayBuffer | null> {
+  console.log(`[Garmin] Fetching FIT for activity ${activityId}`)
   const res = await fetch(
     `${API_BASE}/fit?activityId=${activityId}`,
     { headers: garminHeaders(oauth1, oauth2) },
   )
 
+  console.log(`[Garmin] FIT response status: ${res.status} for activity ${activityId}`)
+
   if (res.status === 404) return null
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string }
+    console.error(`[Garmin] FIT error for ${activityId}:`, data)
     throw new Error(data.error ?? `Erreur FIT ${res.status}`)
   }
 
-  return res.arrayBuffer()
+  const buffer = await res.arrayBuffer()
+  console.log(`[Garmin] FIT downloaded: ${buffer.byteLength} bytes for activity ${activityId}`)
+  return buffer
+}
+
+// ─── Récupérer les stats utilisateur (VO2max, seuil lactate…) ────────────────
+
+export type GarminUserStats = {
+  vo2MaxRunning: number | null
+  vo2MaxCycling: number | null
+  lactateThresholdSpeed: number | null
+  lactateThresholdHeartRate: number | null
+  runningTrainingSpeed: number | null
+  userLevel: string | null
+}
+
+export async function fetchGarminUserStats(
+  oauth1: GarminOAuth1Token,
+  oauth2: GarminOAuth2Token,
+): Promise<GarminUserStats> {
+  console.log('[Garmin] Fetching user-stats (VO2max, lactate threshold…)')
+  const res = await fetch(`${API_BASE}/user-stats`, {
+    headers: garminHeaders(oauth1, oauth2),
+  })
+
+  console.log(`[Garmin] User-stats response status: ${res.status}`)
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string }
+    console.error('[Garmin] User-stats error:', data)
+    throw new Error(data.error ?? `Erreur user-stats ${res.status}`)
+  }
+
+  const data = await res.json() as GarminUserStats
+  console.log('[Garmin] User-stats:', JSON.stringify(data, null, 2))
+  return data
 }
 
 // ─── Mapper GarminActivity → TrainingSession ──────────────────────────────────
@@ -211,15 +264,21 @@ export async function importGarminActivities(
   onProgress: (state: GarminImportProgress) => void,
 ): Promise<{ sessions: TrainingSession[]; withFit: number; skipped: number }> {
   // 1. Liste des activités
+  console.log('[Garmin] Starting import — existing session IDs:', [...existingIds])
   const activities = await fetchGarminActivities(oauth1, oauth2, (loaded, total) => {
     onProgress({ phase: 'activities', loaded, total })
   })
+
+  console.log(`[Garmin] Total activities fetched: ${activities.length}`)
 
   const newActivities = activities.filter(
     a => !existingIds.has(`garmin-${a.activityId}`)
   )
 
+  console.log(`[Garmin] New activities to import: ${newActivities.length}, skipped: ${activities.length - newActivities.length}`)
+
   if (newActivities.length === 0) {
+    console.log('[Garmin] No new activities — import complete')
     return { sessions: [], withFit: 0, skipped: activities.length }
   }
 
@@ -271,5 +330,7 @@ export async function importGarminActivities(
     }
   }
 
+  console.log(`[Garmin] Import complete: ${sessions.length} sessions, ${withFit} with FIT, ${activities.length - newActivities.length} skipped`)
+  console.log('[Garmin] Imported session IDs:', sessions.map(s => s.id))
   return { sessions, withFit, skipped: activities.length - newActivities.length }
 }
