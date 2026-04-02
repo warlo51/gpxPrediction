@@ -54,6 +54,9 @@ console.log(activities)
     if (message.includes('401') || message.includes('403')) {
       return res.status(401).json({ error: 'Session expirée — reconnectez-vous' })
     }
+    if (message.includes('429') || message.includes('Too Many')) {
+      return res.status(429).json({ error: 'Garmin rate-limit atteint — réessayez dans quelques minutes' })
+    }
     return res.status(500).json({ error: message })
   }
 }

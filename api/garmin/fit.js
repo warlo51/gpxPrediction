@@ -53,6 +53,9 @@ export default async function handler(req, res) {
     if (message.includes('404')) {
       return res.status(404).json({ error: 'Activité non trouvée' })
     }
+    if (message.includes('429') || message.includes('Too Many')) {
+      return res.status(429).json({ error: 'Garmin rate-limit atteint — réessayez dans quelques minutes' })
+    }
     return res.status(500).json({ error: message })
   }
 }

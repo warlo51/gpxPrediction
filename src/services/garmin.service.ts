@@ -149,7 +149,7 @@ export async function fetchGarminActivities(
 
   while (true) {
     console.log(`[Garmin] Fetching activities: start=${start}, limit=${batchSize}`)
-    const res = await fetch(
+    const res = await fetchWithRetry(
       `${API_BASE}/activities?start=${start}&limit=${batchSize}`,
       { headers: garminHeaders(oauth1, oauth2) },
     )
@@ -173,11 +173,38 @@ export async function fetchGarminActivities(
     if (data.activities.length < batchSize) break
     start += batchSize
 
-    // Anti rate-limit
-    await new Promise(r => setTimeout(r, 300))
+    // Anti rate-limit entre les pages
+    await delay(1000)
   }
 
   return all
+}
+
+// ─── Helpers anti rate-limit ─────────────────────────────────────────────────
+
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+/**
+ * Fetch avec retry automatique sur 429 (Too Many Requests).
+ * Backoff exponentiel : 2s → 4s → 8s (3 retries max).
+ */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  maxRetries = 3,
+): Promise<Response> {
+  let lastRes: Response | null = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, init)
+    if (res.status !== 429) return res
+    lastRes = res
+    if (attempt < maxRetries) {
+      const wait = Math.pow(2, attempt + 1) * 1000 // 2s, 4s, 8s
+      console.warn(`[Garmin] 429 rate-limited — retry ${attempt + 1}/${maxRetries} in ${wait}ms`)
+      await delay(wait)
+    }
+  }
+  return lastRes!
 }
 
 // ─── Télécharger le fichier FIT d'une activité ───────────────────────────────
@@ -188,7 +215,7 @@ export async function fetchGarminFit(
   oauth2: GarminOAuth2Token,
 ): Promise<ArrayBuffer | null> {
   console.log(`[Garmin] Fetching FIT for activity ${activityId}`)
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `${API_BASE}/fit?activityId=${activityId}`,
     { headers: garminHeaders(oauth1, oauth2) },
   )
@@ -223,7 +250,7 @@ export async function fetchGarminUserStats(
   oauth2: GarminOAuth2Token,
 ): Promise<GarminUserStats> {
   console.log('[Garmin] Fetching user-stats (VO2max, lactate threshold…)')
-  const res = await fetch(`${API_BASE}/user-stats`, {
+  const res = await fetchWithRetry(`${API_BASE}/user-stats`, {
     headers: garminHeaders(oauth1, oauth2),
   })
 
@@ -396,9 +423,9 @@ export async function importGarminActivities(
       sessions.push(mapGarminActivityToSession(activity))
     }
 
-    // Anti rate-limit entre chaque FIT
+    // Anti rate-limit entre chaque FIT (1s minimum, Garmin est strict)
     if (i < newActivities.length - 1) {
-      await new Promise(r => setTimeout(r, 300))
+      await delay(1000)
     }
   }
 
