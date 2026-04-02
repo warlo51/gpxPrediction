@@ -248,8 +248,16 @@ function GarminImportPanel() {
           }
         }
         if (userStats.lactateThresholdSpeed) {
-          console.log('[GarminImport] Garmin lactate threshold speed:', userStats.lactateThresholdSpeed, 'm/s')
-          calibrated.lactateThresholdSpeed = userStats.lactateThresholdSpeed
+          // L'API Garmin Connect renvoie lactateThresholdSpeed dans une unité non documentée.
+          // Valeur attendue en m/s pour un coureur : 2.0–6.0 (≈ 2:47–8:20/km).
+          // Si la valeur brute est < 1.0, c'est vraisemblablement un facteur ×10 manquant.
+          let ltSpeed = userStats.lactateThresholdSpeed
+          console.log('[GarminImport] Garmin lactate threshold speed raw:', ltSpeed)
+          if (ltSpeed > 0 && ltSpeed < 1.0) {
+            ltSpeed = ltSpeed * 10
+            console.log('[GarminImport] Normalized LT speed (×10):', ltSpeed, 'm/s')
+          }
+          calibrated.lactateThresholdSpeed = ltSpeed
         }
       } catch (err) {
         console.warn('[GarminImport] Could not fetch Garmin user-stats:', err)

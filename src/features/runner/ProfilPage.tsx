@@ -62,6 +62,7 @@ type VO2Data = {
 
 function computeVO2Data(
   sessions: Array<{ distance: number; duration: number; date: Date; elevationGain: number; avgPace: number }>,
+  garminVo2Max?: number,
 ): VO2Data {
   const fallback: VO2Data = {
     vo2max: 0, trend: null, percentileLabel: '', level: 'Beginner',
@@ -85,13 +86,18 @@ function computeVO2Data(
     .filter(s => s.vdot > 15 && s.vdot < 90) // sanity
     .sort((a, b) => a.dateMs - b.dateMs)
 
-  if (candidates.length === 0) return fallback
-
-  // VO2max = 90e percentile des 20 dernières sessions éligibles (robuste aux outliers)
-  const recent = candidates.slice(-20)
-  const sortedVdots = [...recent.map(s => s.vdot)].sort((a, b) => a - b)
-  const p90Idx = Math.min(sortedVdots.length - 1, Math.floor(sortedVdots.length * 0.9))
-  const vo2max = Math.round(sortedVdots[p90Idx]!)
+  // VO2max : priorité à la valeur Garmin (Firstbeat), fallback VDOT calculé
+  let vo2max: number
+  if (garminVo2Max && garminVo2Max > 0) {
+    vo2max = Math.round(garminVo2Max)
+  } else if (candidates.length > 0) {
+    const recent = candidates.slice(-20)
+    const sortedVdots = [...recent.map(s => s.vdot)].sort((a, b) => a - b)
+    const p90Idx = Math.min(sortedVdots.length - 1, Math.floor(sortedVdots.length * 0.9))
+    vo2max = Math.round(sortedVdots[p90Idx]!)
+  } else {
+    return fallback
+  }
 
   // Trend : 80e percentile des 8 dernières semaines vs 8 précédentes
   const now = Date.now()
@@ -305,23 +311,34 @@ function extractFlatPace(session: SessionInput): number | null {
 
 function computeAiStats(
   sessions: SessionInput[],
-  profile: { basePaceSecPerKm: number; heartRateModel: { restingHR: number; maxHR: number }; enduranceScore: number },
+  profile: {
+    basePaceSecPerKm: number
+    heartRateModel: { restingHR: number; maxHR: number }
+    enduranceScore: number
+    lactateThresholdSpeed?: number
+  },
 ): AiStats {
   const sorted = [...sessions]
     .filter(s => s.avgPace > 0 && s.distance > 0)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-  // ── Seuil lactique : allure FLAT à ~85% FCR (zone 4 Karvonen) ──
-  // Similaire à Garmin : on extrait l'allure sur segments plats des séances à effort seuil
+  // ── Seuil lactique : priorité Garmin (lactateThresholdSpeed en m/s), fallback calcul sessions ──
   const { restingHR, maxHR } = profile.heartRateModel
   const fcReserve = maxHR - restingHR
   const z4TargetHR = fcReserve > 0 ? restingHR + fcReserve * 0.85 : maxHR * 0.85
 
   let lactateThresholdPace = profile.basePaceSecPerKm * 0.88 // fallback
   let lactateDelta: number | null = null
-
   const sessionsWithHR = sorted.filter(s => s.avgHeartRate)
-  if (sessionsWithHR.length >= 3 && fcReserve > 0) {
+
+  if (profile.lactateThresholdSpeed && profile.lactateThresholdSpeed > 0) {
+    // Garmin : vitesse au seuil en m/s → convertir en s/km
+    // Normalisation : si < 1.0 m/s, la valeur brute Garmin a un facteur ×10 manquant
+    const ltSpeed = profile.lactateThresholdSpeed < 1.0
+      ? profile.lactateThresholdSpeed * 10
+      : profile.lactateThresholdSpeed
+    lactateThresholdPace = 1000 / ltSpeed
+  } else if (sessionsWithHR.length >= 3 && fcReserve > 0) {
     // Séances dont FC est entre 75-95% FCR ≈ effort seuil élargi
     const thresholdCandidates = sessionsWithHR
       .filter(s => {
@@ -335,8 +352,6 @@ function computeAiStats(
       .filter((s): s is { flatPace: number; hr: number } => s !== null)
 
     if (thresholdCandidates.length >= 2) {
-      // Normaliser l'allure plate à la FC cible (85% FCR)
-      // FC plus haute → effort plus intense → à la cible il serait plus lent
       const normalizedPaces = thresholdCandidates.map(s =>
         s.flatPace * (s.hr / z4TargetHR),
       )
@@ -460,7 +475,7 @@ function computeAiStats(
 
 function AiStatsCard({ sessions, profile }: {
   sessions: SessionInput[]
-  profile: { basePaceSecPerKm: number; heartRateModel: { restingHR: number; maxHR: number }; enduranceScore: number }
+  profile: { basePaceSecPerKm: number; heartRateModel: { restingHR: number; maxHR: number }; enduranceScore: number; lactateThresholdSpeed?: number }
 }) {
   const stats = useMemo(() => computeAiStats(sessions, profile), [sessions, profile])
 
@@ -666,9 +681,9 @@ export function ProfilPage() {
     : (profile.name || 'Trail Runner').toUpperCase()
   const location = athlete?.city ? `${athlete.city}, ${athlete.country ?? ''}`.replace(/, $/, '') : null
 
-  // VO2max et niveau calculés depuis les performances réelles (VDOT Jack Daniels)
+  // VO2max : priorité Garmin (Firstbeat), fallback VDOT Jack Daniels
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const vo2Data = useMemo(() => computeVO2Data(sessions), [sessions])
+  const vo2Data = useMemo(() => computeVO2Data(sessions, profile.vo2Max), [sessions, profile.vo2Max])
   const level = vo2Data.level
 
 

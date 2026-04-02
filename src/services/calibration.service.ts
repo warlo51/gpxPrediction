@@ -354,10 +354,10 @@ function calibrateHeartRateModel(
   const cardiacDriftBpmPerHour =
     drifts.length >= 2 ? Math.max(0, Math.round(median(removeOutliers(drifts)) * 10) / 10) : undefined
 
-  // ── lactateThresholdHR : estimation classique FCR repos + 85% FCR
-  // Plus fiable que le breakpoint de régression avec peu de données.
-  let lactateThresholdHR: number | undefined
-  if (calibratedBaseHR && calibratedMaxHR) {
+  // ── lactateThresholdHR : priorité à la valeur Garmin existante (Firstbeat),
+  // sinon estimation classique FCR repos + 85% FCR
+  let lactateThresholdHR: number | undefined = baseProfile.heartRateModel.lactateThresholdHR
+  if (!lactateThresholdHR && calibratedBaseHR && calibratedMaxHR) {
     const restingHREstimate = calibratedBaseHR * 0.55 // approximation si FCR repos inconnue
     lactateThresholdHR = Math.round(restingHREstimate + 0.85 * (calibratedMaxHR - restingHREstimate))
   }
