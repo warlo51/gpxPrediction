@@ -98,6 +98,19 @@ export const useAppStore = create<AppState>()(
       addSession: (session) =>
         set((state) => {
           if (state.sessions.some((s) => s.id === session.id)) return state
+          // Dédoublonnage par date (à la minute près) : Garmin prioritaire
+          const sessionMinute = new Date(session.date).setSeconds(0, 0)
+          const duplicate = state.sessions.find((s) => {
+            const sMinute = new Date(s.date).setSeconds(0, 0)
+            return Math.abs(sMinute - sessionMinute) < 60_000
+          })
+          if (duplicate) {
+            const isNewGarmin = session.source === 'garmin'
+            const isOldGarmin = duplicate.source === 'garmin'
+            if (isOldGarmin && !isNewGarmin) return state // garder Garmin existant
+            // Remplacer par la nouvelle (Garmin prioritaire, ou même source = mise à jour)
+            return { sessions: state.sessions.map((s) => s.id === duplicate.id ? session : s) }
+          }
           return { sessions: [...state.sessions, session] }
         }),
       removeSession: (id) =>
@@ -114,6 +127,20 @@ export const useAppStore = create<AppState>()(
       // et injecter les nouveaux champs manquants pour les profils existants.
       onRehydrateStorage: () => (state) => {
         if (!state) return
+        // Dédoublonner les sessions par date (à la minute près), Garmin prioritaire
+        if (state.sessions.length > 0) {
+          const seen = new Map<number, TrainingSession>()
+          for (const s of state.sessions) {
+            const minute = new Date(s.date).setSeconds(0, 0)
+            const existing = seen.get(minute)
+            if (!existing || (s.source === 'garmin' && existing.source !== 'garmin')) {
+              seen.set(minute, s)
+            }
+          }
+          if (seen.size < state.sessions.length) {
+            state.sessions = Array.from(seen.values())
+          }
+        }
         if (state.profile.speedModel.uphillDecayFactor >= 0.07) {
           state.profile = {
             ...state.profile,
