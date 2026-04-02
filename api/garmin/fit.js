@@ -2,7 +2,7 @@
 // Vercel Serverless Function — Node.js ESM runtime
 // GET /api/garmin/fit?activityId=123456
 
-import pkg from 'garmin-connect'
+import pkg from '@flow-js/garmin-connect'
 const { GarminConnect } = pkg
 
 export default async function handler(req, res) {

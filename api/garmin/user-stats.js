@@ -4,7 +4,7 @@
 // Retourne les statistiques officielles Garmin du coureur :
 // VO2max running, seuil lactate (vitesse + FC), profil social
 
-import pkg from 'garmin-connect'
+import pkg from '@flow-js/garmin-connect'
 const { GarminConnect } = pkg
 
 export default async function handler(req, res) {

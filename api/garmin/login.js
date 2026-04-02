@@ -66,6 +66,9 @@ function loginParams() {
   }
 }
 
+// ── Helper sleep ─────────────────────────────────────────────────────────────
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+
 // ── Réaliser le flow login complet (JSON mobile API) ────────────────────────
 async function doLogin(username, password, mfaCode, savedState) {
   const jar = makeCookieJar(savedState?.cookies)
@@ -94,6 +97,11 @@ async function doLogin(username, password, mfaCode, savedState) {
       )
     } catch (e) {
       return { error: `Erreur réseau MFA: ${e.message}` }
+    }
+
+    // Retry MFA sur 429
+    if (mfaResp.status === 429) {
+      return { error: 'rate_limited', retryable: true }
     }
 
     jar.extract(mfaResp)
@@ -126,27 +134,45 @@ async function doLogin(username, password, mfaCode, savedState) {
   }
 
   // ── Étape 2 : soumettre email + password (JSON API) ──────────────────────
+  // Retry automatique sur 429 avec backoff exponentiel (3s, 6s, 12s)
   let loginResp
-  try {
-    loginResp = await client.post(
-      `${SSO_BASE}/mobile/api/login`,
-      {
-        username,
-        password,
-        rememberMe: false,
-        captchaToken: '',
-      },
-      {
-        params,
-        headers: { ...SSO_PAGE_HEADERS, Cookie: jar.header() },
-        validateStatus: () => true,
-      },
-    )
-  } catch (e) {
-    return {
-      error: `Erreur réseau login: ${e.message}`,
-      debug: `URL: ${SSO_BASE}/mobile/api/login`,
+  const MAX_LOGIN_RETRIES = 3
+  for (let attempt = 0; attempt <= MAX_LOGIN_RETRIES; attempt++) {
+    try {
+      loginResp = await client.post(
+        `${SSO_BASE}/mobile/api/login`,
+        {
+          username,
+          password,
+          rememberMe: false,
+          captchaToken: '',
+        },
+        {
+          params,
+          headers: { ...SSO_PAGE_HEADERS, Cookie: jar.header() },
+          validateStatus: () => true,
+        },
+      )
+    } catch (e) {
+      return {
+        error: `Erreur réseau login: ${e.message}`,
+        debug: `URL: ${SSO_BASE}/mobile/api/login`,
+      }
     }
+
+    if (loginResp.status !== 429) break
+
+    // 429 rate-limited — retry avec backoff
+    if (attempt < MAX_LOGIN_RETRIES) {
+      const wait = Math.pow(2, attempt) * 3000 // 3s, 6s, 12s
+      console.warn(`[Garmin Login] 429 rate-limited — retry ${attempt + 1}/${MAX_LOGIN_RETRIES} in ${wait}ms`)
+      await sleep(wait)
+    }
+  }
+
+  // Si toujours 429 après tous les retries
+  if (loginResp.status === 429) {
+    return { error: 'rate_limited', retryable: true }
   }
 
   jar.extract(loginResp)
@@ -273,6 +299,11 @@ export default async function handler(req, res) {
 
     // Erreur métier
     if (result.error) {
+      if (result.retryable) {
+        return res.status(429).json({
+          error: 'Garmin limite les connexions — réessayez dans 1-2 minutes',
+        })
+      }
       return res.status(result.error.includes('incorrect') || result.error.includes('bloqué') ? 401 : 500)
         .json({ error: result.error, ...(result.debug ? { debug: result.debug } : {}) })
     }
