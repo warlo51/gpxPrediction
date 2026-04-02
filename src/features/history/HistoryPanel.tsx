@@ -428,16 +428,8 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 }
 
 function SourceBadge({ source, id }: { source: TrainingSession['source']; id?: string }) {
-  const isGarminConnect = source === 'gpx' && id?.startsWith('garmin-')
   const isGarminFit = source === 'gpx' && id?.startsWith('fit-')
 
-  if (isGarminConnect) {
-    return (
-      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-900/50 text-sky-400">
-        🏔️ Garmin
-      </span>
-    )
-  }
   if (isGarminFit) {
     return (
       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-900/30 text-sky-500">
@@ -448,11 +440,13 @@ function SourceBadge({ source, id }: { source: TrainingSession['source']; id?: s
   const styles: Record<TrainingSession['source'], string> = {
     manual: 'bg-slate-700 text-slate-300',
     strava: 'bg-orange-900/50 text-orange-400',
+    garmin: 'bg-sky-900/50 text-sky-400',
     gpx: 'bg-indigo-900/50 text-indigo-400',
   }
   const labels: Record<TrainingSession['source'], string> = {
     manual: 'Manuel',
     strava: 'Strava',
+    garmin: '🏔️ Garmin',
     gpx: 'GPX',
   }
   return (

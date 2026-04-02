@@ -51,19 +51,27 @@ function Calibrated({
   label, value, sub, color = 'text-white', source,
 }: {
   label: string; value: string; sub?: string
-  color?: string; source: 'strava' | 'calculé'
+  color?: string; source: 'strava' | 'garmin' | 'calculé'
 }) {
+  const sourceStyles = {
+    strava: 'bg-orange-900/50 text-orange-400 border border-orange-800/40',
+    garmin: 'bg-sky-900/50 text-sky-400 border border-sky-800/40',
+    calculé: 'bg-indigo-900/50 text-indigo-400 border border-indigo-800/40',
+  }
+  const sourceLabels = {
+    strava: '⚡ Strava',
+    garmin: '🏔️ Garmin',
+    calculé: '🧮 Calculé',
+  }
   return (
     <div className="bg-white/3 border border-white/6 rounded-xl p-3 hover:bg-white/5 transition-colors">
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-slate-500 text-xs leading-tight">{label}</span>
         <span className={[
           'text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-1',
-          source === 'strava'
-            ? 'bg-orange-900/50 text-orange-400 border border-orange-800/40'
-            : 'bg-indigo-900/50 text-indigo-400 border border-indigo-800/40',
+          sourceStyles[source],
         ].join(' ')}>
-          {source === 'strava' ? '⚡ Strava' : '🧮 Calculé'}
+          {sourceLabels[source]}
         </span>
       </div>
       <div className={`font-bold text-sm ${color}`}>{value}</div>
@@ -87,6 +95,8 @@ export function RunnerProfileForm() {
   const [isRecalibrating, setIsRecalibrating] = useState(false)
 
   const hasHistory = sessions.length > 0
+  const hasGarmin = sessions.some(s => s.source === 'garmin')
+  const dataSource: 'garmin' | 'strava' = hasGarmin ? 'garmin' : 'strava'
 
   // ── Grade max réellement observé dans les streams
   const maxObservedGrade = (() => {
@@ -239,7 +249,7 @@ export function RunnerProfileForm() {
                 value={`${currentThreshold} %`}
                 sub={`Depuis ${sessionsWithElevation} séance${sessionsWithElevation > 1 ? 's' : ''} · pente max observée ${maxObservedGrade}%`}
                 color="text-orange-300"
-                source="strava"
+                source={dataSource}
               />
             </div>
           ) : walkingThresholdUnreliable ? (
@@ -362,38 +372,38 @@ export function RunnerProfileForm() {
             value={`${paceMin}:${String(paceSec).padStart(2, '0')} /km`}
             sub={`${(profile.speedModel.flatSpeed * 3.6).toFixed(1)} km/h`}
             color="text-indigo-300"
-            source={hasHistory ? 'strava' : 'calculé'}
+            source={hasHistory ? dataSource : 'calculé'}
           />
           <Calibrated
             label="FC de base"
             value={`${profile.heartRateModel.baseHR} bpm`}
             sub={`Max: ${profile.heartRateModel.maxHR} bpm`}
             color="text-rose-300"
-            source={hasHistory && sessions.some(s => s.avgHeartRate) ? 'strava' : 'calculé'}
+            source={hasHistory && sessions.some(s => s.avgHeartRate) ? dataSource : 'calculé'}
           />
           <Calibrated
             label="Score d'endurance"
             value={`${(profile.enduranceScore * 100).toFixed(0)} %`}
             sub={profile.enduranceScore > 0.75 ? 'Très bon' : profile.enduranceScore > 0.55 ? 'Correct' : 'À développer'}
             color="text-emerald-400"
-            source={hasHistory ? 'strava' : 'calculé'}
+            source={hasHistory ? dataSource : 'calculé'}
           />
           <Calibrated
             label="Fatigue horaire"
             value={`-${(profile.fatigueModel.hourlyDecayFactor * 100).toFixed(1)} %/h`}
             sub={`Seuil tardif: ${profile.fatigueModel.fatigueThresholdKm} km`}
             color="text-amber-400"
-            source={hasHistory ? 'strava' : 'calculé'}
+            source={hasHistory ? dataSource : 'calculé'}
           />
           <Calibrated
             label="Décroissance montée"
             value={`-${(profile.speedModel.uphillDecayFactor * 100).toFixed(1)} %/% pente`}
-            source={hasHistory && sessions.some(s => s.streams) ? 'strava' : 'calculé'}
+            source={hasHistory && sessions.some(s => s.streams) ? dataSource : 'calculé'}
           />
           <Calibrated
             label="Boost descente"
             value={`+${(profile.speedModel.downhillBoostFactor * 100).toFixed(1)} %/% pente`}
-            source={hasHistory && sessions.some(s => s.streams) ? 'strava' : 'calculé'}
+            source={hasHistory && sessions.some(s => s.streams) ? dataSource : 'calculé'}
           />
           <Calibrated
             label="Dérive cardiaque"
@@ -404,7 +414,7 @@ export function RunnerProfileForm() {
             label="Calibré le"
             value={new Date(profile.calibratedAt).toLocaleDateString('fr-FR')}
             sub={`${profile.sessionCount} séance${profile.sessionCount > 1 ? 's' : ''} analysée${profile.sessionCount > 1 ? 's' : ''}`}
-            source={hasHistory ? 'strava' : 'calculé'}
+            source={hasHistory ? dataSource : 'calculé'}
           />
         </div>
 

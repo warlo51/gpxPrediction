@@ -476,8 +476,16 @@ export function calibrateRunner(
 ): RunnerProfile {
   if (history.length === 0) return baseProfile
 
+  // ── 0. Priorité Garmin > Strava
+  // Les données Garmin (FIT files) sont plus complètes que Strava (streams API limités).
+  // Si l'utilisateur a des sessions Garmin, on exclut les sessions Strava de la calibration.
+  const hasGarminSessions = history.some(s => s.source === 'garmin')
+  const calibrationHistory = hasGarminSessions
+    ? history.filter(s => s.source !== 'strava')
+    : history
+
   // ── 1. Extraction des métriques
-  const metrics = history
+  const metrics = calibrationHistory
     .map(extractSessionMetrics)
     .filter((m): m is SessionMetrics => m !== null)
 
@@ -487,7 +495,7 @@ export function calibrateRunner(
     .filter((v) => v > 0.5 && v < 8)
 
   // Allure globale brute depuis les séances (s/km → m/s)
-  const globalPaces = history
+  const globalPaces = calibrationHistory
     .filter((s) => s.avgPace > 0)
     .map((s) => 1000 / s.avgPace)
 
@@ -502,7 +510,7 @@ export function calibrateRunner(
     // Correction basée sur le D+/km moyen des séances :
     // ~+8% de correction par 100m D+/km (empirique trail)
     const avgElevGainPerKm = mean(
-      history
+      calibrationHistory
         .filter((s) => s.distance > 0)
         .map((s) => (s.elevationGain / (s.distance / 1000)))
     )
@@ -522,10 +530,10 @@ export function calibrateRunner(
   // ── 4. Calibration FC
   const allHrSamples = metrics.flatMap((m) => m.hrSpeedSamples)
   const allHrGradeSamples = metrics.flatMap((m) => m.hrGradeSamples)
-  const hrCalibration = calibrateHeartRateModel(allHrSamples, allHrGradeSamples, metrics, history)
+  const hrCalibration = calibrateHeartRateModel(allHrSamples, allHrGradeSamples, metrics, calibrationHistory)
 
   // ── 5. Calibration fatigue
-  const fatigueCalibration = calibrateFatigueModel(metrics, history)
+  const fatigueCalibration = calibrateFatigueModel(metrics, calibrationHistory)
 
   // ── 6. Vitesse de marche réelle
   const calibratedWalkingSpeed = calibrateWalkingSpeed(metrics)

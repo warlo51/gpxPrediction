@@ -177,7 +177,7 @@ export function mapGarminActivityToSession(
     id: `garmin-${activity.activityId}`,
     name: activity.activityName,
     date: new Date(activity.startTimeLocal ?? activity.startTimeGMT),
-    source: 'gpx',
+    source: 'garmin',
     distance,
     duration,
     elevationGain: activity.elevationGain ?? 0,
@@ -248,6 +248,7 @@ export async function importGarminActivities(
           id: `garmin-${activity.activityId}`,
           name: activity.activityName,
           date: new Date(activity.startTimeLocal ?? activity.startTimeGMT),
+          source: 'garmin',
           // Préférer les métriques agrégées de l'API (plus fiables que le FIT summary)
           avgHeartRate: activity.averageHR ?? fitResult.session.avgHeartRate,
           maxHeartRate: activity.maxHR ?? fitResult.session.maxHeartRate,

@@ -4,7 +4,7 @@
  */
 
 /** Source de la séance */
-export type SessionSource = 'strava' | 'manual' | 'gpx'
+export type SessionSource = 'strava' | 'garmin' | 'manual' | 'gpx'
 
 /** Streams bruts récupérés depuis l'API Strava */
 export type ActivityStreams = {
