@@ -61,6 +61,7 @@ export type RunnerAnalysis = {
     consistencyScore: number   // 0-100 : régularité des sorties
     progressionScore: number   // 0-100 : amélioration de l'allure sur la période
     trailScore: number         // 0-100 : spécificité trail (D+/km)
+    enduranceScore: number     // 0-100 : résistance à la fatigue (calculé depuis les sessions)
   }
   // Zones FC classiques (% FC max)
   trainingZones: {
@@ -116,6 +117,52 @@ function getWeekKey(date: Date): string {
 function formatWeekLabel(isoDate: string): string {
   const d = new Date(isoDate)
   return `${d.getDate()}/${d.getMonth() + 1}`
+}
+
+/**
+ * Déduplique les sessions cross-sources (Strava + FIT).
+ * Deux sessions sont considérées comme identiques si :
+ * - elles sont à moins de 5 minutes d'écart
+ * - leur distance est similaire à ±15%
+ * En cas de doublon, on garde celle avec le plus de données (streams).
+ */
+function deduplicateSessions(sessions: TrainingSession[]): TrainingSession[] {
+  // Trier par date pour un parcours stable
+  const sorted = [...sessions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  )
+  const kept: TrainingSession[] = []
+
+  for (const s of sorted) {
+    const dupeIdx = kept.findIndex(existing => {
+      const timeDiff = Math.abs(
+        new Date(existing.date).getTime() - new Date(s.date).getTime(),
+      )
+      if (timeDiff > 5 * 60 * 1000) return false // > 5 min d'écart
+      if (existing.distance === 0 || s.distance === 0) return false
+      const ratio = Math.min(existing.distance, s.distance) /
+        Math.max(existing.distance, s.distance)
+      return ratio > 0.85 // ±15% de distance
+    })
+
+    if (dupeIdx >= 0) {
+      // Garder la session avec le plus de données
+      const existing = kept[dupeIdx]!
+      const existingScore = (existing.streams?.heartrate ? 1 : 0) +
+        (existing.streams?.velocity_smooth ? 1 : 0) +
+        (existing.streams?.latlng ? 1 : 0)
+      const newScore = (s.streams?.heartrate ? 1 : 0) +
+        (s.streams?.velocity_smooth ? 1 : 0) +
+        (s.streams?.latlng ? 1 : 0)
+      if (newScore > existingScore) {
+        kept[dupeIdx] = s
+      }
+    } else {
+      kept.push(s)
+    }
+  }
+
+  return kept
 }
 
 // ─── Tendance de performance ──────────────────────────────────────────────────
@@ -242,65 +289,53 @@ function computeWeeklyLoad(sessions: TrainingSession[]): WeeklyLoad[] {
 
 function computeStrengthsWeaknesses(
   sessions: TrainingSession[],
-  profile: RunnerProfile,
+  stats: RunnerAnalysis['stats'],
 ): StrengthWeakness[] {
   const result: StrengthWeakness[] = []
   if (sessions.length === 0) return result
 
-  const distancesKm = sessions.map(s => s.distance / 1000)
-  const avgDist = mean(distancesKm)
-  const elevPerKm = sessions.map(s => s.elevationGain / (s.distance / 1000))
-  const avgElev = mean(elevPerKm)
   const sessionsWithHR = sessions.filter(s => s.avgHeartRate)
 
-  // Régularité
+  // Régularité (réutilise le score unifié de computeStats basé sur les semaines uniques)
   const cutoff12w = new Date(); cutoff12w.setDate(cutoff12w.getDate() - 84)
-  const recentCount = sessions.filter(s => new Date(s.date) >= cutoff12w).length
-  const consistencyScore = Math.min(100, (recentCount / 12) * 100) // 1 séance/semaine = 100%
-
-  if (consistencyScore >= 70) {
-    result.push({ type: 'force', icon: '📅', label: 'Régularité', detail: `${recentCount} séances sur 12 semaines`, value: `${Math.round(consistencyScore)}%` })
-  } else if (consistencyScore < 40) {
-    result.push({ type: 'faiblesse', icon: '📅', label: 'Régularité', detail: 'Moins d\'1 sortie/semaine en moyenne', value: `${Math.round(consistencyScore)}%` })
+  const recentWeeks = new Set(
+    sessions.filter(s => new Date(s.date) >= cutoff12w).map(s => getWeekKey(new Date(s.date)))
+  )
+  if (stats.consistencyScore >= 70) {
+    result.push({ type: 'force', icon: '📅', label: 'Régularité', detail: `${recentWeeks.size} semaines actives sur 12`, value: `${stats.consistencyScore}%` })
+  } else if (stats.consistencyScore < 40) {
+    result.push({ type: 'faiblesse', icon: '📅', label: 'Régularité', detail: `Seulement ${recentWeeks.size} semaines actives sur 12`, value: `${stats.consistencyScore}%` })
   }
 
-  // Endurance
-  if (avgDist >= 15) {
-    result.push({ type: 'force', icon: '🏅', label: 'Endurance de base', detail: `Distance moyenne ${avgDist.toFixed(1)} km`, value: `${avgDist.toFixed(1)} km` })
-  } else if (avgDist < 8) {
-    result.push({ type: 'faiblesse', icon: '📏', label: 'Volume kilométrique', detail: 'Distance moyenne faible pour le trail', value: `${avgDist.toFixed(1)} km` })
+  // Endurance (distance moyenne)
+  if (stats.avgDistanceKm >= 15) {
+    result.push({ type: 'force', icon: '🏅', label: 'Endurance de base', detail: `Distance moyenne ${stats.avgDistanceKm} km`, value: `${stats.avgDistanceKm} km` })
+  } else if (stats.avgDistanceKm < 8) {
+    result.push({ type: 'faiblesse', icon: '📏', label: 'Volume kilométrique', detail: 'Distance moyenne faible pour le trail', value: `${stats.avgDistanceKm} km` })
   }
 
   // Spécificité trail (D+/km)
-  if (avgElev >= 60) {
-    result.push({ type: 'force', icon: '⛰️', label: 'Spécificité trail', detail: `${avgElev.toFixed(0)} m D+/km en moyenne`, value: `${avgElev.toFixed(0)} m/km` })
-  } else if (avgElev < 20) {
-    result.push({ type: 'faiblesse', icon: '🏔️', label: 'Manque de dénivelé', detail: 'Peu de D+ dans les séances — intégrer plus de montées', value: `${avgElev.toFixed(0)} m/km` })
+  if (stats.avgElevPerKm >= 60) {
+    result.push({ type: 'force', icon: '⛰️', label: 'Spécificité trail', detail: `${stats.avgElevPerKm.toFixed(0)} m D+/km en moyenne`, value: `${stats.avgElevPerKm.toFixed(0)} m/km` })
+  } else if (stats.avgElevPerKm < 20) {
+    result.push({ type: 'faiblesse', icon: '🏔️', label: 'Manque de dénivelé', detail: 'Peu de D+ dans les séances — intégrer plus de montées', value: `${stats.avgElevPerKm.toFixed(0)} m/km` })
   } else {
-    result.push({ type: 'neutre', icon: '📈', label: 'Terrain varié', detail: `${avgElev.toFixed(0)} m D+/km — profil trail moyen`, value: `${avgElev.toFixed(0)} m/km` })
+    result.push({ type: 'neutre', icon: '📈', label: 'Terrain varié', detail: `${stats.avgElevPerKm.toFixed(0)} m D+/km — profil trail moyen`, value: `${stats.avgElevPerKm.toFixed(0)} m/km` })
   }
 
-  // Progression de l'allure (pente tendancielle sur les 20 dernières séances)
-  const recentPaces = sessions
-    .filter(s => s.avgPace > 0)
-    .slice(-20)
-    .map(s => s.avgPace)
-  if (recentPaces.length >= 6) {
-    const firstHalf = mean(recentPaces.slice(0, Math.floor(recentPaces.length / 2)))
-    const secondHalf = mean(recentPaces.slice(Math.floor(recentPaces.length / 2)))
-    const improvement = ((firstHalf - secondHalf) / firstHalf) * 100
-    if (improvement >= 3) {
-      result.push({ type: 'force', icon: '📈', label: 'Progression', detail: `Allure améliorée de ${improvement.toFixed(1)}% récemment`, value: `+${improvement.toFixed(1)}%` })
-    } else if (improvement <= -3) {
-      result.push({ type: 'faiblesse', icon: '📉', label: 'Régression', detail: `Allure dégradée de ${Math.abs(improvement).toFixed(1)}% — vérifier la récupération`, value: `${improvement.toFixed(1)}%` })
-    }
+  // Progression (réutilise le score unifié — converti en % d'amélioration)
+  const progressionPct = stats.progressionScore - 50 // >0 = amélioration, <0 = régression
+  if (progressionPct >= 15) {
+    result.push({ type: 'force', icon: '📈', label: 'Progression', detail: `Allure en amélioration récente`, value: `${stats.progressionScore}/100` })
+  } else if (progressionPct <= -15) {
+    result.push({ type: 'faiblesse', icon: '📉', label: 'Régression', detail: 'Allure en baisse — vérifier la récupération', value: `${stats.progressionScore}/100` })
   }
 
-  // Endurance score
-  if (profile.enduranceScore >= 0.75) {
-    result.push({ type: 'force', icon: '🔋', label: 'Résistance à la fatigue', detail: 'Bonne stabilité de l\'allure sur la durée', value: `${Math.round(profile.enduranceScore * 100)}%` })
-  } else if (profile.enduranceScore < 0.5) {
-    result.push({ type: 'faiblesse', icon: '😓', label: 'Fatigue progressive', detail: 'L\'allure se dégrade en fin de sortie', value: `${Math.round(profile.enduranceScore * 100)}%` })
+  // Endurance score (calculé depuis les sessions)
+  if (stats.enduranceScore >= 75) {
+    result.push({ type: 'force', icon: '🔋', label: 'Résistance à la fatigue', detail: 'Bonne stabilité de l\'allure sur la durée', value: `${stats.enduranceScore}%` })
+  } else if (stats.enduranceScore < 50) {
+    result.push({ type: 'faiblesse', icon: '😓', label: 'Fatigue progressive', detail: 'L\'allure se dégrade en fin de sortie', value: `${stats.enduranceScore}%` })
   }
 
   // FC disponible
@@ -331,15 +366,36 @@ function computeTrainingZones(
     { zone: 5, label: 'Maximal', color: '#ef4444', pctMin: 0.90, pctMax: 1.00 },
   ]
 
-  // Estimer le % de temps dans chaque zone depuis les FC moyennes
-  const sessionsWithHR = sessions.filter(s => s.avgHeartRate)
-  const zoneCounts = new Array(5).fill(0)
-  for (const s of sessionsWithHR) {
-    const hrPct = s.avgHeartRate! / maxHR
-    const zoneIdx = zones.findIndex(z => hrPct >= z.pctMin && hrPct < z.pctMax)
-    if (zoneIdx >= 0) zoneCounts[zoneIdx]++
+  // Estimer le % de temps dans chaque zone
+  // Priorité aux streams HR (point par point) pour une répartition précise
+  // Fallback : FC moyenne pondérée par la durée de la séance
+  const zoneCounts = new Array(zones.length).fill(0)
+  let totalPoints = 0
+
+  for (const s of sessions) {
+    if (s.streams?.heartrate?.length) {
+      // Données point par point → répartition précise
+      for (const hr of s.streams.heartrate) {
+        const pct = hr / maxHR
+        let idx = -1
+        for (let j = zones.length - 1; j >= 0; j--) {
+          if (pct >= zones[j]!.pctMin) { idx = j; break }
+        }
+        if (idx >= 0) zoneCounts[idx]++
+        totalPoints++
+      }
+    } else if (s.avgHeartRate) {
+      // Fallback : FC moyenne pondérée par la durée
+      const pct = s.avgHeartRate / maxHR
+      let idx = -1
+      for (let j = zones.length - 1; j >= 0; j--) {
+        if (pct >= zones[j]!.pctMin) { idx = j; break }
+      }
+      if (idx >= 0) zoneCounts[idx] += s.duration
+      totalPoints += s.duration
+    }
   }
-  const total = sessionsWithHR.length || 1
+  const total = totalPoints || 1
 
   return zones.map((z, i) => ({
     zone: z.zone,
@@ -376,15 +432,33 @@ function computeKarvonenZones(
   // FC absolue = FC repos + FCR × pct
   const toAbsHR = (pct: number) => Math.round(restingHR + fcReserve * pct)
 
-  // Estimer le % de temps dans chaque zone depuis les FC moyennes des séances
-  const sessionsWithHR = sessions.filter(s => s.avgHeartRate)
+  // Estimer le % de temps dans chaque zone
+  // Priorité aux streams HR (point par point) pour une répartition précise
   const zoneCounts = new Array(zones.length).fill(0)
-  for (const s of sessionsWithHR) {
-    const hrPct = (s.avgHeartRate! - restingHR) / fcReserve
-    const idx = zones.findIndex(z => hrPct >= z.pctMin && hrPct < z.pctMax)
-    if (idx >= 0) zoneCounts[idx]++
+  let totalPoints = 0
+
+  for (const s of sessions) {
+    if (s.streams?.heartrate?.length) {
+      for (const hr of s.streams.heartrate) {
+        const pct = fcReserve > 0 ? (hr - restingHR) / fcReserve : 0
+        let idx = -1
+        for (let j = zones.length - 1; j >= 0; j--) {
+          if (pct >= zones[j]!.pctMin) { idx = j; break }
+        }
+        if (idx >= 0) zoneCounts[idx]++
+        totalPoints++
+      }
+    } else if (s.avgHeartRate) {
+      const pct = fcReserve > 0 ? (s.avgHeartRate - restingHR) / fcReserve : 0
+      let idx = -1
+      for (let j = zones.length - 1; j >= 0; j--) {
+        if (pct >= zones[j]!.pctMin) { idx = j; break }
+      }
+      if (idx >= 0) zoneCounts[idx] += s.duration
+      totalPoints += s.duration
+    }
   }
-  const total = sessionsWithHR.length || 1
+  const total = totalPoints || 1
 
   return zones.map((z, i) => ({
     zone: z.zone,
@@ -428,12 +502,15 @@ function computeTerrainBreakdown(sessions: TrainingSession[]): RunnerAnalysis['t
 
 // ─── Statistiques globales ────────────────────────────────────────────────────
 
-function computeStats(sessions: TrainingSession[]): RunnerAnalysis['stats'] {
+function computeStats(
+  sessions: TrainingSession[],
+  profile: RunnerProfile,
+): RunnerAnalysis['stats'] {
   if (!sessions.length) return {
     totalDistanceKm: 0, totalElevationGain: 0, totalDurationHours: 0,
     totalSessions: 0, longestRunKm: 0, biggestElevGain: 0,
     avgDistanceKm: 0, avgElevPerKm: 0, consistencyScore: 0,
-    progressionScore: 50, trailScore: 0,
+    progressionScore: 50, trailScore: 0, enduranceScore: 50,
   }
 
   const totalDistanceKm = sessions.reduce((a, s) => a + s.distance / 1000, 0)
@@ -442,7 +519,7 @@ function computeStats(sessions: TrainingSession[]): RunnerAnalysis['stats'] {
   const longestRunKm = Math.max(...sessions.map(s => s.distance / 1000))
   const biggestElevGain = Math.max(...sessions.map(s => s.elevationGain))
   const avgDistanceKm = totalDistanceKm / sessions.length
-  const avgElevPerKm = totalElevationGain / totalDistanceKm
+  const avgElevPerKm = totalDistanceKm > 0 ? totalElevationGain / totalDistanceKm : 0
 
   // Consistance : nombre de semaines avec au moins 1 sortie sur 12
   const cutoff12w = new Date(); cutoff12w.setDate(cutoff12w.getDate() - 84)
@@ -451,14 +528,16 @@ function computeStats(sessions: TrainingSession[]): RunnerAnalysis['stats'] {
   )
   const consistencyScore = Math.min(100, Math.round((recentWeeks.size / 12) * 100))
 
-  // Progression : comparaison allure début vs fin historique
-  const sortedByDate = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  const paces = sortedByDate.filter(s => s.avgPace > 0).map(s => s.avgPace)
+  // Progression : comparaison allure sur les 20 dernières séances
+  const recentPaces = sessions
+    .filter(s => s.avgPace > 0)
+    .slice(-20)
+    .map(s => s.avgPace)
   let progressionScore = 50
-  if (paces.length >= 4) {
-    const half = Math.floor(paces.length / 2)
-    const before = mean(paces.slice(0, half))
-    const after = mean(paces.slice(half))
+  if (recentPaces.length >= 4) {
+    const half = Math.floor(recentPaces.length / 2)
+    const before = mean(recentPaces.slice(0, half))
+    const after = mean(recentPaces.slice(half))
     const diff = (before - after) / before // positif = amélioration (allure qui baisse)
     progressionScore = Math.round(50 + diff * 500) // ±50 pts autour de 50
     progressionScore = Math.max(0, Math.min(100, progressionScore))
@@ -466,6 +545,23 @@ function computeStats(sessions: TrainingSession[]): RunnerAnalysis['stats'] {
 
   // Trail score : basé sur D+/km
   const trailScore = Math.min(100, Math.round(avgElevPerKm * 1.5))
+
+  // Endurance score : dérive de l'allure au sein des séances longues (via streams)
+  const enduranceDrifts: number[] = []
+  for (const s of sessions) {
+    if (!s.streams?.velocity_smooth || s.duration < 1800) continue // min 30 min
+    const velocities = s.streams.velocity_smooth.filter(v => v > 0.5) // exclure les arrêts
+    if (velocities.length < 20) continue
+    const half = Math.floor(velocities.length / 2)
+    const firstHalfMean = mean(velocities.slice(0, half))
+    const secondHalfMean = mean(velocities.slice(half))
+    if (firstHalfMean > 0) {
+      enduranceDrifts.push(Math.min(1.2, secondHalfMean / firstHalfMean))
+    }
+  }
+  const enduranceScore = enduranceDrifts.length > 0
+    ? Math.round(Math.min(100, Math.max(10, mean(enduranceDrifts) * 100)))
+    : Math.round(profile.enduranceScore * 100) // fallback profil
 
   return {
     totalDistanceKm: parseFloat(totalDistanceKm.toFixed(1)),
@@ -479,6 +575,7 @@ function computeStats(sessions: TrainingSession[]): RunnerAnalysis['stats'] {
     consistencyScore,
     progressionScore,
     trailScore,
+    enduranceScore,
   }
 }
 
@@ -488,14 +585,20 @@ export function analyzeRunner(
   sessions: TrainingSession[],
   profile: RunnerProfile,
 ): RunnerAnalysis {
-  const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  // Filtrer les sessions invalides et dédupliquer les imports croisés (Strava + FIT)
+  const valid = sessions.filter(s => s.distance > 0 && s.duration > 0)
+  const deduped = deduplicateSessions(valid)
+  const sorted = [...deduped].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+  // Calculer les stats en premier pour réutiliser dans les forces/faiblesses
+  const stats = computeStats(sorted, profile)
 
   return {
     performanceTrend: computePerformanceTrend(sorted),
     gradePaceCurve: computeGradePaceCurve(sorted),
     weeklyLoad: computeWeeklyLoad(sorted),
-    strengths: computeStrengthsWeaknesses(sorted, profile),
-    stats: computeStats(sorted),
+    strengths: computeStrengthsWeaknesses(sorted, stats),
+    stats,
     trainingZones: computeTrainingZones(sorted, profile),
     karvonenZones: computeKarvonenZones(sorted, profile),
     terrainBreakdown: computeTerrainBreakdown(sorted),

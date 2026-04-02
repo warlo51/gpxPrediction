@@ -28,6 +28,128 @@ function formatNumber(n: number): string {
   return new Intl.NumberFormat('fr-FR').format(Math.round(n))
 }
 
+// ─── Estimation VO2max — Formule VDOT de Jack Daniels ────────────────────────
+
+/**
+ * Estime le VO2max (VDOT) à partir d'une performance de course.
+ * Référence : Daniels' Running Formula, 3rd edition.
+ * @param distanceM  distance en mètres
+ * @param durationSec  durée en secondes
+ * @returns VO2max estimé en mL/kg/min
+ */
+function estimateVDOT(distanceM: number, durationSec: number): number {
+  if (distanceM <= 0 || durationSec <= 0) return 0
+  const t = durationSec / 60  // minutes
+  const v = distanceM / t     // m/min
+
+  // Coût en O2 à la vitesse v
+  const o2cost = -4.60 + 0.182258 * v + 0.000104 * v * v
+
+  // % de VO2max soutenable pour la durée t
+  const pctVO2max = 0.8 + 0.1894393 * Math.exp(-0.012778 * t) + 0.2989558 * Math.exp(-0.1932605 * t)
+
+  if (pctVO2max <= 0) return 0
+  return o2cost / pctVO2max
+}
+
+type VO2Data = {
+  vo2max: number
+  trend: number | null
+  percentileLabel: string
+  level: string
+  history: number[] // 7 valeurs normalisées 0-1 pour le mini chart
+}
+
+function computeVO2Data(
+  sessions: Array<{ distance: number; duration: number; date: Date; elevationGain: number; avgPace: number }>,
+): VO2Data {
+  const fallback: VO2Data = {
+    vo2max: 0, trend: null, percentileLabel: '', level: 'Beginner',
+    history: [0, 0, 0, 0, 0, 0, 0],
+  }
+
+  // Filtrer pour des estimations VDOT fiables :
+  // 10-120 min, relativement plat (<20 m D+/km), allure valide
+  const candidates = sessions
+    .filter(s => {
+      if (s.distance <= 0 || s.duration <= 0 || s.avgPace <= 0) return false
+      const durMin = s.duration / 60
+      if (durMin < 10 || durMin > 120) return false
+      const distKm = s.distance / 1000
+      return distKm > 0 && s.elevationGain / distKm < 20
+    })
+    .map(s => ({
+      vdot: estimateVDOT(s.distance, s.duration),
+      dateMs: new Date(s.date).getTime(),
+    }))
+    .filter(s => s.vdot > 15 && s.vdot < 90) // sanity
+    .sort((a, b) => a.dateMs - b.dateMs)
+
+  if (candidates.length === 0) return fallback
+
+  // VO2max = 90e percentile des 20 dernières sessions éligibles (robuste aux outliers)
+  const recent = candidates.slice(-20)
+  const sortedVdots = [...recent.map(s => s.vdot)].sort((a, b) => a - b)
+  const p90Idx = Math.min(sortedVdots.length - 1, Math.floor(sortedVdots.length * 0.9))
+  const vo2max = Math.round(sortedVdots[p90Idx]!)
+
+  // Trend : 80e percentile des 8 dernières semaines vs 8 précédentes
+  const now = Date.now()
+  const ms8w = 56 * 86400000
+  const recentV = candidates.filter(s => now - s.dateMs < ms8w).map(s => s.vdot)
+  const prevV = candidates.filter(s => {
+    const age = now - s.dateMs
+    return age >= ms8w && age < ms8w * 2
+  }).map(s => s.vdot)
+
+  let trend: number | null = null
+  if (recentV.length >= 2 && prevV.length >= 2) {
+    const rSorted = [...recentV].sort((a, b) => a - b)
+    const pSorted = [...prevV].sort((a, b) => a - b)
+    const rP80 = rSorted[Math.floor(rSorted.length * 0.8)]!
+    const pP80 = pSorted[Math.floor(pSorted.length * 0.8)]!
+    if (pP80 > 0) trend = parseFloat((((rP80 - pP80) / pP80) * 100).toFixed(1))
+  }
+
+  // Percentile (population générale, hommes adultes)
+  const percentileLabel =
+    vo2max >= 65 ? 'TOP 1%' : vo2max >= 60 ? 'TOP 3%'
+    : vo2max >= 55 ? 'TOP 5%' : vo2max >= 50 ? 'TOP 15%'
+    : vo2max >= 45 ? 'TOP 30%' : vo2max >= 40 ? 'TOP 50%' : ''
+
+  // Niveau
+  const level =
+    vo2max >= 60 ? 'Elite Level' : vo2max >= 52 ? 'Pro Level'
+    : vo2max >= 45 ? 'Advanced' : vo2max >= 38 ? 'Amateur' : 'Beginner'
+
+  // Historique : 80e percentile par période de 4 semaines (7 périodes)
+  const ms4w = 28 * 86400000
+  const history: number[] = []
+  for (let i = 6; i >= 0; i--) {
+    const start = now - (i + 1) * ms4w
+    const end = now - i * ms4w
+    const pVdots = candidates.filter(s => s.dateMs >= start && s.dateMs < end).map(s => s.vdot)
+    if (pVdots.length > 0) {
+      const s = [...pVdots].sort((a, b) => a - b)
+      history.push(s[Math.floor(s.length * 0.8)]!)
+    } else {
+      history.push(0)
+    }
+  }
+
+  // Normaliser 0-1 pour le bar chart
+  const nonZero = history.filter(h => h > 0)
+  if (nonZero.length === 0) return { ...fallback, vo2max, percentileLabel, level }
+  const maxH = Math.max(...nonZero)
+  const minH = Math.min(...nonZero)
+  const range = maxH - minH || 1
+  const normalizedHistory = history.map(h =>
+    h === 0 ? 0.1 : 0.3 + ((h - minH) / range) * 0.7,
+  )
+
+  return { vo2max, trend, percentileLabel, level, history: normalizedHistory }
+}
+
 // ─── Sous-composants ──────────────────────────────────────────────────────────
 
 function StatCard({
@@ -64,13 +186,24 @@ function StatCard({
   )
 }
 
-function Vo2Card({
-  vo2max, trend,
-}: {
-  vo2max: number
-  trend: number
-}) {
-  const bars = [0.4, 0.55, 0.65, 0.72, 0.8, 0.88, 1.0]
+function Vo2Card({ data }: { data: VO2Data }) {
+  const { vo2max, trend, percentileLabel, history } = data
+
+  if (vo2max === 0) {
+    return (
+      <div className="flex flex-col justify-between p-6 rounded-2xl"
+        style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <p className="text-[10px] font-medium tracking-[1.5px] uppercase text-[rgba(218,226,253,0.5)] mb-3">
+          VO2 Max Trend
+        </p>
+        <p className="text-[18px] font-black text-[rgba(218,226,253,0.2)] mb-1">—</p>
+        <p className="text-[11px] text-[rgba(218,226,253,0.4)]">
+          Pas assez de sessions plates (10-120 min) pour estimer
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col justify-between p-6 rounded-2xl"
       style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -78,25 +211,29 @@ function Vo2Card({
         <p className="text-[10px] font-medium tracking-[1.5px] uppercase text-[rgba(218,226,253,0.5)]">
           VO2 Max Trend
         </p>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-          style={{ background: '#ff6d00', color: '#1a0500' }}>
-          TOP 1%
-        </span>
+        {percentileLabel && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background: '#ff6d00', color: '#1a0500' }}>
+            {percentileLabel}
+          </span>
+        )}
       </div>
       <div className="flex items-end gap-2 mb-1">
         <span className="text-[48px] font-black leading-none text-white">{vo2max}</span>
       </div>
       <p className="text-[11px] text-[rgba(218,226,253,0.5)] mb-4">
-        +{trend.toFixed(1)}% vs last month
+        {trend !== null
+          ? `${trend >= 0 ? '+' : ''}${trend.toFixed(1)}% vs 2 mois précédents`
+          : 'Pas assez de données pour la tendance'}
       </p>
-      {/* Mini bar chart */}
+      {/* Mini bar chart — historique VDOT sur 7 périodes de 4 semaines */}
       <div className="flex items-end gap-[3px] h-[40px]">
-        {bars.map((h, i) => (
+        {history.map((h, i) => (
           <div key={i}
             className="flex-1 rounded-sm transition-all"
             style={{
               height: `${h * 100}%`,
-              background: i === bars.length - 1 ? '#ff6d00' : 'rgba(255,255,255,0.12)',
+              background: i === history.length - 1 ? '#ff6d00' : 'rgba(255,255,255,0.12)',
             }}
           />
         ))}
@@ -129,37 +266,80 @@ type AiStats = {
   insight: string
 }
 
+type SessionInput = {
+  distance: number; duration: number; date: Date; avgPace: number
+  avgHeartRate?: number; elevationGain: number
+  streams?: { velocity_smooth?: number[]; grade_smooth?: number[] }
+}
+
+/**
+ * Extrait l'allure sur les segments plats (-2% à +2%) depuis les streams GPS.
+ * Retourne null si pas assez de données flat.
+ */
+function extractFlatPace(session: SessionInput): number | null {
+  const { streams } = session
+  if (streams?.velocity_smooth?.length && streams?.grade_smooth?.length) {
+    const flatSpeeds: number[] = []
+    const len = Math.min(streams.velocity_smooth.length, streams.grade_smooth.length)
+    for (let i = 0; i < len; i++) {
+      const grade = streams.grade_smooth[i]!
+      const speed = streams.velocity_smooth[i]!
+      if (Math.abs(grade) <= 2 && speed > 0.5 && speed < 8) {
+        flatSpeeds.push(speed)
+      }
+    }
+    if (flatSpeeds.length >= 20) {
+      // Médiane pour robustesse aux outliers
+      flatSpeeds.sort((a, b) => a - b)
+      const median = flatSpeeds[Math.floor(flatSpeeds.length / 2)]!
+      return 1000 / median // sec/km
+    }
+  }
+  // Fallback : avgPace uniquement si la séance est plate (<15 m D+/km)
+  const distKm = session.distance / 1000
+  if (distKm > 0 && session.elevationGain / distKm < 15) {
+    return session.avgPace
+  }
+  return null // trop vallonné sans streams → on ignore
+}
+
 function computeAiStats(
-  sessions: Array<{ distance: number; duration: number; date: Date; avgPace: number; avgHeartRate?: number; elevationGain: number }>,
+  sessions: SessionInput[],
   profile: { basePaceSecPerKm: number; heartRateModel: { restingHR: number; maxHR: number }; enduranceScore: number },
 ): AiStats {
   const sorted = [...sessions]
     .filter(s => s.avgPace > 0 && s.distance > 0)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-  // ── Seuil lactique : allure à ~85% FCR (zone 4 Karvonen) ──
-  // On cherche les séances dont la FC moyenne est proche de 83-87% FCR
+  // ── Seuil lactique : allure FLAT à ~85% FCR (zone 4 Karvonen) ──
+  // Similaire à Garmin : on extrait l'allure sur segments plats des séances à effort seuil
   const { restingHR, maxHR } = profile.heartRateModel
   const fcReserve = maxHR - restingHR
-  const z4TargetHR = restingHR + fcReserve * 0.85
+  const z4TargetHR = fcReserve > 0 ? restingHR + fcReserve * 0.85 : maxHR * 0.85
 
   let lactateThresholdPace = profile.basePaceSecPerKm * 0.88 // fallback
   let lactateDelta: number | null = null
 
   const sessionsWithHR = sorted.filter(s => s.avgHeartRate)
-  if (sessionsWithHR.length >= 4) {
-    // Séances dont FC est entre 80-90% FCR = effort seuil
-    const thresholdSessions = sessionsWithHR.filter(s => {
-      const pctFCR = (s.avgHeartRate! - restingHR) / fcReserve
-      return pctFCR >= 0.78 && pctFCR <= 0.92
-    })
-
-    if (thresholdSessions.length >= 2) {
-      // Normaliser l'allure par la FC (ajustement linéaire) pour comparer à iso-effort
-      const normalizedPaces = thresholdSessions.map(s => {
-        const hrRatio = z4TargetHR / s.avgHeartRate!
-        return s.avgPace * hrRatio
+  if (sessionsWithHR.length >= 3 && fcReserve > 0) {
+    // Séances dont FC est entre 75-95% FCR ≈ effort seuil élargi
+    const thresholdCandidates = sessionsWithHR
+      .filter(s => {
+        const pctFCR = (s.avgHeartRate! - restingHR) / fcReserve
+        return pctFCR >= 0.75 && pctFCR <= 0.95
       })
+      .map(s => {
+        const flatPace = extractFlatPace(s)
+        return flatPace ? { flatPace, hr: s.avgHeartRate! } : null
+      })
+      .filter((s): s is { flatPace: number; hr: number } => s !== null)
+
+    if (thresholdCandidates.length >= 2) {
+      // Normaliser l'allure plate à la FC cible (85% FCR)
+      // FC plus haute → effort plus intense → à la cible il serait plus lent
+      const normalizedPaces = thresholdCandidates.map(s =>
+        s.flatPace * (s.hr / z4TargetHR),
+      )
       lactateThresholdPace = normalizedPaces.reduce((a, b) => a + b, 0) / normalizedPaces.length
 
       // Delta : dernière moitié vs première moitié
@@ -178,8 +358,9 @@ function computeAiStats(
   const recentFlat = sorted
     .filter(s => {
       const distKm = s.distance / 1000
-      const elevPerKm = s.elevationGain / distKm
-      return distKm >= 4.5 && distKm <= 25 && elevPerKm < 30
+      if (distKm < 4.5 || distKm > 25) return false
+      const elevPerKm = distKm > 0 ? s.elevationGain / distKm : 0
+      return elevPerKm < 15 // max 15m D+/km pour un effort "plat"
     })
     .slice(-20)
 
@@ -200,18 +381,27 @@ function computeAiStats(
     else marathonSource = `${refDistKm.toFixed(0)}K`
   }
 
-  // ── Économie de course : allure normalisée par FC ──
+  // ── Économie de course : allure plate normalisée par FC ──
   // Plus la valeur est basse, meilleure est l'économie (vite pour peu de battements)
   let runningEconomy: number | null = null
   let economyDelta: number | null = null
 
   if (sessionsWithHR.length >= 4) {
-    const economies = sessionsWithHR.map(s => s.avgPace / s.avgHeartRate!)
-    const half = Math.floor(economies.length / 2)
-    const oldEco = economies.slice(0, half).reduce((a, b) => a + b, 0) / half
-    const recentEco = economies.slice(half).reduce((a, b) => a + b, 0) / (economies.length - half)
-    runningEconomy = recentEco
-    economyDelta = ((recentEco - oldEco) / oldEco) * 100 // négatif = amélioration
+    // Utiliser l'allure plate (streams ou sessions plates) pour éviter le biais terrain
+    const economies = sessionsWithHR
+      .map(s => {
+        const flatPace = extractFlatPace(s)
+        return flatPace && s.avgHeartRate ? flatPace / s.avgHeartRate : null
+      })
+      .filter((e): e is number => e !== null)
+
+    if (economies.length >= 4) {
+      const half = Math.floor(economies.length / 2)
+      const oldEco = economies.slice(0, half).reduce((a, b) => a + b, 0) / half
+      const recentEco = economies.slice(half).reduce((a, b) => a + b, 0) / (economies.length - half)
+      runningEconomy = recentEco
+      economyDelta = oldEco > 0 ? ((recentEco - oldEco) / oldEco) * 100 : null // négatif = amélioration
+    }
   }
 
   // ── Volume hebdo (4 dernières vs 4 précédentes) ──
@@ -269,7 +459,7 @@ function computeAiStats(
 }
 
 function AiStatsCard({ sessions, profile }: {
-  sessions: Array<{ distance: number; duration: number; date: Date; avgPace: number; avgHeartRate?: number; elevationGain: number }>
+  sessions: SessionInput[]
   profile: { basePaceSecPerKm: number; heartRateModel: { restingHR: number; maxHR: number }; enduranceScore: number }
 }) {
   const stats = useMemo(() => computeAiStats(sessions, profile), [sessions, profile])
@@ -476,14 +666,10 @@ export function ProfilPage() {
     : (profile.name || 'Trail Runner').toUpperCase()
   const location = athlete?.city ? `${athlete.city}, ${athlete.country ?? ''}`.replace(/, $/, '') : null
 
-  const level =
-    profile.enduranceScore >= 0.8 ? 'Elite Level'
-    : profile.enduranceScore >= 0.6 ? 'Pro Level'
-    : profile.enduranceScore >= 0.4 ? 'Amateur'
-    : 'Beginner'
-
-  const vo2max = Math.round(30 + profile.enduranceScore * 40)
-  const vo2trend = 2.4
+  // VO2max et niveau calculés depuis les performances réelles (VDOT Jack Daniels)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const vo2Data = useMemo(() => computeVO2Data(sessions), [sessions])
+  const level = vo2Data.level
 
 
   return (
@@ -552,7 +738,7 @@ export function ProfilPage() {
           accent="#3b82f6"
           progress={Math.min(100, (totalElevYear / 50000) * 100)}
         />
-        <Vo2Card vo2max={vo2max} trend={vo2trend} />
+        <Vo2Card data={vo2Data} />
       </div>
 
       {/* ── AI Stats + Personal Bests ── */}

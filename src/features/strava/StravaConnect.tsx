@@ -53,9 +53,9 @@ function useStravaCallback() {
       .then(({ token, athlete }) => {
         setToken(token)
         setAthlete(athlete)
-        // Sauvegarder la connexion en DB pour les premium
-        const { user, isPremium } = useAuthStore.getState()
-        if (user && isPremium) {
+        // Sauvegarder la connexion en DB pour tout utilisateur authentifié
+        const { user } = useAuthStore.getState()
+        if (user) {
           saveStravaConnection(user.id, { credentials, token, athlete }).catch(() => {})
         }
       })
@@ -283,7 +283,7 @@ type ImportState =
 
 function StravaImportPanel() {
   const { token, credentials, athlete, disconnect } = useStravaStore()
-  const { sessions, addSession, profile, setProfile } = useAppStore()
+  const { sessions, addSession, clearSessions, profile, setProfile } = useAppStore()
   const [importState, setImportState] = useState<ImportState>({ phase: 'idle' })
   // Tous les jours sélectionnés par défaut
   const [selectedDays, setSelectedDays] = useState<Set<number>>(
@@ -309,7 +309,15 @@ function StravaImportPanel() {
         (loaded) => setImportState({ phase: 'fetching', loaded }),
       )
 
-      const existingIds = new Set(sessions.filter(s => s.stravaId).map(s => s.stravaId))
+      // Nettoyer les sessions demo avant le premier import réel
+      const hasRealSessions = sessions.some(s => s.source === 'strava')
+      if (!hasRealSessions) {
+        clearSessions()
+      }
+
+      // Recalculer les IDs existants depuis le store actuel (après éventuel clear)
+      const currentSessions = useAppStore.getState().sessions
+      const existingIds = new Set(currentSessions.filter(s => s.stravaId).map(s => s.stravaId))
 
       // Filtrer par jour de la semaine si moins de 7 jours sélectionnés
       const activitiesFiltered = selectedDays.size === 7
@@ -359,15 +367,15 @@ function StravaImportPanel() {
         }
       }
 
-      // 3. Calibration automatique
+      // 3. Calibration automatique (uniquement sur les sessions réelles)
       setImportState({ phase: 'calibrating' })
-      const allSessions = [...sessions, ...newSessions]
-      const calibrated = calibrateRunner(allSessions, profile)
+      const allRealSessions = useAppStore.getState().sessions
+      const calibrated = calibrateRunner(allRealSessions, profile)
       setProfile(calibrated)
 
-      // 4. Sauvegarder en DB pour les utilisateurs premium
-      const { user, isPremium } = useAuthStore.getState()
-      if (user && isPremium) {
+      // 4. Sauvegarder en DB pour tout utilisateur authentifié
+      const { user } = useAuthStore.getState()
+      if (user) {
         saveSessions(user.id, newSessions).catch((err) =>
           console.error('Erreur sauvegarde sessions DB:', err),
         )
@@ -387,7 +395,7 @@ function StravaImportPanel() {
     } catch (err) {
       setImportState({ phase: 'error', message: err instanceof Error ? err.message : "Erreur lors de l'import" })
     }
-  }, [token, credentials, sessions, addSession, profile, setProfile, sessionsWithStreams, sessionsWithElevation, selectedDays])
+  }, [token, credentials, sessions, addSession, clearSessions, profile, setProfile, sessionsWithStreams, sessionsWithElevation, selectedDays])
 
   if (!athlete || !token) return null
 

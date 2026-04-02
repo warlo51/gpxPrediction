@@ -53,9 +53,9 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
       }
 
       setTokens(result.oauth1, result.oauth2, result.profile)
-      // Sauvegarder la connexion en DB pour les premium
-      const { user, isPremium } = useAuthStore.getState()
-      if (user && isPremium) {
+      // Sauvegarder la connexion en DB pour tout utilisateur authentifié
+      const { user } = useAuthStore.getState()
+      if (user) {
         saveGarminConnection(user.id, {
           oauth1: result.oauth1,
           oauth2: result.oauth2,
@@ -221,9 +221,9 @@ function GarminImportPanel() {
         const calibrated = calibrateRunner(allSessions, runnerProfile)
         setProfile(calibrated)
 
-        // Sauvegarder en DB pour les utilisateurs premium
-        const { user, isPremium } = useAuthStore.getState()
-        if (user && isPremium) {
+        // Sauvegarder en DB pour tout utilisateur authentifié
+        const { user } = useAuthStore.getState()
+        if (user) {
           saveSessions(user.id, newSessions).catch((err) =>
             console.error('Erreur sauvegarde sessions DB:', err),
           )

@@ -444,7 +444,7 @@ export function RunnerAnalysisPanel() {
           <ScoreRing value={stats.consistencyScore} label="Régularité" color="#22c55e" />
           <ScoreRing value={stats.progressionScore} label="Progression" color="#6366f1" />
           <ScoreRing value={stats.trailScore} label="Spécificité trail" color="#f97316" />
-          <ScoreRing value={Math.round(profile.enduranceScore * 100)} label="Endurance" color="#f59e0b" />
+          <ScoreRing value={stats.enduranceScore} label="Endurance" color="#f59e0b" />
         </div>
       </div>
 
