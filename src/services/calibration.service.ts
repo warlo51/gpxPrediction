@@ -318,6 +318,7 @@ function calibrateHeartRateModel(
   allHrGradeSamples: SessionMetrics['hrGradeSamples'],
   allMetrics: SessionMetrics[],
   sessions: TrainingSession[],
+  existingLactateThresholdHR?: number,
 ): Partial<RunnerProfile['heartRateModel']> {
   const sessionsWithHR = sessions.filter((s) => s.avgHeartRate && s.avgHeartRate > 0)
 
@@ -356,7 +357,7 @@ function calibrateHeartRateModel(
 
   // ── lactateThresholdHR : priorité à la valeur Garmin existante (Firstbeat),
   // sinon estimation classique FCR repos + 85% FCR
-  let lactateThresholdHR: number | undefined = baseProfile.heartRateModel.lactateThresholdHR
+  let lactateThresholdHR: number | undefined = existingLactateThresholdHR
   if (!lactateThresholdHR && calibratedBaseHR && calibratedMaxHR) {
     const restingHREstimate = calibratedBaseHR * 0.55 // approximation si FCR repos inconnue
     lactateThresholdHR = Math.round(restingHREstimate + 0.85 * (calibratedMaxHR - restingHREstimate))
@@ -530,7 +531,7 @@ export function calibrateRunner(
   // ── 4. Calibration FC
   const allHrSamples = metrics.flatMap((m) => m.hrSpeedSamples)
   const allHrGradeSamples = metrics.flatMap((m) => m.hrGradeSamples)
-  const hrCalibration = calibrateHeartRateModel(allHrSamples, allHrGradeSamples, metrics, calibrationHistory)
+  const hrCalibration = calibrateHeartRateModel(allHrSamples, allHrGradeSamples, metrics, calibrationHistory, baseProfile.heartRateModel.lactateThresholdHR)
 
   // ── 5. Calibration fatigue
   const fatigueCalibration = calibrateFatigueModel(metrics, calibrationHistory)
