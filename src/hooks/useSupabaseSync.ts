@@ -40,32 +40,48 @@ export function useSupabaseSync() {
 
     if (!user) {
       // Anonyme : charger les données demo
+      console.log('[SupabaseSync] Anonymous user — loading demo data')
       Promise.all([
         getDemoRunnerProfile(),
         getDemoSessions(),
       ]).then(([demoProfile, demoSessions]) => {
+        console.log('[SupabaseSync] Demo data loaded:', { profile: !!demoProfile, sessions: demoSessions.length })
         if (demoProfile) setProfile(demoProfile)
         for (const s of demoSessions) addSession(s)
       }).catch((err) =>
-        console.error('Erreur chargement donnees demo:', err),
+        console.error('[SupabaseSync] Error loading demo data:', err),
       )
       return
     }
 
     // Utilisateur authentifié : charger ses données DB, fallback demo
+    console.log('[SupabaseSync] Authenticated user:', user.id, '— loading from DB')
     Promise.all([
       getRunnerProfile(user.id),
       getSessions(user.id),
       getStravaConnection(user.id),
       getGarminConnection(user.id),
     ]).then(async ([dbProfile, dbSessions, strava, garmin]) => {
+      console.log('[SupabaseSync] DB data loaded:', {
+        profile: !!dbProfile,
+        sessions: dbSessions.length,
+        sessionSources: dbSessions.reduce((acc, s) => { acc[s.source] = (acc[s.source] ?? 0) + 1; return acc }, {} as Record<string, number>),
+        hasStrava: !!strava,
+        hasGarmin: !!garmin,
+      })
+
       if (dbSessions.length > 0) {
         // L'utilisateur a ses propres données → les utiliser
         clearSessions()
-        if (dbProfile) setProfile(dbProfile)
+        if (dbProfile) {
+          console.log('[SupabaseSync] Setting profile from DB:', { vo2Max: dbProfile.vo2Max, sessionCount: dbProfile.sessionCount })
+          setProfile(dbProfile)
+        }
         for (const s of dbSessions) addSession(s)
+        console.log('[SupabaseSync] Sessions loaded from DB:', dbSessions.length)
       } else {
         // Pas de données en DB → charger le demo comme fallback
+        console.log('[SupabaseSync] No sessions in DB — falling back to demo data')
         const [demoProfile, demoSessions] = await Promise.all([
           getDemoRunnerProfile(),
           getDemoSessions(),
@@ -76,15 +92,17 @@ export function useSupabaseSync() {
 
       // Restaurer les connexions dans tous les cas
       if (strava) {
+        console.log('[SupabaseSync] Restoring Strava connection')
         setStravaCredentials(strava.credentials)
         setStravaToken(strava.token)
         setStravaAthlete(strava.athlete)
       }
       if (garmin) {
+        console.log('[SupabaseSync] Restoring Garmin connection')
         setGarminTokens(garmin.oauth1, garmin.oauth2, garmin.profile)
       }
     }).catch((err) =>
-      console.error('Erreur chargement donnees utilisateur:', err),
+      console.error('[SupabaseSync] Error loading user data:', err),
     )
   }, [loading, user, setProfile, addSession, clearSessions, setStravaCredentials, setStravaToken, setStravaAthlete, setGarminTokens])
 }
