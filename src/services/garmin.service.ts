@@ -30,7 +30,7 @@ export type GarminActivity = {
   maxPower?: number
   normPower?: number
   calories?: number
-  vo2MaxValue?: number
+  vO2MaxValue?: number   // casse originale retournée par l'API Garmin Connect
   aerobicTrainingEffect?: number
   anaerobicTrainingEffect?: number
   activityType?: { typeKey: string; typeId: number }

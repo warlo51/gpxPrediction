@@ -3,7 +3,7 @@
  * Analyse un historique de TrainingSession[] pour générer un RunnerProfile calibré.
  */
 
-import type { TrainingSession, RunnerProfile, SessionMetrics } from '@/types'
+import type { TrainingSession, RunnerProfile, SessionMetrics, CalibrationSource } from '@/types'
 import { DEFAULT_RUNNER_PROFILE } from '@/stores/appStore'
 
 // ─── Helpers statistiques ─────────────────────────────────────────────────────
@@ -539,10 +539,17 @@ export function calibrateRunner(
   const calibratedWalkingSpeed = calibrateWalkingSpeed(metrics)
 
   // ── 7. Assemblage du profil calibré
+  const calibrationSource: CalibrationSource = hasGarminSessions
+    ? 'garmin'
+    : calibrationHistory.some(s => s.source === 'strava')
+      ? 'strava'
+      : 'mixed'
+
   return {
     ...baseProfile,
     calibratedAt: new Date(),
-    sessionCount: history.length,
+    sessionCount: calibrationHistory.length,
+    calibrationSource,
     basePaceSecPerKm,
     baseHeartRate: hrCalibration.baseHR ?? baseProfile.baseHeartRate,
     enduranceScore: fatigueCalibration.enduranceScore,

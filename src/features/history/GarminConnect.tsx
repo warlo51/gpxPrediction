@@ -224,12 +224,16 @@ function GarminImportPanel() {
         // Sauvegarder en DB pour tout utilisateur authentifié
         const { user } = useAuthStore.getState()
         if (user) {
-          saveSessions(user.id, newSessions).catch((err) =>
-            console.error('Erreur sauvegarde sessions DB:', err),
-          )
-          saveRunnerProfile(user.id, calibrated).catch((err) =>
-            console.error('Erreur sauvegarde profil DB:', err),
-          )
+          try {
+            await saveSessions(user.id, newSessions)
+          } catch (err) {
+            console.error('Erreur sauvegarde sessions DB:', err)
+          }
+          try {
+            await saveRunnerProfile(user.id, calibrated)
+          } catch (err) {
+            console.error('Erreur sauvegarde profil DB:', err)
+          }
         }
       }
 

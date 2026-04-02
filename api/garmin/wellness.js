@@ -1,6 +1,8 @@
-// api/garmin/activities.js
+// api/garmin/wellness.js
 // Vercel Serverless Function — Node.js ESM runtime
-// GET /api/garmin/activities?limit=100&start=0
+// GET /api/garmin/wellness?date=2024-01-15
+// Retourne les données wellness pour une date donnée :
+// sommeil (+ HRV, body battery), FC de repos, pas journaliers
 
 import pkg from 'garmin-connect'
 const { GarminConnect } = pkg
@@ -27,30 +29,25 @@ export default async function handler(req, res) {
     const client = new GarminConnect({ username: '', password: '' })
     client.loadToken(oauth1, oauth2)
 
-    const start = parseInt(req.query?.start ?? '0', 10)
-    const limit = Math.min(parseInt(req.query?.limit ?? '100', 10), 100)
+    // Date cible (défaut : aujourd'hui)
+    const dateStr = req.query?.date
+    const date = dateStr ? new Date(dateStr) : new Date()
 
-    const activities = await client.getActivities(start, limit)
+    // Récupérer sleep, HR et steps en parallèle — chaque appel est indépendant
+    const [sleepResult, heartRateResult, stepsResult] = await Promise.allSettled([
+      client.getSleepData(date),
+      client.getHeartRate(date),
+      client.getSteps(date),
+    ])
 
-    const RUNNING_TYPES = [
-      'running',
-      'street_running',    // typeKey principal Garmin pour les courses route
-      'trail_running',
-      'treadmill_running',
-      'indoor_running',    // typeKey Garmin pour tapis de course
-      'virtual_running',
-      'track_running',
-    ]
-    const runs = activities.filter(a =>
-      RUNNING_TYPES.includes((a.activityType?.typeKey ?? '').toLowerCase())
-      || (a.activityName ?? '').toLowerCase().includes('run')
-      || (a.activityName ?? '').toLowerCase().includes('trail')
-      || (a.activityName ?? '').toLowerCase().includes('course')
-    )
-
-    return res.status(200).json({ activities: runs, total: activities.length })
+    return res.status(200).json({
+      date: date.toISOString().slice(0, 10),
+      sleep: sleepResult.status === 'fulfilled' ? sleepResult.value : null,
+      heartRate: heartRateResult.status === 'fulfilled' ? heartRateResult.value : null,
+      steps: stepsResult.status === 'fulfilled' ? stepsResult.value : null,
+    })
   } catch (err) {
-    const message = err?.message ?? 'Erreur récupération activités'
+    const message = err?.message ?? 'Erreur récupération wellness'
     if (message.includes('401') || message.includes('403')) {
       return res.status(401).json({ error: 'Session expirée — reconnectez-vous' })
     }
