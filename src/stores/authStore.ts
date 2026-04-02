@@ -6,7 +6,6 @@
 import { create } from 'zustand'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { getUserProfile } from '@/services/supabase.service'
 
 type AuthState = {
   user: User | null
@@ -22,8 +21,14 @@ type AuthState = {
 
 async function loadPremiumStatus(userId: string): Promise<boolean> {
   try {
-    const profile = await getUserProfile(userId)
-    return profile?.is_premium ?? false
+    // Requête dédiée : ne dépend pas du schéma complet de profiles
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('is_premium')
+      .eq('id', userId)
+      .single()
+    if (error) return false
+    return data?.is_premium ?? false
   } catch {
     return false
   }

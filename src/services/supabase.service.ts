@@ -30,11 +30,12 @@ export async function upsertUserProfile(
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('email, weight_kg, age, resting_hr, is_premium')
+    .select('email, weight_kg, age, is_premium')
     .eq('id', userId)
     .single()
   if (error && error.code !== 'PGRST116') throw error
-  return data
+  if (!data) return null
+  return { ...data, resting_hr: (data as Record<string, unknown>).resting_hr as number | null ?? null }
 }
 
 // ─── Profil coureur demo (pour utilisateurs anonymes) ────────────────────────
