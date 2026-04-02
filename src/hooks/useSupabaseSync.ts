@@ -32,15 +32,21 @@ export function useSupabaseSync() {
   const setStravaAthlete = useStravaStore((s) => s.setAthlete)
   const setGarminTokens = useGarminStore((s) => s.setTokens)
 
-  const initialLoadDone = useRef(false)
+  // Track quel user a été synchronisé pour relancer si login/logout
+  const lastSyncedUserId = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
-    if (loading || initialLoadDone.current) return
-    initialLoadDone.current = true
+    if (loading) return
+
+    const currentUserId = user?.id ?? null
+    // Ne pas re-sync si c'est le même utilisateur
+    if (lastSyncedUserId.current === currentUserId) return
+    lastSyncedUserId.current = currentUserId
 
     if (!user) {
-      // Anonyme : charger les données demo
+      // Anonyme ou logout : charger les données demo
       console.log('[SupabaseSync] Anonymous user — loading demo data')
+      clearSessions()
       Promise.all([
         getDemoRunnerProfile(),
         getDemoSessions(),
