@@ -338,8 +338,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
               </span>
               <ul className="flex flex-col gap-3">
                 {[
-                  { label: 'Analyse GPX', page: 'planificateur' },
-                  { label: 'Simulation de course', page: 'strategie' },
+                  { label: 'Analyse GPX & Stratégie', page: 'planificateur' },
                   { label: 'Profil coureur', page: 'profil' },
                 ].map(item => (
                   <li key={item.label}>

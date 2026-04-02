@@ -6,7 +6,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 
-export type Page = 'accueil' | 'planificateur' | 'strategie' | 'profil' | 'compte'
+export type Page = 'accueil' | 'planificateur' | 'profil' | 'compte'
 
 interface NavBarProps {
   activePage: Page
@@ -16,7 +16,6 @@ interface NavBarProps {
 const NAV_LINKS: { id: Page; label: string }[] = [
   { id: 'profil',        label: 'Dashboard' },
   { id: 'planificateur', label: 'Planner' },
-  { id: 'strategie',     label: 'Strategies' },
 ]
 
 export function NavBar({ activePage, onNavigate }: NavBarProps) {

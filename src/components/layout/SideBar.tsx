@@ -39,16 +39,6 @@ const NAV_ITEMS: { id: Page; label: string; icon: ReactNode }[] = [
       </svg>
     ),
   },
-  {
-    id: 'strategie',
-    label: 'Race Strategy',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.4"/>
-        <path d="M9 5V9.5L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
 ]
 
 // Icône + dans un cercle pour le bouton CTA
@@ -173,7 +163,7 @@ export function SideBar({ activePage, onNavigate, isOpen, onClose }: SideBarProp
         {/* ── Zone 2 : CTA "New Strategy" en bas ── */}
         <div className="px-[24px] shrink-0">
           <button
-            onClick={() => handleNavClick('strategie')}
+            onClick={() => handleNavClick('planificateur')}
             className="w-full flex items-center justify-center gap-[8px]
                        px-px py-[17px] rounded-[8px]
                        bg-[#2d3449] border border-[rgba(89,65,54,0.2)]

@@ -13,6 +13,7 @@ import type {
   RiskZone,
   NutritionVerdict,
   RaceStrategyId,
+  StrategyRecommendation,
 } from '@/types/raceStrategy.types'
 import { runSimulation, formatDuration, formatPace } from './simulationEngine.service'
 
@@ -324,6 +325,59 @@ function generateLecture(
   return bullets.slice(0, 8)
 }
 
+// ─── Recommandation ───────────────────────────────────────────────────────────
+
+function computeRecommendation(
+  track: GpxTrack,
+  profile: RunnerProfile,
+  plans: StrategyPlan[],
+): StrategyRecommendation {
+  const totalKm      = track.totalDistance / 1000
+  const dPlus        = track.totalElevationGain
+  const endurance    = profile.enduranceScore
+  const ratioD       = dPlus / totalKm // m D+ par km
+
+  const prudente   = plans.find(p => p.id === 'prudente')!
+  const objectif   = plans.find(p => p.id === 'objectif')!
+  const ambitieuse = plans.find(p => p.id === 'ambitieuse')!
+
+  // Course ultra/longue (>50 km) ou très montagneux (>60 m D+/km)
+  if (totalKm > 50 || ratioD > 60) {
+    return {
+      id: 'prudente',
+      reason: totalKm > 50
+        ? `Sur ${Math.round(totalKm)} km, la gestion de l'énergie est critique — une approche prudente maximise les chances de finir fort`
+        : `Avec ${Math.round(ratioD)} m de D+/km, le parcours est très exigeant — mieux vaut se préserver pour les montées`,
+    }
+  }
+
+  // Si faible endurance ou nutrition insuffisante sur objectif
+  if (endurance < 0.4 || objectif.nutrition.icon === '❌') {
+    return {
+      id: 'prudente',
+      reason: endurance < 0.4
+        ? `Ton score d'endurance (${(endurance * 100).toFixed(0)}%) suggère de privilégier la régularité plutôt que la performance`
+        : `Le déficit calorique estimé en stratégie Objectif est trop élevé — une approche prudente réduit la dépense et le risque de fringale`,
+    }
+  }
+
+  // Si bonne endurance et risque modéré sur ambitieuse
+  if (endurance > 0.7 && ambitieuse.blowupRisk !== 'Élevé' && ambitieuse.walkingSegments === 0) {
+    return {
+      id: 'ambitieuse',
+      reason: `Ton endurance (${(endurance * 100).toFixed(0)}%) et le profil du parcours permettent de viser l'ambitieuse — le risque d'explosion reste contenu`,
+    }
+  }
+
+  // Par défaut : objectif
+  const prudenteDiff = objectif.totalTimeSeconds - prudente.totalTimeSeconds
+  const diffMinutes  = Math.abs(Math.round(prudenteDiff / 60))
+  return {
+    id: 'objectif',
+    reason: `Le meilleur compromis performance/sécurité pour ton profil — ${diffMinutes} min plus rapide que la prudente avec un risque maîtrisé`,
+  }
+}
+
 // ─── Fonction principale ───────────────────────────────────────────────────────
 
 export function generateRaceStrategy(
@@ -356,6 +410,14 @@ export function generateRaceStrategy(
     )
     const maxHREstimated = Math.round(Math.max(...result.segments.map(s => s.heartRateRange.max)))
     const avgPaceSec     = result.totalDuration / (track.totalDistance / 1000)
+    const avgFatigue     = result.segments.reduce((s, seg) => s + seg.fatigueFactor, 0) / result.segments.length
+    const walkingSegments = result.segments.filter(s => s.isWalking).length
+
+    const chartData = result.segments.map(seg => ({
+      km: Math.round(seg.segment.cumulativeDistance / 100) / 10,
+      pace: Math.round(seg.paceRange.target),
+      hr: Math.round(seg.heartRateRange.target),
+    }))
 
     plans.push({
       id:                  config.id,
@@ -367,10 +429,13 @@ export function generateRaceStrategy(
       avgHR,
       maxHREstimated,
       totalCalories:       Math.round(result.totalCalories),
+      avgFatigue,
+      walkingSegments,
       phases,
       riskZones,
       nutrition,
       blowupRisk:          config.blowupRisk,
+      chartData,
     })
   }
 
@@ -381,6 +446,8 @@ export function generateRaceStrategy(
     profile,
   )
 
+  const recommendation = computeRecommendation(track, profile, plans)
+
   return {
     generatedAt:        new Date(),
     trackName:          track.name,
@@ -390,5 +457,6 @@ export function generateRaceStrategy(
     strategies:         plans,
     lecture,
     carbToleranceGPerHour,
+    recommendation,
   }
 }
