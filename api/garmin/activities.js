@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     const limit = Math.min(parseInt(req.query?.limit ?? '100', 10), 100)
 
     const activities = await client.getActivities(start, limit)
-
+console.log(activities)
     const RUNNING_TYPES = [
       'running',
       'street_running',    // typeKey principal Garmin pour les courses route

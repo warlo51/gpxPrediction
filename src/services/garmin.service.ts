@@ -19,9 +19,11 @@ export type GarminActivity = {
   distance: number            // mètres
   duration: number            // secondes
   movingDuration?: number
+  elapsedDuration?: number
   elevationGain?: number
   elevationLoss?: number
   averageSpeed?: number       // m/s
+  maxSpeed?: number           // m/s
   averageHR?: number
   maxHR?: number
   averageRunningCadenceInStepsPerMinute?: number
@@ -33,6 +35,8 @@ export type GarminActivity = {
   vO2MaxValue?: number   // casse originale retournée par l'API Garmin Connect
   aerobicTrainingEffect?: number
   anaerobicTrainingEffect?: number
+  trainingEffectLabel?: string  // ex: "LACTATE_THRESHOLD", "TEMPO", "BASE"
+  activityTrainingLoad?: number // Training Load (EPOC)
   activityType?: { typeKey: string; typeId: number }
   // Métriques HRM-Pro/HRM-Run
   avgGroundContactTime?: number      // ms
@@ -42,6 +46,27 @@ export type GarminActivity = {
   groundContactBalance?: number      // % gauche
   trainingStressScore?: number
   intensityFactor?: number
+  // Splits et zones HR
+  fastestSplit_1000?: number   // meilleur split 1km en secondes
+  fastestSplit_1609?: number   // meilleur split 1 mile en secondes
+  fastestSplit_5000?: number   // meilleur split 5km en secondes
+  hrTimeInZone_1?: number      // secondes en zone 1
+  hrTimeInZone_2?: number
+  hrTimeInZone_3?: number
+  hrTimeInZone_4?: number
+  hrTimeInZone_5?: number
+  // Métriques avancées
+  avgGradeAdjustedSpeed?: number  // GAP en m/s
+  minElevation?: number
+  maxElevation?: number
+  steps?: number
+  minTemperature?: number
+  maxTemperature?: number
+  avgRespirationRate?: number
+  moderateIntensityMinutes?: number
+  vigorousIntensityMinutes?: number
+  locationName?: string
+  lapCount?: number
 }
 
 // ─── Auth headers ─────────────────────────────────────────────────────────────
@@ -225,6 +250,20 @@ export function mapGarminActivityToSession(
   const duration = activity.movingDuration ?? activity.duration ?? 0
   const avgSpeed = activity.averageSpeed ?? (duration > 0 ? distance / duration : 0)
   const avgPace = avgSpeed > 0 ? 1000 / avgSpeed : 0
+  const gapSpeed = activity.avgGradeAdjustedSpeed
+  const gradeAdjustedPace = gapSpeed && gapSpeed > 0 ? 1000 / gapSpeed : undefined
+
+  // Zones FC : regrouper en tuple [z1, z2, z3, z4, z5]
+  const hrZones: [number, number, number, number, number] | undefined =
+    activity.hrTimeInZone_1 != null
+      ? [
+          activity.hrTimeInZone_1,
+          activity.hrTimeInZone_2 ?? 0,
+          activity.hrTimeInZone_3 ?? 0,
+          activity.hrTimeInZone_4 ?? 0,
+          activity.hrTimeInZone_5 ?? 0,
+        ]
+      : undefined
 
   return {
     id: `garmin-${activity.activityId}`,
@@ -234,10 +273,43 @@ export function mapGarminActivityToSession(
     distance,
     duration,
     elevationGain: activity.elevationGain ?? 0,
+    elevationLoss: activity.elevationLoss,
     avgPace,
     avgHeartRate: activity.averageHR,
     maxHeartRate: activity.maxHR,
     streams,
+
+    // Données Garmin enrichies
+    activityType: activity.activityType?.typeKey,
+    calories: activity.calories,
+    vo2Max: activity.vO2MaxValue,
+    avgCadence: activity.averageRunningCadenceInStepsPerMinute,
+    maxCadence: activity.maxRunningCadenceInStepsPerMinute,
+    avgPower: activity.avgPower,
+    maxPower: activity.maxPower,
+    normalizedPower: activity.normPower,
+    aerobicTrainingEffect: activity.aerobicTrainingEffect,
+    anaerobicTrainingEffect: activity.anaerobicTrainingEffect,
+    trainingEffectLabel: activity.trainingEffectLabel,
+    trainingLoad: activity.activityTrainingLoad,
+    avgGroundContactTime: activity.avgGroundContactTime,
+    avgVerticalOscillation: activity.avgVerticalOscillation,
+    avgStrideLength: activity.avgStrideLength,
+    avgVerticalRatio: activity.avgVerticalRatio,
+    gradeAdjustedPace,
+    fastestKm: activity.fastestSplit_1000,
+    fastest5k: activity.fastestSplit_5000,
+    hrZones,
+    maxSpeed: activity.maxSpeed,
+    steps: activity.steps,
+    temperature: activity.minTemperature != null && activity.maxTemperature != null
+      ? { min: activity.minTemperature, max: activity.maxTemperature }
+      : undefined,
+    avgRespirationRate: activity.avgRespirationRate,
+    locationName: activity.locationName,
+    lapCount: activity.lapCount,
+    moderateIntensityMinutes: activity.moderateIntensityMinutes,
+    vigorousIntensityMinutes: activity.vigorousIntensityMinutes,
   }
 }
 

@@ -61,7 +61,7 @@ type VO2Data = {
 }
 
 function computeVO2Data(
-  sessions: Array<{ distance: number; duration: number; date: Date; elevationGain: number; avgPace: number }>,
+  sessions: Array<{ distance: number; duration: number; date: Date; elevationGain: number; avgPace: number; vo2Max?: number }>,
   garminVo2Max?: number,
 ): VO2Data {
   const fallback: VO2Data = {
@@ -69,9 +69,15 @@ function computeVO2Data(
     history: [0, 0, 0, 0, 0, 0, 0],
   }
 
-  // Filtrer pour des estimations VDOT fiables :
-  // 10-120 min, relativement plat (<20 m D+/km), allure valide
-  const candidates = sessions
+  // Construire les candidats VO2max :
+  // Priorité 1 : vo2Max Garmin par activité (Firstbeat, toutes sessions)
+  // Priorité 2 : VDOT Jack Daniels (sessions plates 10-120 min uniquement)
+  const garminCandidates = sessions
+    .filter(s => s.vo2Max && s.vo2Max > 15 && s.vo2Max < 90)
+    .map(s => ({ vdot: s.vo2Max!, dateMs: new Date(s.date).getTime() }))
+    .sort((a, b) => a.dateMs - b.dateMs)
+
+  const vdotCandidates = sessions
     .filter(s => {
       if (s.distance <= 0 || s.duration <= 0 || s.avgPace <= 0) return false
       const durMin = s.duration / 60
@@ -79,14 +85,14 @@ function computeVO2Data(
       const distKm = s.distance / 1000
       return distKm > 0 && s.elevationGain / distKm < 20
     })
-    .map(s => ({
-      vdot: estimateVDOT(s.distance, s.duration),
-      dateMs: new Date(s.date).getTime(),
-    }))
-    .filter(s => s.vdot > 15 && s.vdot < 90) // sanity
+    .map(s => ({ vdot: estimateVDOT(s.distance, s.duration), dateMs: new Date(s.date).getTime() }))
+    .filter(s => s.vdot > 15 && s.vdot < 90)
     .sort((a, b) => a.dateMs - b.dateMs)
 
-  // VO2max : priorité à la valeur Garmin (Firstbeat), fallback VDOT calculé
+  // Utiliser les données Garmin si disponibles, sinon VDOT
+  const candidates = garminCandidates.length > 0 ? garminCandidates : vdotCandidates
+
+  // VO2max principal : profil Garmin > 90e percentile candidats
   let vo2max: number
   if (garminVo2Max && garminVo2Max > 0) {
     vo2max = Math.round(garminVo2Max)
@@ -276,6 +282,11 @@ type SessionInput = {
   distance: number; duration: number; date: Date; avgPace: number
   avgHeartRate?: number; elevationGain: number
   streams?: { velocity_smooth?: number[]; grade_smooth?: number[] }
+  // Données Garmin enrichies
+  gradeAdjustedPace?: number
+  fastestKm?: number
+  fastest5k?: number
+  trainingEffectLabel?: string
 }
 
 /**
@@ -332,26 +343,34 @@ function computeAiStats(
   const sessionsWithHR = sorted.filter(s => s.avgHeartRate)
 
   if (profile.lactateThresholdSpeed && profile.lactateThresholdSpeed > 0) {
-    // Garmin : vitesse au seuil en m/s → convertir en s/km
+    // Garmin profil : vitesse au seuil en m/s → convertir en s/km
     // Normalisation : si < 1.0 m/s, la valeur brute Garmin a un facteur ×10 manquant
     const ltSpeed = profile.lactateThresholdSpeed < 1.0
       ? profile.lactateThresholdSpeed * 10
       : profile.lactateThresholdSpeed
     lactateThresholdPace = 1000 / ltSpeed
-  } else if (sessionsWithHR.length >= 3 && fcReserve > 0) {
-    // Séances dont FC est entre 75-95% FCR ≈ effort seuil élargi
-    const thresholdCandidates = sessionsWithHR
-      .filter(s => {
-        const pctFCR = (s.avgHeartRate! - restingHR) / fcReserve
+  } else {
+    // Fallback : GAP des sessions Garmin au seuil, sinon extraction streams
+    const thresholdSessions = sessionsWithHR.filter(s => {
+      // Priorité : sessions identifiées comme seuil par Garmin
+      if (s.trainingEffectLabel === 'LACTATE_THRESHOLD' || s.trainingEffectLabel === 'TEMPO') return true
+      // Sinon : FC entre 75-95% FCR
+      if (fcReserve > 0 && s.avgHeartRate) {
+        const pctFCR = (s.avgHeartRate - restingHR) / fcReserve
         return pctFCR >= 0.75 && pctFCR <= 0.95
-      })
+      }
+      return false
+    })
+
+    // Utiliser le GAP Garmin quand disponible, sinon extractFlatPace
+    const thresholdCandidates = thresholdSessions
       .map(s => {
-        const flatPace = extractFlatPace(s)
-        return flatPace ? { flatPace, hr: s.avgHeartRate! } : null
+        const pace = s.gradeAdjustedPace ?? extractFlatPace(s)
+        return pace && s.avgHeartRate ? { flatPace: pace, hr: s.avgHeartRate } : null
       })
       .filter((s): s is { flatPace: number; hr: number } => s !== null)
 
-    if (thresholdCandidates.length >= 2) {
+    if (thresholdCandidates.length >= 2 && fcReserve > 0) {
       const normalizedPaces = thresholdCandidates.map(s =>
         s.flatPace * (s.hr / z4TargetHR),
       )
@@ -366,34 +385,44 @@ function computeAiStats(
   }
 
   // ── Marathon prédit : formule de Riegel (T2 = T1 × (D2/D1)^1.06) ──
-  // Chercher le meilleur effort récent entre 5km et 25km (course "plate" : D+/km < 30m)
+  // Priorité : fastest5k/fastestKm Garmin (splits natifs), sinon scan des sessions plates
   let marathonPrediction: number | null = null
   let marathonSource: string | null = null
 
-  const recentFlat = sorted
-    .filter(s => {
-      const distKm = s.distance / 1000
-      if (distKm < 4.5 || distKm > 25) return false
-      const elevPerKm = distKm > 0 ? s.elevationGain / distKm : 0
-      return elevPerKm < 15 // max 15m D+/km pour un effort "plat"
-    })
-    .slice(-20)
+  // 1) Meilleur split 5K Garmin (toutes sessions confondues)
+  const best5k = sorted
+    .map(s => s.fastest5k)
+    .filter((t): t is number => t != null && t > 0)
+    .sort((a, b) => a - b)[0]
 
-  if (recentFlat.length > 0) {
-    // Meilleure performance = plus rapide avgPace parmi les courses > 5km
-    let bestSession = recentFlat[0]!
-    for (const s of recentFlat) {
-      if (s.avgPace < bestSession.avgPace) bestSession = s
+  if (best5k) {
+    marathonPrediction = best5k * Math.pow(42.195 / 5, 1.06)
+    marathonSource = '5K split'
+  } else {
+    // 2) Fallback : meilleur effort récent entre 5km et 25km (course plate)
+    const recentFlat = sorted
+      .filter(s => {
+        const distKm = s.distance / 1000
+        if (distKm < 4.5 || distKm > 25) return false
+        const elevPerKm = distKm > 0 ? s.elevationGain / distKm : 0
+        return elevPerKm < 15
+      })
+      .slice(-20)
+
+    if (recentFlat.length > 0) {
+      let bestSession = recentFlat[0]!
+      for (const s of recentFlat) {
+        if (s.avgPace < bestSession.avgPace) bestSession = s
+      }
+      const refDistKm = bestSession.distance / 1000
+      const refTimeSec = bestSession.duration
+      marathonPrediction = refTimeSec * Math.pow(42.195 / refDistKm, 1.06)
+
+      if (refDistKm <= 6) marathonSource = '5K'
+      else if (refDistKm <= 12) marathonSource = '10K'
+      else if (refDistKm <= 22) marathonSource = 'Semi'
+      else marathonSource = `${refDistKm.toFixed(0)}K`
     }
-    const refDistKm = bestSession.distance / 1000
-    const refTimeSec = bestSession.duration
-    // Riegel: T_marathon = T_ref × (42.195 / D_ref)^1.06
-    marathonPrediction = refTimeSec * Math.pow(42.195 / refDistKm, 1.06)
-
-    if (refDistKm <= 6) marathonSource = '5K'
-    else if (refDistKm <= 12) marathonSource = '10K'
-    else if (refDistKm <= 22) marathonSource = 'Semi'
-    else marathonSource = `${refDistKm.toFixed(0)}K`
   }
 
   // ── Économie de course : allure plate normalisée par FC ──
@@ -402,10 +431,10 @@ function computeAiStats(
   let economyDelta: number | null = null
 
   if (sessionsWithHR.length >= 4) {
-    // Utiliser l'allure plate (streams ou sessions plates) pour éviter le biais terrain
+    // Utiliser GAP Garmin, sinon allure plate (streams), pour éviter le biais terrain
     const economies = sessionsWithHR
       .map(s => {
-        const flatPace = extractFlatPace(s)
+        const flatPace = s.gradeAdjustedPace ?? extractFlatPace(s)
         return flatPace && s.avgHeartRate ? flatPace / s.avgHeartRate : null
       })
       .filter((e): e is number => e !== null)
@@ -590,7 +619,12 @@ function AiStatsCard({ sessions, profile }: {
   )
 }
 
-function PersonalBestsCard({ sessions }: { sessions: Array<{ distance: number; duration: number; date: Date; name: string }> }) {
+function PersonalBestsCard({ sessions }: { sessions: Array<{ distance: number; duration: number; date: Date; name: string; fastestKm?: number; fastest5k?: number }> }) {
+  // Meilleurs splits Garmin (toutes sessions confondues)
+  const bestGarmin5k = sessions
+    .map(s => s.fastest5k)
+    .filter((t): t is number => t != null && t > 0)
+    .sort((a, b) => a - b)[0]
   const distances: Array<{ label: string; min: number; max: number; unit: string }> = [
     { label: '5 Kilomètre',  min: 4500,  max: 5500,  unit: 'MIN' },
     { label: '10 Kilomètre', min: 9500,  max: 10500, unit: 'MIN' },
@@ -600,7 +634,15 @@ function PersonalBestsCard({ sessions }: { sessions: Array<{ distance: number; d
   const bests = distances.map(({ label, min, max, unit }) => {
     const matching = sessions.filter(s => s.distance >= min && s.distance <= max)
     const best = matching.sort((a, b) => a.duration - b.duration)[0]
-    return { label, unit, best }
+
+    // Pour le 5K : utiliser le meilleur split Garmin s'il est plus rapide
+    if (label === '5 Kilomètre' && bestGarmin5k) {
+      if (!best || bestGarmin5k < best.duration) {
+        return { label, unit, best: best ? { ...best, duration: bestGarmin5k } : undefined, garminSplit: bestGarmin5k }
+      }
+    }
+
+    return { label, unit, best, garminSplit: undefined as number | undefined }
   })
 
   return (

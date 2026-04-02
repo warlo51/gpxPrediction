@@ -29,6 +29,8 @@ export type WeeklyLoad = {
   elevationGain: number
   sessionCount: number
   avgPace: number
+  /** Charge d'entraînement cumulée (Training Load / EPOC Garmin), 0 si non disponible */
+  trainingLoad: number
 }
 
 export type StrengthWeakness = {
@@ -172,19 +174,27 @@ function computePerformanceTrend(sessions: TrainingSession[]): PerformanceTrend[
     .filter(s => s.avgPace > 0 && s.distance > 0)
     .slice(-40)
     .map(s => {
-      const distKm = s.distance / 1000
-      const elevScore = Math.min(50, (s.elevationGain / distKm) / 2) // max 50 pts
-      const distScore = Math.min(30, distKm / 2)                      // max 30 pts
-      const hrScore = s.avgHeartRate
-        ? Math.min(20, Math.max(0, (180 - s.avgHeartRate) / 2))        // FC basse = effort moindre
-        : 10
+      // Effort score : priorité Training Load Garmin (EPOC), fallback calcul custom
+      let effortScore: number
+      if (s.trainingLoad && s.trainingLoad > 0) {
+        // Training Load Garmin (EPOC) : typiquement 0-300+, normaliser sur 0-100
+        effortScore = Math.min(100, Math.round(s.trainingLoad / 3))
+      } else {
+        const distKm = s.distance / 1000
+        const elevScore = Math.min(50, (s.elevationGain / distKm) / 2)
+        const distScore = Math.min(30, distKm / 2)
+        const hrScore = s.avgHeartRate
+          ? Math.min(20, Math.max(0, (180 - s.avgHeartRate) / 2))
+          : 10
+        effortScore = Math.round(elevScore + distScore + hrScore)
+      }
       return {
         date: new Date(s.date),
         paceSecPerKm: s.avgPace,
-        distanceKm: distKm,
+        distanceKm: s.distance / 1000,
         elevationGain: s.elevationGain,
         avgHR: s.avgHeartRate,
-        effortScore: Math.round(elevScore + distScore + hrScore),
+        effortScore,
       }
     })
     .sort((a, b) => a.date.getTime() - b.date.getTime())
@@ -250,7 +260,7 @@ function computeGradePaceCurve(sessions: TrainingSession[]): GradePacePoint[] {
 // ─── Charge hebdomadaire ──────────────────────────────────────────────────────
 
 function computeWeeklyLoad(sessions: TrainingSession[]): WeeklyLoad[] {
-  const map = new Map<string, { distanceKm: number; elevationGain: number; paces: number[]; count: number }>()
+  const map = new Map<string, { distanceKm: number; elevationGain: number; paces: number[]; count: number; trainingLoad: number }>()
 
   // 12 dernières semaines
   const cutoff = new Date()
@@ -259,10 +269,11 @@ function computeWeeklyLoad(sessions: TrainingSession[]): WeeklyLoad[] {
   for (const s of sessions) {
     if (new Date(s.date) < cutoff) continue
     const key = getWeekKey(new Date(s.date))
-    const existing = map.get(key) ?? { distanceKm: 0, elevationGain: 0, paces: [], count: 0 }
+    const existing = map.get(key) ?? { distanceKm: 0, elevationGain: 0, paces: [], count: 0, trainingLoad: 0 }
     existing.distanceKm += s.distance / 1000
     existing.elevationGain += s.elevationGain
     if (s.avgPace > 0) existing.paces.push(s.avgPace)
+    existing.trainingLoad += s.trainingLoad ?? 0
     existing.count++
     map.set(key, existing)
   }
@@ -280,6 +291,7 @@ function computeWeeklyLoad(sessions: TrainingSession[]): WeeklyLoad[] {
       elevationGain: Math.round(data?.elevationGain ?? 0),
       sessionCount: data?.count ?? 0,
       avgPace: data?.paces.length ? Math.round(mean(data.paces)) : 0,
+      trainingLoad: Math.round(data?.trainingLoad ?? 0),
     })
   }
   return weeks
@@ -367,13 +379,18 @@ function computeTrainingZones(
   ]
 
   // Estimer le % de temps dans chaque zone
-  // Priorité aux streams HR (point par point) pour une répartition précise
-  // Fallback : FC moyenne pondérée par la durée de la séance
+  // Priorité : 1) hrZones Garmin (natif montre), 2) streams HR, 3) FC moyenne pondérée
   const zoneCounts = new Array(zones.length).fill(0)
   let totalPoints = 0
 
   for (const s of sessions) {
-    if (s.streams?.heartrate?.length) {
+    if (s.hrZones) {
+      // Données Garmin natives : temps en secondes par zone
+      for (let j = 0; j < zones.length; j++) {
+        zoneCounts[j] += s.hrZones[j] ?? 0
+      }
+      totalPoints += s.hrZones.reduce((a, b) => a + b, 0)
+    } else if (s.streams?.heartrate?.length) {
       // Données point par point → répartition précise
       for (const hr of s.streams.heartrate) {
         const pct = hr / maxHR
@@ -433,12 +450,18 @@ function computeKarvonenZones(
   const toAbsHR = (pct: number) => Math.round(restingHR + fcReserve * pct)
 
   // Estimer le % de temps dans chaque zone
-  // Priorité aux streams HR (point par point) pour une répartition précise
+  // Priorité : 1) hrZones Garmin (natif montre), 2) streams HR, 3) FC moyenne pondérée
   const zoneCounts = new Array(zones.length).fill(0)
   let totalPoints = 0
 
   for (const s of sessions) {
-    if (s.streams?.heartrate?.length) {
+    if (s.hrZones) {
+      // Données Garmin natives : temps en secondes par zone
+      for (let j = 0; j < zones.length; j++) {
+        zoneCounts[j] += s.hrZones[j] ?? 0
+      }
+      totalPoints += s.hrZones.reduce((a, b) => a + b, 0)
+    } else if (s.streams?.heartrate?.length) {
       for (const hr of s.streams.heartrate) {
         const pct = fcReserve > 0 ? (hr - restingHR) / fcReserve : 0
         let idx = -1
