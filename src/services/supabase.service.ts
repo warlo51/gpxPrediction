@@ -161,10 +161,16 @@ export async function saveSessions(userId: string, sessions: TrainingSession[]) 
     streams: s.streams ?? null,
   }))
 
-  const { error } = await supabase
-    .from('training_sessions')
-    .upsert(rows, { onConflict: 'id' })
-  if (error) throw error
+  // Upsert par batch de 5 pour éviter de dépasser la limite de payload Supabase
+  // (les streams FIT Garmin peuvent être très volumineux)
+  const BATCH_SIZE = 5
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE)
+    const { error } = await supabase
+      .from('training_sessions')
+      .upsert(batch, { onConflict: 'id' })
+    if (error) throw error
+  }
 }
 
 export async function getSessions(userId: string): Promise<TrainingSession[]> {

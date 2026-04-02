@@ -6,7 +6,6 @@
 
 import { useState } from 'react'
 import { useAppStore } from '@/stores/appStore'
-import { useStravaStore } from '@/stores/stravaStore'
 import { calibrateRunner } from '@/services/calibration.service'
 import { RunnerAnalysisPanel } from './RunnerAnalysis'
 
@@ -84,7 +83,6 @@ function Calibrated({
 
 export function RunnerProfileForm() {
   const { profile, setProfile, sessions } = useAppStore()
-  const { athlete } = useStravaStore()
 
   const [name, setName] = useState(profile.name)
   const [weightKg, setWeightKg] = useState(profile.energyModel.weightKg)
@@ -202,10 +200,22 @@ export function RunnerProfileForm() {
               </p>
             </div>
           </div>
-          {athlete && (
-            <div className="flex items-center gap-2 text-xs text-orange-400 bg-orange-900/20 px-3 py-1.5 rounded-full">
+          {profile.calibrationSource === 'garmin' && (
+            <div className="flex items-center gap-2 text-xs text-sky-400 bg-sky-900/20 px-3 py-1.5 rounded-full border border-sky-800/30">
+              <span>🏔️</span>
+              <span>Calibré depuis Garmin ({profile.sessionCount} séances)</span>
+            </div>
+          )}
+          {profile.calibrationSource === 'strava' && (
+            <div className="flex items-center gap-2 text-xs text-orange-400 bg-orange-900/20 px-3 py-1.5 rounded-full border border-orange-800/30">
               <span>⚡</span>
-              <span>Calibré depuis Strava ({sessions.length} séances)</span>
+              <span>Calibré depuis Strava ({profile.sessionCount} séances)</span>
+            </div>
+          )}
+          {!profile.calibrationSource && sessions.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/40 px-3 py-1.5 rounded-full">
+              <span>🧮</span>
+              <span>{sessions.length} séance{sessions.length > 1 ? 's' : ''} chargée{sessions.length > 1 ? 's' : ''}</span>
             </div>
           )}
         </div>

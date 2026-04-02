@@ -2,6 +2,9 @@
  * Types liés au profil coureur et à ses statistiques
  */
 
+/** Source de données utilisée pour la calibration du profil */
+export type CalibrationSource = 'garmin' | 'strava' | 'manual' | 'mixed'
+
 /** Plage de valeurs (min/max) pour une estimation probabiliste */
 export type ValueRange = {
   min: number
@@ -76,6 +79,8 @@ export type RunnerProfile = {
   calibratedAt: Date
   /** Nombre de séances utilisées pour la calibration */
   sessionCount: number
+  /** Source de données utilisée pour la calibration (garmin prioritaire sur strava) */
+  calibrationSource?: CalibrationSource
 
   speedModel: SpeedGradeModel
   fatigueModel: FatigueModel
