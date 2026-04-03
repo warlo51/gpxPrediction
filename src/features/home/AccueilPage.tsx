@@ -2,6 +2,9 @@
  * Page d'accueil — présentation honnête des vraies fonctionnalités
  */
 
+import { useState, useEffect } from 'react'
+import { getGlobalGpxCount } from '@/services/supabase.service'
+
 interface AccueilPageProps {
   onNavigate: (page: string) => void
 }
@@ -48,6 +51,14 @@ const IconChart = () => (
 // ── Composant ────────────────────────────────────────────────────────────────
 
 export function AccueilPage({ onNavigate }: AccueilPageProps) {
+  const [gpxCount, setGpxCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    getGlobalGpxCount()
+      .then(setGpxCount)
+      .catch(() => {})
+  }, [])
+
   return (
     <div
       className="w-full min-h-screen flex flex-col"
@@ -73,15 +84,29 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
         {/* Hero content */}
         <div className="relative z-10 flex flex-col gap-6 max-w-2xl">
 
-          {/* Badge */}
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-xl self-start"
-            style={{ background: '#2d3449' }}
-          >
-            <IconBolt />
-            <span className="text-[10px] tracking-[2px] uppercase" style={{ color: '#ffb692' }}>
-              Open Source Trail Analytics
-            </span>
+          {/* Badges */}
+          <div className="flex flex-wrap gap-2">
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-xl"
+              style={{ background: '#2d3449' }}
+            >
+              <IconBolt />
+              <span className="text-[10px] tracking-[2px] uppercase" style={{ color: '#ffb692' }}>
+                Open Source Trail Analytics
+              </span>
+            </div>
+            {gpxCount !== null && gpxCount > 0 && (
+              <div
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-xl"
+                style={{ background: '#131b2e', border: '1px solid rgba(255,109,0,0.2)' }}
+              >
+                <span style={{ fontSize: 12 }}>🗺️</span>
+                <span className="text-[10px]" style={{ color: '#e2bfb0' }}>
+                  <strong style={{ color: '#ffb692' }}>{gpxCount.toLocaleString('fr-FR')}</strong>
+                  {' '}parcours sauvegardés
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Heading */}
