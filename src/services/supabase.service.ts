@@ -97,20 +97,32 @@ export async function getRunnerProfile(userId: string): Promise<RunnerProfile | 
 
 // ─── Tracks GPX ──────────────────────────────────────────────────────────────
 
-export async function saveGpxTrack(userId: string, track: GpxTrack) {
+export type TrackProfile = 'route' | 'trail' | 'mixed'
+
+export async function saveGpxTrack(
+  userId: string,
+  track: GpxTrack,
+  fileHash: string,
+  trackProfile: TrackProfile,
+): Promise<string | null> {
   const { data, error } = await supabase
     .from('gpx_tracks')
-    .insert({
-      user_id: userId,
-      name: track.name,
-      gpx_data: track,
-      total_distance: track.totalDistance,
-      total_elevation_gain: track.totalElevationGain,
-    })
+    .upsert(
+      {
+        user_id: userId,
+        name: track.name,
+        gpx_data: track,
+        total_distance: track.totalDistance,
+        total_elevation_gain: track.totalElevationGain,
+        file_hash: fileHash,
+        track_profile: trackProfile,
+      },
+      { onConflict: 'user_id,file_hash', ignoreDuplicates: true },
+    )
     .select('id')
-    .single()
+    .maybeSingle()
   if (error) throw error
-  return data.id as string
+  return data?.id ?? null
 }
 
 export type GpxTrackRow = {
@@ -119,17 +131,25 @@ export type GpxTrackRow = {
   gpx_data: GpxTrack
   total_distance: number
   total_elevation_gain: number
+  track_profile: TrackProfile | null
+  file_hash: string | null
   created_at: string
 }
 
 export async function getGpxTracks(userId: string): Promise<GpxTrackRow[]> {
   const { data, error } = await supabase
     .from('gpx_tracks')
-    .select('id, name, gpx_data, total_distance, total_elevation_gain, created_at')
+    .select('id, name, gpx_data, total_distance, total_elevation_gain, track_profile, file_hash, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as GpxTrackRow[]
+}
+
+export async function getGlobalGpxCount(): Promise<number> {
+  const { data, error } = await supabase.rpc('get_gpx_tracks_count')
+  if (error) throw error
+  return (data as number) ?? 0
 }
 
 export async function deleteGpxTrack(trackId: string) {

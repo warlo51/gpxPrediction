@@ -303,3 +303,24 @@ export async function parseGpxFile(input: File | string): Promise<GpxTrack> {
     segments,
   } satisfies GpxTrack
 }
+
+// ─── Utilitaires de sauvegarde ────────────────────────────────────────────────
+
+/** Calcule le SHA-256 (hex) des bytes bruts d'un fichier */
+export async function computeFileHash(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/** Infère le profil du tracé selon le D+ par km */
+export function inferTrackProfile(track: GpxTrack): 'route' | 'trail' | 'mixed' {
+  const distanceKm = track.totalDistance / 1000
+  if (distanceKm === 0) return 'mixed'
+  const gainPerKm = track.totalElevationGain / distanceKm
+  if (gainPerKm < 20) return 'route'
+  if (gainPerKm > 50) return 'trail'
+  return 'mixed'
+}

@@ -3,20 +3,24 @@
  * Import → simulation auto → résultats immédiats
  */
 
-import { useCallback, useRef, useState, useMemo } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import type { DragEvent } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import { useAppStore } from '@/stores/appStore'
+import { useAuthStore } from '@/stores/authStore'
 import { parseGpxFile } from '@/services/gpxParser.service'
 import { generateRaceStrategy } from '@/services/raceStrategy.service'
 import { formatPace } from '@/services/simulationEngine.service'
+import { getGpxTracks } from '@/services/supabase.service'
+import { useGpxSave } from '@/hooks/useGpxSave'
 import { TrackMap } from './TrackMap'
 import { Track3DView } from './Track3DView'
 import { ElevationChart } from './ElevationChart'
 import type { GpxTrack } from '@/types'
+import type { GpxTrackRow, TrackProfile } from '@/services/supabase.service'
 import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation } from '@/types/raceStrategy.types'
 
 // ─── Strategy metadata ──────────────────────────────────────────────────────
@@ -643,14 +647,146 @@ function LectureSection({ report }: { report: RaceStrategyReport }) {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 
+// ─── Filtres bibliothèque GPX ────────────────────────────────────────────────
+
+const DISTANCE_BUCKETS = [
+  { label: 'Toutes distances', min: 0, max: Infinity },
+  { label: '5 km', min: 3, max: 7 },
+  { label: '10 km', min: 7, max: 14 },
+  { label: 'Semi (21 km)', min: 14, max: 28 },
+  { label: 'Marathon (42 km)', min: 28, max: 55 },
+  { label: '50 km+', min: 55, max: 80 },
+  { label: '80 km+', min: 80, max: 110 },
+  { label: '100 km+', min: 110, max: Infinity },
+]
+
+const ELEVATION_BUCKETS = [
+  { label: 'Tous dénivelés', min: 0, max: Infinity },
+  { label: 'Plat (< 500 m)', min: 0, max: 500 },
+  { label: 'Vallonné (500–1500 m)', min: 500, max: 1500 },
+  { label: 'Montagneux (> 1500 m)', min: 1500, max: Infinity },
+]
+
+const PROFILE_OPTIONS: { label: string; value: TrackProfile | null }[] = [
+  { label: 'Tous profils', value: null },
+  { label: 'Route', value: 'route' },
+  { label: 'Trail', value: 'trail' },
+  { label: 'Mixed', value: 'mixed' },
+]
+
+// ─── Composant bibliothèque GPX sauvegardés ──────────────────────────────────
+
+function GpxLibrary({
+  tracks,
+  filterDist,
+  setFilterDist,
+  filterElev,
+  setFilterElev,
+  filterProfile,
+  setFilterProfile,
+  onSelect,
+}: {
+  tracks: GpxTrackRow[]
+  filterDist: number
+  setFilterDist: (v: number) => void
+  filterElev: number
+  setFilterElev: (v: number) => void
+  filterProfile: TrackProfile | null
+  setFilterProfile: (v: TrackProfile | null) => void
+  onSelect: (row: GpxTrackRow) => void
+}) {
+  const filtered = useMemo(() => {
+    const { min: dMin, max: dMax } = DISTANCE_BUCKETS[filterDist]
+    const { min: eMin, max: eMax } = ELEVATION_BUCKETS[filterElev]
+    return tracks.filter((t) => {
+      const distKm = t.total_distance / 1000
+      return (
+        distKm >= dMin && distKm < dMax &&
+        t.total_elevation_gain >= eMin && t.total_elevation_gain < eMax &&
+        (filterProfile === null || t.track_profile === filterProfile)
+      )
+    })
+  }, [tracks, filterDist, filterElev, filterProfile])
+
+  if (tracks.length === 0) return null
+
+  const selectClass = 'text-xs rounded-lg px-2 py-1.5 bg-[#1a2540] border border-white/10 text-[rgba(218,226,253,0.7)] focus:outline-none'
+
+  return (
+    <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <span className="w-1 h-5 rounded-full bg-[#ff6d00] shrink-0" />
+        <p className="text-[11px] uppercase tracking-widest text-slate-200 font-semibold">
+          Charger un GPX sauvegardé
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <select value={filterDist} onChange={(e) => setFilterDist(Number(e.target.value))} className={selectClass}>
+          {DISTANCE_BUCKETS.map((b, i) => <option key={i} value={i}>{b.label}</option>)}
+        </select>
+        <select value={filterElev} onChange={(e) => setFilterElev(Number(e.target.value))} className={selectClass}>
+          {ELEVATION_BUCKETS.map((b, i) => <option key={i} value={i}>{b.label}</option>)}
+        </select>
+        <select
+          value={filterProfile ?? ''}
+          onChange={(e) => setFilterProfile((e.target.value || null) as TrackProfile | null)}
+          className={selectClass}
+        >
+          {PROFILE_OPTIONS.map((o) => <option key={o.value ?? ''} value={o.value ?? ''}>{o.label}</option>)}
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="text-xs text-[rgba(218,226,253,0.3)]">Aucun parcours pour ces filtres.</p>
+      ) : (
+        <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-1">
+          {filtered.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onSelect(t)}
+              className="flex items-center justify-between px-3 py-2 rounded-xl text-left
+                         bg-white/[0.03] border border-white/[0.06] hover:border-[#ff6d00]/40
+                         hover:bg-[rgba(255,109,0,0.06)] transition-all"
+            >
+              <span className="text-[13px] text-[rgba(218,226,253,0.85)] truncate">{t.name}</span>
+              <div className="flex gap-2 shrink-0 ml-3 text-[11px] text-[rgba(218,226,253,0.4)]">
+                <span>{(t.total_distance / 1000).toFixed(1)} km</span>
+                <span>+{Math.round(t.total_elevation_gain)} m</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Page principale ─────────────────────────────────────────────────────────
+
 export function PlanificateurPage() {
   const { track, setTrack, profile } = useAppStore()
+  const user = useAuthStore((s) => s.user)
+  const { saveTrack } = useGpxSave()
 
   const [isDragging, setIsDragging] = useState(false)
   const [isParsing,  setIsParsing]  = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
   const [carbTolerance, setCarbTolerance] = useState(60)
   const [activeStrategy, setActiveStrategy] = useState<RaceStrategyId | null>(null)
+
+  // Bibliothèque GPX sauvegardés
+  const [savedTracks, setSavedTracks] = useState<GpxTrackRow[]>([])
+  const [filterDist, setFilterDist] = useState(0)
+  const [filterElev, setFilterElev] = useState(0)
+  const [filterProfile, setFilterProfile] = useState<TrackProfile | null>(null)
+
+  useEffect(() => {
+    if (!user?.id) return
+    getGpxTracks(user.id)
+      .then(setSavedTracks)
+      .catch((err) => console.warn('[GPX] Failed to load saved tracks:', err))
+  }, [user?.id])
 
   // Simulation auto dès qu'un track est chargé
   const report = useMemo<RaceStrategyReport | null>(() => {
@@ -671,18 +807,33 @@ export function PlanificateurPage() {
       setParseError('Le fichier doit être au format .gpx')
       return
     }
+    if (file.size > 5 * 1024 * 1024) {
+      setParseError('Le fichier GPX ne doit pas dépasser 5 Mo')
+      return
+    }
     setParseError(null)
     setIsParsing(true)
     setActiveStrategy(null)
     try {
       const parsed = await parseGpxFile(file)
       setTrack(parsed)
+      // Sauvegarde silencieuse et non-bloquante
+      saveTrack(file, parsed)
+        .then((id) => {
+          if (id) {
+            // Rafraîchir la bibliothèque après sauvegarde
+            if (user?.id) {
+              getGpxTracks(user.id).then(setSavedTracks).catch(() => {})
+            }
+          }
+        })
+        .catch((err) => console.warn('[GPX] Save failed (non-blocking):', err))
     } catch (err) {
       setParseError(err instanceof Error ? err.message : 'Erreur lors du parsing GPX')
     } finally {
       setIsParsing(false)
     }
-  }, [setTrack])
+  }, [setTrack, saveTrack, user?.id])
 
   const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -698,6 +849,11 @@ export function PlanificateurPage() {
 
   const handleDragLeave = useCallback(() => setIsDragging(false), [])
 
+  const handleSelectSavedTrack = useCallback((row: GpxTrackRow) => {
+    setTrack(row.gpx_data as GpxTrack)
+    setActiveStrategy(null)
+  }, [setTrack])
+
   // ── Pas de track → drop zone plein écran ──
   if (!track) {
     return (
@@ -707,6 +863,16 @@ export function PlanificateurPage() {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
       >
+        <GpxLibrary
+          tracks={savedTracks}
+          filterDist={filterDist}
+          setFilterDist={setFilterDist}
+          filterElev={filterElev}
+          setFilterElev={setFilterElev}
+          filterProfile={filterProfile}
+          setFilterProfile={setFilterProfile}
+          onSelect={handleSelectSavedTrack}
+        />
         <DropZone
           onFile={handleFile}
           isDragging={isDragging}
@@ -731,6 +897,20 @@ export function PlanificateurPage() {
 
       {/* Header compact : nom + stats + bouton changer */}
       <TrackHeader track={track} onChangeFile={handleFile} />
+
+      {/* Bibliothèque GPX sauvegardés */}
+      {savedTracks.length > 0 && (
+        <GpxLibrary
+          tracks={savedTracks}
+          filterDist={filterDist}
+          setFilterDist={setFilterDist}
+          filterElev={filterElev}
+          setFilterElev={setFilterElev}
+          filterProfile={filterProfile}
+          setFilterProfile={setFilterProfile}
+          onSelect={handleSelectSavedTrack}
+        />
+      )}
 
       {/* Parcours (carte + élévation, repliable) */}
       <TrackVisualization track={track} />
