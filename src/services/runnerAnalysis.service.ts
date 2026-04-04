@@ -85,6 +85,17 @@ export type RunnerAnalysis = {
     maxPct: number  // % FCR max
     pct: number     // % du temps estimé dans cette zone
   }[]
+  // Zones FC basées sur le seuil lactique (% FCSL)
+  lactateThresholdZones: {
+    zone: number
+    label: string
+    color: string
+    minHR: number   // bpm absolu
+    maxHR: number
+    minPct: number  // % FCSL min
+    maxPct: number  // % FCSL max
+    pct: number     // % du temps estimé dans cette zone
+  }[]
   // Bilan par type de terrain
   terrainBreakdown: {
     flat: number    // % de km sur plat
@@ -495,6 +506,79 @@ function computeKarvonenZones(
   }))
 }
 
+// ─── Zones FC basées sur le seuil lactique ──────────────────────────────────
+
+/**
+ * Méthode Seuil Lactique : zones définies par rapport à la FC au seuil (LTHR).
+ * Basé sur le modèle de Joe Friel (5 zones).
+ * Zone 1 : < 85% LTHR — Récupération active
+ * Zone 2 : 85–89% LTHR — Endurance fondamentale
+ * Zone 3 : 90–94% LTHR — Tempo
+ * Zone 4 : 95–105% LTHR — Seuil lactique
+ * Zone 5 : > 105% LTHR — VO2max / Anaérobie
+ */
+function computeLactateThresholdZones(
+  sessions: TrainingSession[],
+  profile: RunnerProfile,
+): RunnerAnalysis['lactateThresholdZones'] {
+  const { restingHR, maxHR, lactateThresholdHR } = profile.heartRateModel
+
+  // Estimer LTHR si absent : FC repos + 85% FCR (convention courante)
+  const lthr = lactateThresholdHR ?? Math.round(restingHR + 0.85 * (maxHR - restingHR))
+
+  const zones = [
+    { zone: 1, label: 'Récupération active', color: '#22c55e', pctMin: 0.00, pctMax: 0.85 },
+    { zone: 2, label: 'Endurance fondamentale', color: '#84cc16', pctMin: 0.85, pctMax: 0.90 },
+    { zone: 3, label: 'Tempo', color: '#f59e0b', pctMin: 0.90, pctMax: 0.95 },
+    { zone: 4, label: 'Seuil lactique', color: '#f97316', pctMin: 0.95, pctMax: 1.05 },
+    { zone: 5, label: 'VO2max / Anaérobie', color: '#ef4444', pctMin: 1.05, pctMax: maxHR / lthr },
+  ]
+
+  const toAbsHR = (pct: number) => Math.round(lthr * pct)
+
+  const zoneCounts = new Array(zones.length).fill(0)
+  let totalPoints = 0
+
+  for (const s of sessions) {
+    if (s.hrZones) {
+      for (let j = 0; j < zones.length; j++) {
+        zoneCounts[j] += s.hrZones[j] ?? 0
+      }
+      totalPoints += s.hrZones.reduce((a, b) => a + b, 0)
+    } else if (s.streams?.heartrate?.length) {
+      for (const hr of s.streams.heartrate) {
+        const pct = hr / lthr
+        let idx = -1
+        for (let j = zones.length - 1; j >= 0; j--) {
+          if (pct >= zones[j]!.pctMin) { idx = j; break }
+        }
+        if (idx >= 0) zoneCounts[idx]++
+        totalPoints++
+      }
+    } else if (s.avgHeartRate) {
+      const pct = s.avgHeartRate / lthr
+      let idx = -1
+      for (let j = zones.length - 1; j >= 0; j--) {
+        if (pct >= zones[j]!.pctMin) { idx = j; break }
+      }
+      if (idx >= 0) zoneCounts[idx] += s.duration
+      totalPoints += s.duration
+    }
+  }
+  const total = totalPoints || 1
+
+  return zones.map((z, i) => ({
+    zone: z.zone,
+    label: z.label,
+    color: z.color,
+    minHR: z.zone === 1 ? restingHR : toAbsHR(z.pctMin),
+    maxHR: Math.min(toAbsHR(z.pctMax), maxHR),
+    minPct: Math.round(z.pctMin * 100),
+    maxPct: Math.round(z.pctMax * 100),
+    pct: Math.round((zoneCounts[i]! / total) * 100),
+  }))
+}
+
 // ─── Terrain breakdown ────────────────────────────────────────────────────────
 
 function computeTerrainBreakdown(sessions: TrainingSession[]): RunnerAnalysis['terrainBreakdown'] {
@@ -624,6 +708,7 @@ export function analyzeRunner(
     stats,
     trainingZones: computeTrainingZones(sorted, profile),
     karvonenZones: computeKarvonenZones(sorted, profile),
+    lactateThresholdZones: computeLactateThresholdZones(sorted, profile),
     terrainBreakdown: computeTerrainBreakdown(sorted),
   }
 }
