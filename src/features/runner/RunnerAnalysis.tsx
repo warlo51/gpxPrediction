@@ -311,6 +311,7 @@ function ZoneList({
   subtitle,
   accentColor,
   showPct = true,
+  pctLabel,
 }: {
   zones: { zone: number; label: string; color: string; minHR: number; maxHR: number; pct: number; minPct?: number; maxPct?: number }[]
   hasHR: boolean
@@ -318,6 +319,7 @@ function ZoneList({
   subtitle: string
   accentColor: string
   showPct?: boolean
+  pctLabel?: string
 }) {
   return (
     <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col">
@@ -339,7 +341,7 @@ function ZoneList({
                 <span className="text-xs text-slate-500 shrink-0 tabular-nums">
                   {z.minHR}–{z.maxHR} bpm
                   {'minPct' in z && z.minPct !== undefined
-                    ? ` (${z.minPct}–${z.maxPct}% FCR)`
+                    ? ` (${z.minPct}–${z.maxPct}% ${pctLabel ?? 'FCR'})`
                     : ''}
                 </span>
               </div>
@@ -485,12 +487,12 @@ export function RunnerAnalysisPanel() {
       </div>
 
       {/* ── Zones FC ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <ZoneList
           zones={analysis.trainingZones}
           hasHR={hasHR}
           title="Zones FC — % FC max"
-          subtitle="Méthode classique : intensité basée sur le % de votre FC maximale"
+          subtitle="Intensité basée sur le % de votre FC maximale"
           accentColor="#ef4444"
           showPct={hasHR}
         />
@@ -498,9 +500,18 @@ export function RunnerAnalysisPanel() {
           zones={analysis.karvonenZones}
           hasHR={hasHR}
           title="Zones FC — Karvonen (FCR)"
-          subtitle="Méthode Karvonen : tient compte de votre FC de repos → plus précise"
+          subtitle="Tient compte de votre FC de repos → plus précise"
           accentColor="#f97316"
           showPct={hasHR}
+        />
+        <ZoneList
+          zones={analysis.lactateThresholdZones}
+          hasHR={hasHR}
+          title="Zones FC — Seuil Lactique"
+          subtitle="Zones définies par rapport à votre FC au seuil (LTHR)"
+          accentColor="#a855f7"
+          showPct={hasHR}
+          pctLabel="FCSL"
         />
       </div>
 
