@@ -5,7 +5,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { RunnerProfile, GpxTrack, TrainingSession } from '@/types'
+import type { RunnerProfile, GpxTrack, TrainingSession, GarminRacePredictions } from '@/types'
 
 // ─── Profil par défaut ────────────────────────────────────────────────────────
 
@@ -72,6 +72,10 @@ type AppState = {
   addSession: (session: TrainingSession) => void
   removeSession: (id: string) => void
   clearSessions: () => void
+
+  // Prédictions de course Garmin
+  garminRacePredictions: GarminRacePredictions | null
+  setGarminRacePredictions: (predictions: GarminRacePredictions | null) => void
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -116,12 +120,17 @@ export const useAppStore = create<AppState>()(
       removeSession: (id) =>
         set((state) => ({ sessions: state.sessions.filter((s) => s.id !== id) })),
       clearSessions: () => set({ sessions: [] }),
+
+      // ── Prédictions Garmin
+      garminRacePredictions: null,
+      setGarminRacePredictions: (garminRacePredictions) => set({ garminRacePredictions }),
     }),
     {
       name: 'gpx-predictor-store',
       partialize: (state) => ({
         profile: state.profile,
         sessions: state.sessions,
+        garminRacePredictions: state.garminRacePredictions,
       }),
       // Migration : corriger les anciens profils avec uphillDecayFactor trop élevé (modèle linéaire)
       // et injecter les nouveaux champs manquants pour les profils existants.

@@ -4,7 +4,7 @@
  */
 
 import type { GarminOAuth1Token, GarminOAuth2Token, GarminProfile } from '@/stores/garminStore'
-import type { TrainingSession, ActivityStreams } from '@/types'
+import type { TrainingSession, ActivityStreams, GarminRacePredictions, RunnerProfile } from '@/types'
 import { parseFitFile } from './fitParser.service'
 
 const API_BASE = '/api/garmin'
@@ -432,4 +432,179 @@ export async function importGarminActivities(
   console.log(`[Garmin] Import complete: ${sessions.length} sessions, ${withFit} with FIT, ${activities.length - newActivities.length} skipped`)
   console.log('[Garmin] Imported session IDs:', sessions.map(s => s.id))
   return { sessions, withFit, skipped: activities.length - newActivities.length }
+}
+
+// ─── Prédictions de course Garmin ─────────────────────────────────────────────
+
+export async function fetchGarminRacePredictions(
+  oauth1: GarminOAuth1Token,
+  oauth2: GarminOAuth2Token,
+): Promise<GarminRacePredictions> {
+  console.log('[Garmin] Fetching race predictions…')
+  const res = await fetchWithRetry(`${API_BASE}/race-predictions`, {
+    headers: garminHeaders(oauth1, oauth2),
+  })
+
+  console.log(`[Garmin] Race predictions response status: ${res.status}`)
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string }
+    console.error('[Garmin] Race predictions error:', data)
+    throw new Error(data.error ?? `Erreur race-predictions ${res.status}`)
+  }
+
+  const data = await res.json() as GarminRacePredictions
+  console.log('[Garmin] Race predictions:', JSON.stringify(data, null, 2))
+  return data
+}
+
+// ─── Sync Garmin profile (stats + prédictions + wellness) ────────────────────
+
+export type GarminSyncResult = {
+  userStats: GarminUserStats
+  racePredictions: GarminRacePredictions
+  restingHR: number | null
+  hrv: number | null
+}
+
+/**
+ * Synchronise en une seule passe les données physiologiques Garmin :
+ * VO2max, seuil lactate, prédictions de course, FC repos et HRV.
+ * Les trois appels sont lancés en parallèle.
+ */
+export async function syncGarminProfile(
+  oauth1: GarminOAuth1Token,
+  oauth2: GarminOAuth2Token,
+): Promise<GarminSyncResult> {
+  console.log('[Garmin] Starting profile sync…')
+
+  const [userStatsResult, racePredictionsResult, wellnessRes] = await Promise.allSettled([
+    fetchGarminUserStats(oauth1, oauth2),
+    fetchGarminRacePredictions(oauth1, oauth2),
+    fetchWithRetry(`${API_BASE}/wellness`, { headers: garminHeaders(oauth1, oauth2) }),
+  ])
+
+  const userStats: GarminUserStats = userStatsResult.status === 'fulfilled'
+    ? userStatsResult.value
+    : { vo2MaxRunning: null, vo2MaxCycling: null, lactateThresholdSpeed: null, lactateThresholdHeartRate: null, runningTrainingSpeed: null, userLevel: null }
+
+  let racePredictions: GarminRacePredictions = racePredictionsResult.status === 'fulfilled'
+    ? racePredictionsResult.value
+    : { fiveK: null, tenK: null, halfMarathon: null, marathon: null, source: 'unavailable', updatedAt: null }
+
+  let restingHR: number | null = null
+  let hrv: number | null = null
+  if (wellnessRes.status === 'fulfilled' && wellnessRes.value.ok) {
+    try {
+      const wellness = await wellnessRes.value.json() as {
+        heartRate?: { restingHeartRate?: number }
+        sleep?: { averageHRV?: number }
+      }
+      restingHR = wellness.heartRate?.restingHeartRate ?? null
+      hrv = wellness.sleep?.averageHRV ?? null
+    } catch {
+      // wellness data non critique
+    }
+  }
+
+  // ── Fallback client-side : si le backend race-predictions n'a pas pu fournir
+  // de données mais qu'on a un VO2max, on calcule les prédictions ici
+  if (racePredictions.source === 'unavailable' && userStats.vo2MaxRunning && userStats.vo2MaxRunning > 20) {
+    const vVo2max = userStats.vo2MaxRunning * 0.0345 + 0.182
+    racePredictions = {
+      fiveK: Math.round(5000 / (vVo2max * 0.975)),
+      tenK: Math.round(10000 / (vVo2max * 0.93)),
+      halfMarathon: Math.round(21097 / (vVo2max * 0.86)),
+      marathon: Math.round(42195 / (vVo2max * 0.78)),
+      source: 'computed',
+      updatedAt: new Date().toISOString(),
+    }
+    console.log('[Garmin] Race predictions computed client-side from VO2max:', racePredictions)
+  }
+
+  console.log('[Garmin] Sync complete:', {
+    vo2Max: userStats.vo2MaxRunning,
+    racePredictions: racePredictions.source,
+    restingHR,
+    hrv,
+  })
+
+  return { userStats, racePredictions, restingHR, hrv }
+}
+
+// ─── Construire le profil coureur depuis les stats Garmin directes ────────────
+
+/**
+ * Construit (ou met à jour) un RunnerProfile à partir des données Garmin
+ * sans nécessiter l'historique d'activités.
+ *
+ * Priorités :
+ * 1. Prédictions de course Garmin → vitesse de base (plus fiable car calibrée par Firstbeat)
+ * 2. VO2max → fallback si pas de prédictions
+ * 3. Valeurs du profil existant si aucune donnée Garmin disponible
+ */
+export function buildProfileFromGarminStats(
+  syncResult: GarminSyncResult,
+  baseProfile: RunnerProfile,
+): RunnerProfile {
+  const { userStats, racePredictions, restingHR } = syncResult
+
+  // ── Vitesse de base sur plat
+  // Priorité 1 : depuis la prédiction 10K de Garmin (distance la plus représentative)
+  // Formule : v10K correspond à ~93% vVO2max → vitesse "course de base" ≈ v10K / 0.87
+  //           (on remonte légèrement pour avoir la vitesse à 100% effort, ni sprint ni endurance)
+  let flatSpeed = baseProfile.speedModel.flatSpeed
+  let basePaceSecPerKm = baseProfile.basePaceSecPerKm
+
+  if (racePredictions.tenK && racePredictions.tenK > 0) {
+    const v10K = 10000 / racePredictions.tenK // m/s
+    flatSpeed = v10K / 0.87   // remonte vers vVO2max depuis vitesse 10K
+    basePaceSecPerKm = Math.round(1000 / v10K)
+    console.log('[buildProfile] flatSpeed from 10K prediction:', { v10K, flatSpeed, basePaceSecPerKm })
+  } else if (racePredictions.fiveK && racePredictions.fiveK > 0) {
+    const v5K = 5000 / racePredictions.fiveK
+    flatSpeed = v5K / 0.92
+    basePaceSecPerKm = Math.round(1000 / (flatSpeed * 0.87))
+    console.log('[buildProfile] flatSpeed from 5K prediction:', { v5K, flatSpeed })
+  } else if (userStats.vo2MaxRunning && userStats.vo2MaxRunning > 20) {
+    const vVo2max = userStats.vo2MaxRunning * 0.0345 + 0.182
+    flatSpeed = vVo2max * 0.87  // vitesse à ~87% vVO2max (allure marathon ~80%, 10K ~93%, plat moyen ≈ 87%)
+    basePaceSecPerKm = Math.round(1000 / (vVo2max * 0.93))
+    console.log('[buildProfile] flatSpeed from VO2max:', { vo2max: userStats.vo2MaxRunning, flatSpeed })
+  }
+
+  // ── Seuil lactate (vitesse)
+  // L'API Garmin renvoie parfois la valeur ×10 (bug connu)
+  let lactateThresholdSpeed = userStats.lactateThresholdSpeed
+  if (lactateThresholdSpeed && lactateThresholdSpeed > 0 && lactateThresholdSpeed < 1.0) {
+    lactateThresholdSpeed = lactateThresholdSpeed * 10
+  }
+
+  // ── FC max : inchangée (pas de source directe Garmin — utiliser le profil existant)
+  // ── FC repos : depuis wellness si disponible
+  const updatedRestingHR = restingHR ?? baseProfile.heartRateModel.restingHR
+
+  // ── FC seuil lactate
+  const lactateThresholdHR = userStats.lactateThresholdHeartRate
+    ?? baseProfile.heartRateModel.lactateThresholdHR
+
+  return {
+    ...baseProfile,
+    calibratedAt: new Date(),
+    calibrationSource: 'garmin',
+    basePaceSecPerKm,
+    ...(userStats.vo2MaxRunning && { vo2Max: userStats.vo2MaxRunning }),
+    ...(lactateThresholdSpeed && { lactateThresholdSpeed }),
+
+    speedModel: {
+      ...baseProfile.speedModel,
+      flatSpeed,
+    },
+
+    heartRateModel: {
+      ...baseProfile.heartRateModel,
+      restingHR: updatedRestingHR,
+      ...(lactateThresholdHR && { lactateThresholdHR }),
+    },
+  }
 }
