@@ -14,7 +14,7 @@ import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
 import { parseGpxFile } from '@/services/gpxParser.service'
 import { generateRaceStrategy } from '@/services/raceStrategy.service'
-import { formatPace } from '@/services/simulationEngine.service'
+import { formatPace, formatDuration } from '@/services/simulationEngine.service'
 import { getGpxTracks } from '@/services/supabase.service'
 import { useGpxSave } from '@/hooks/useGpxSave'
 import { TrackMap } from './TrackMap'
@@ -22,7 +22,7 @@ import { Track3DView } from './Track3DView'
 import { ElevationChart } from './ElevationChart'
 import type { GpxTrack } from '@/types'
 import type { GpxTrackRow, TrackProfile } from '@/services/supabase.service'
-import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation } from '@/types/raceStrategy.types'
+import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation, GarminCurveAnchor } from '@/types/raceStrategy.types'
 
 // ─── Strategy metadata ──────────────────────────────────────────────────────
 
@@ -224,6 +224,74 @@ function TrackVisualization({ track }: { track: GpxTrack }) {
           <ElevationChart track={track} />
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Garmin curve anchor banner ─────────────────────────────────────────────
+
+function GarminAnchorBanner({ anchor, track }: { anchor: GarminCurveAnchor; track: GpxTrack }) {
+  const sourceLabel =
+    anchor.predictionSource === 'garmin'
+      ? 'Firstbeat Analytics'
+      : anchor.predictionSource === 'computed'
+        ? 'Calculé depuis VO2max'
+        : 'Indisponible'
+
+  const confidenceLabel =
+    anchor.confidence === 'high' ? 'Élevée'
+      : anchor.confidence === 'medium' ? 'Moyenne'
+        : 'Faible'
+
+  const flatKm = (track.totalDistance / 1000).toFixed(1)
+  const effortDelta = anchor.kmEffortDistanceKm - track.totalDistance / 1000
+  const scaleDelta = Math.round((anchor.flatSpeedScaleFactor - 1) * 100)
+  const scaleLabel = scaleDelta === 0
+    ? 'Profil inchangé'
+    : scaleDelta > 0
+      ? `+${scaleDelta}% sur le profil (Minetti plus lent que Garmin)`
+      : `${scaleDelta}% sur le profil (Minetti plus rapide que Garmin)`
+
+  return (
+    <div
+      className="w-full px-4 sm:px-5 py-4 rounded-2xl border-2"
+      style={{
+        borderColor: 'rgba(56,189,248,0.35)',
+        background: 'rgba(56,189,248,0.06)',
+      }}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-sky-400">
+          Ancrage Garmin · courbe Riegel + km-effort
+        </span>
+        <span className="text-[9px] font-semibold text-sky-300/80 px-1.5 py-0.5 rounded-md bg-sky-400/10">
+          {sourceLabel}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div>
+          <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Temps ancre</div>
+          <div className="font-mono font-semibold text-white">{formatDuration(anchor.totalTimeSeconds)}</div>
+        </div>
+        <div>
+          <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Distance km-effort</div>
+          <div className="font-mono font-semibold text-white">
+            {anchor.kmEffortDistanceKm.toFixed(1)} km
+            <span className="text-slate-500 font-normal"> (+{effortDelta.toFixed(1)} vs {flatKm})</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Exposant Riegel</div>
+          <div className="font-mono font-semibold text-white">{anchor.riegelExponent.toFixed(3)}</div>
+        </div>
+        <div>
+          <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Fiabilité</div>
+          <div className="font-mono font-semibold text-white">{confidenceLabel}</div>
+        </div>
+      </div>
+      <p className="mt-2 text-[10px] text-slate-400 leading-relaxed">
+        Les temps des 3 stratégies ci-dessous sont calés sur ta courbe de prédiction Garmin appliquée à la distance km-effort du parcours. {scaleLabel}.
+      </p>
     </div>
   )
 }
@@ -776,7 +844,7 @@ function GpxLibrary({
 // ─── Page principale ─────────────────────────────────────────────────────────
 
 export function PlanificateurPage() {
-  const { track, setTrack, profile } = useAppStore()
+  const { track, setTrack, profile, garminRacePredictions } = useAppStore()
   const user = useAuthStore((s) => s.user)
   const { saveTrack } = useGpxSave()
 
@@ -800,10 +868,13 @@ export function PlanificateurPage() {
   }, [user?.id])
 
   // Simulation auto dès qu'un track est chargé
+  // Si des prédictions Garmin (Firstbeat) sont disponibles, on les utilise comme ancrage :
+  // le flatSpeed du profil est recalé pour que le temps total Minetti colle à la courbe Garmin
+  // + km-effort. Sans Garmin, on retombe sur le calcul Minetti pur.
   const report = useMemo<RaceStrategyReport | null>(() => {
     if (!track) return null
-    return generateRaceStrategy(track, profile, carbTolerance)
-  }, [track, profile, carbTolerance])
+    return generateRaceStrategy(track, profile, carbTolerance, garminRacePredictions)
+  }, [track, profile, carbTolerance, garminRacePredictions])
 
   // Sélection auto de la stratégie recommandée quand le report change
   const effectiveStrategy = activeStrategy ?? report?.recommendation.id ?? 'objectif'
@@ -943,6 +1014,11 @@ export function PlanificateurPage() {
               <span className="text-xs font-mono text-slate-200 w-12 shrink-0">{carbTolerance} g/h</span>
             </div>
           </div>
+
+          {/* Ancrage Garmin (courbe Firstbeat + km-effort) */}
+          {report.garminCurveAnchor && (
+            <GarminAnchorBanner anchor={report.garminCurveAnchor} track={track} />
+          )}
 
           {/* Recommandation */}
           <RecommendationBanner
