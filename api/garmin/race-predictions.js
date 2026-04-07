@@ -94,7 +94,7 @@ export default async function handler(req, res) {
     if (displayName) {
       try {
         const racePredictions = await client.get(
-          `/metrics-service/metrics/racepredictions/latest/${encodeURIComponent(displayName)}`,
+          `https://connectapi.garmin.com/metrics-service/metrics/racepredictions/latest/${encodeURIComponent(displayName)}`,
         )
         console.log('[race-predictions] raw Garmin response:', JSON.stringify(racePredictions))
 
