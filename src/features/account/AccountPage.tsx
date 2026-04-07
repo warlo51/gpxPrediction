@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
 import { useStravaStore } from '@/stores/stravaStore'
@@ -18,6 +19,7 @@ import {
 // ── Login / Signup form (pour utilisateurs anonymes) ─────────────────────────
 
 function AuthForm() {
+  const { t } = useTranslation()
   const { signIn, signUp } = useAuthStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -48,10 +50,10 @@ function AuthForm() {
     <div className="w-full flex flex-col items-center gap-8 pb-8">
       <div className="flex flex-col items-center gap-3">
         <h1 className="text-[28px] font-black text-white leading-none tracking-tight">
-          Mon compte
+          {t('account.title')}
         </h1>
         <p className="text-[13px] text-[rgba(218,226,253,0.4)] text-center max-w-sm">
-          Connectez-vous pour sauvegarder vos donnees, synchroniser votre profil coureur et retrouver vos GPX.
+          {t('account.subtitle')}
         </p>
       </div>
 
@@ -62,22 +64,22 @@ function AuthForm() {
         {signUpSuccess ? (
           <div className="text-center flex flex-col gap-3">
             <p className="text-[14px] text-[#22c55e] font-semibold">
-              Compte cree !
+              {t('account.accountCreated')}
             </p>
             <p className="text-[12px] text-[rgba(218,226,253,0.5)]">
-              Verifiez votre email pour confirmer votre inscription, puis connectez-vous.
+              {t('account.checkEmail')}
             </p>
             <button
               onClick={() => { setIsSignUp(false); setSignUpSuccess(false) }}
               className="text-[13px] text-[#ffb692] hover:underline mt-2"
             >
-              Se connecter
+              {t('nav.signIn')}
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <p className="text-[12px] text-center tracking-wide uppercase" style={{ color: 'rgba(218,226,253,0.5)' }}>
-              {isSignUp ? 'Creer un compte' : 'Se connecter'}
+              {isSignUp ? t('account.createAccount') : t('nav.signIn')}
             </p>
 
             <input
@@ -93,7 +95,7 @@ function AuthForm() {
 
             <input
               type="password"
-              placeholder="Mot de passe"
+              placeholder={t('common.password')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -118,7 +120,7 @@ function AuthForm() {
                 color: '#341100',
               }}
             >
-              {loading ? 'Chargement...' : isSignUp ? 'Creer mon compte' : 'Se connecter'}
+              {loading ? t('common.loading') : isSignUp ? t('account.createMyAccount') : t('nav.signIn')}
             </button>
 
             <button
@@ -126,7 +128,7 @@ function AuthForm() {
               onClick={() => { setIsSignUp(!isSignUp); setError(null) }}
               className="text-[12px] text-[rgba(218,226,253,0.5)] hover:text-[#ffb692] transition-colors text-center"
             >
-              {isSignUp ? 'Deja un compte ? Se connecter' : 'Pas de compte ? Creer un compte'}
+              {isSignUp ? t('account.alreadyHaveAccount') : t('account.noAccount')}
             </button>
           </form>
         )}
@@ -152,6 +154,7 @@ function AccountContent({
   user: { id: string; email?: string }
   signOut: () => Promise<void>
 }) {
+  const { t } = useTranslation()
   const { profile, updateProfile } = useAppStore()
   const stravaAthlete = useStravaStore(s => s.athlete)
   const stravaToken = useStravaStore(s => s.token)
@@ -240,7 +243,7 @@ function AccountContent({
         </div>
         <div>
           <h1 className="text-[28px] font-black text-white leading-none tracking-tight mb-1">
-            Mon compte
+            {t('account.title')}
           </h1>
           <p className="text-[13px] text-[rgba(218,226,253,0.4)]">
             {userEmail}
@@ -256,14 +259,14 @@ function AccountContent({
         <div className="flex items-center gap-2 mb-5">
           <div className="w-2 h-2 rounded-full bg-[#ff6d00]" />
           <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-white">
-            Informations personnelles
+            {t('account.personalInfo')}
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-medium tracking-[1px] uppercase text-[rgba(218,226,253,0.4)]">
-              Poids (kg)
+              {t('account.weight')}
             </label>
             <input
               type="number"
@@ -281,7 +284,7 @@ function AccountContent({
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-medium tracking-[1px] uppercase text-[rgba(218,226,253,0.4)]">
-              Age
+              {t('account.age')}
             </label>
             <input
               type="number"
@@ -298,7 +301,7 @@ function AccountContent({
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-medium tracking-[1px] uppercase text-[rgba(218,226,253,0.4)]">
-              FC Repos (bpm)
+              {t('account.restingHR')}
             </label>
             <input
               type="number"
@@ -325,11 +328,11 @@ function AccountContent({
               color: '#341100',
             }}
           >
-            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+            {saving ? t('common.saving') : t('common.save')}
           </button>
           {saved && (
             <span className="text-[11px] text-[#22c55e] font-medium">
-              Enregistre
+              {t('common.saved')}
             </span>
           )}
         </div>
@@ -340,7 +343,7 @@ function AccountContent({
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#ff6d00]" />
           <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-white">
-            Connexions
+            {t('account.connections')}
           </span>
           <div className="flex items-center gap-2 ml-auto">
             <StatusPill label="Strava" connected={stravaConnected} />
@@ -360,9 +363,9 @@ function AccountContent({
         style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}
       >
         <div>
-          <p className="text-[13px] font-semibold text-white mb-0.5">Se deconnecter</p>
+          <p className="text-[13px] font-semibold text-white mb-0.5">{t('account.signOutSection')}</p>
           <p className="text-[11px] text-[rgba(218,226,253,0.35)]">
-            Vos donnees locales seront conservees.
+            {t('account.localDataKept')}
           </p>
         </div>
         <button
@@ -371,7 +374,7 @@ function AccountContent({
                      bg-red-500/10 border border-red-500/20 text-red-400
                      hover:bg-red-500/20 transition-colors"
         >
-          Deconnexion
+          {t('account.signOutBtn')}
         </button>
       </section>
     </div>

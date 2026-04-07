@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
+import { useTranslation } from 'react-i18next'
 import type { GpxTrack, SegmentType } from '@/types'
 
 // ─── Couleurs par type de segment ────────────────────────────────────────────
@@ -25,12 +26,12 @@ const SEGMENT_COLORS: Record<SegmentType, string> = {
   steep_downhill: '#6366f1',
 }
 
-const SEGMENT_LABELS: Record<SegmentType, string> = {
-  flat: 'Plat',
-  uphill: 'Montée',
-  steep_uphill: 'Montée raide',
-  downhill: 'Descente',
-  steep_downhill: 'Descente raide',
+const SEGMENT_LABEL_KEYS: Record<SegmentType, string> = {
+  flat: 'elevation.flat',
+  uphill: 'elevation.uphill',
+  steep_uphill: 'elevation.steepUphill',
+  downhill: 'elevation.downhill',
+  steep_downhill: 'elevation.steepDownhill',
 }
 
 // ─── Types internes ──────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ function CustomTooltip({
   active?: boolean
   payload?: TooltipPayloadItem[]
 }) {
+  const { t } = useTranslation()
   if (!active || !payload?.length) return null
   const d = payload[0]!.payload
 
@@ -72,11 +74,11 @@ function CustomTooltip({
         📍 <span className="text-white font-semibold">{d.distanceKm.toFixed(2)} km</span>
       </div>
       <div className="text-slate-400">
-        ↕️ Altitude :{' '}
+        ↕️ {t('elevation.altitude')} :{' '}
         <span className="text-white font-semibold">{Math.round(d.altitude)} m</span>
       </div>
       <div className="text-slate-400">
-        📐 Pente :{' '}
+        📐 {t('elevation.grade')} :{' '}
         <span
           className="font-semibold"
           style={{ color: SEGMENT_COLORS[d.segmentType] }}
@@ -88,7 +90,7 @@ function CustomTooltip({
         className="mt-1 text-xs font-medium"
         style={{ color: SEGMENT_COLORS[d.segmentType] }}
       >
-        {SEGMENT_LABELS[d.segmentType]}
+        {t(SEGMENT_LABEL_KEYS[d.segmentType])}
       </div>
     </div>
   )
@@ -97,6 +99,7 @@ function CustomTooltip({
 // ─── Légende ─────────────────────────────────────────────────────────────────
 
 function Legend() {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-wrap gap-3 justify-center mt-3">
       {(Object.keys(SEGMENT_COLORS) as SegmentType[]).map((type) => (
@@ -105,7 +108,7 @@ function Legend() {
             className="inline-block w-3 h-3 rounded-full"
             style={{ backgroundColor: SEGMENT_COLORS[type] }}
           />
-          {SEGMENT_LABELS[type]}
+          {t(SEGMENT_LABEL_KEYS[type])}
         </div>
       ))}
     </div>

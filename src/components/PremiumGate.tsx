@@ -1,9 +1,12 @@
 import { useAuthStore } from '@/stores/authStore'
+import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
 
 export function PremiumGate({ children }: { children: ReactNode }) {
   const isPremium = useAuthStore((s) => s.isPremium)
   const user = useAuthStore((s) => s.user)
+
+  const { t } = useTranslation()
 
   if (isPremium) return <>{children}</>
 
@@ -23,11 +26,9 @@ export function PremiumGate({ children }: { children: ReactNode }) {
             </svg>
           </div>
           <div>
-            <p className="text-amber-300 font-bold text-sm mb-1">Acces Premium requis</p>
+            <p className="text-amber-300 font-bold text-sm mb-1">{t('premium.required')}</p>
             <p className="text-slate-400 text-xs leading-relaxed">
-              {user
-                ? 'La synchronisation Strava et Garmin Connect est reservee aux comptes Premium.'
-                : 'Connectez-vous avec un compte Premium pour synchroniser vos activites Strava et Garmin.'}
+              {user ? t('premium.loggedIn') : t('premium.loggedOut')}
             </p>
           </div>
         </div>

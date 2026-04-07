@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import type { DragEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -48,6 +49,7 @@ function DropZone({
   onDragLeave: () => void
   onDrop: (e: DragEvent<HTMLDivElement>) => void
 }) {
+  const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
 
   return (
@@ -78,7 +80,7 @@ function DropZone({
         {isParsing ? (
           <>
             <div className="w-12 h-12 border-2 border-[#ff6d00] border-t-transparent rounded-full animate-spin" />
-            <p className="text-[rgba(218,226,253,0.6)] text-sm">Analyse du parcours…</p>
+            <p className="text-[rgba(218,226,253,0.6)] text-sm">{t('planner.analyzing')}</p>
           </>
         ) : (
           <>
@@ -95,10 +97,10 @@ function DropZone({
 
             <div className="text-center">
               <p className="text-lg font-semibold text-white mb-2">
-                {isDragging ? 'Relâchez pour importer' : 'Importer un fichier GPX'}
+                {isDragging ? t('planner.dropTitleDragging') : t('planner.dropTitle')}
               </p>
               <p className="text-[13px] text-[rgba(218,226,253,0.45)] max-w-[280px] leading-relaxed">
-                Glissez votre trace GPX ici pour lancer l'analyse et générer votre plan de course.
+                {t('planner.dropHint')}
               </p>
             </div>
 
@@ -110,7 +112,7 @@ function DropZone({
               style={{ background: '#1a2540', border: '1px solid rgba(255,255,255,0.12)' }}
               onClick={e => { e.stopPropagation(); inputRef.current?.click() }}
             >
-              Parcourir
+              {t('common.browse')}
             </button>
           </>
         )}
@@ -128,6 +130,7 @@ function TrackHeader({
   track: GpxTrack
   onChangeFile: (f: File) => void
 }) {
+  const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
 
   return (
@@ -164,7 +167,7 @@ function TrackHeader({
                      text-slate-400 hover:text-white border border-white/[0.08] hover:border-white/20
                      bg-white/[0.03] transition-all"
         >
-          Changer GPX
+          {t('planner.changeGpx')}
         </button>
       </div>
     </div>
@@ -174,6 +177,7 @@ function TrackHeader({
 // ─── Track visualization (collapsible) ──────────────────────────────────────
 
 function TrackVisualization({ track }: { track: GpxTrack }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(true)
   const [viewMode, setViewMode] = useState<'map' | '3d'>('map')
 
@@ -185,7 +189,7 @@ function TrackVisualization({ track }: { track: GpxTrack }) {
       >
         <div className="flex items-center gap-2">
           <span className="w-1 h-5 rounded-full bg-[#ff6d00] shrink-0" />
-          <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">Parcours</h3>
+          <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.track')}</h3>
         </div>
         <span className="text-slate-500 text-xs">{expanded ? '▲' : '▼'}</span>
       </button>
@@ -204,7 +208,7 @@ function TrackVisualization({ track }: { track: GpxTrack }) {
                     : 'bg-white/[0.03] border-white/[0.06] text-slate-500 hover:text-slate-300'
                 }`}
               >
-                {mode === 'map' ? 'Carte 2D' : 'Vue 3D'}
+                {mode === 'map' ? t('planner.map2d') : t('planner.view3d')}
               </button>
             ))}
           </div>
@@ -233,6 +237,7 @@ function RecommendationBanner({
   recommendation: StrategyRecommendation
   onSelect: (id: RaceStrategyId) => void
 }) {
+  const { t } = useTranslation()
   const meta = STRATEGY_META[recommendation.id]
 
   return (
@@ -253,7 +258,7 @@ function RecommendationBanner({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[10px] font-bold tracking-[1.5px] uppercase" style={{ color: meta.color }}>
-            Stratégie recommandée
+            {t('planner.recommendedStrategy')}
           </span>
           <span className="text-xs font-semibold text-white">{meta.name}</span>
         </div>
@@ -279,6 +284,7 @@ function StrategyPills({
   recommendedId: RaceStrategyId
   onSelect: (id: RaceStrategyId) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="grid grid-cols-3 gap-2 sm:gap-3">
       {strategies.map((s) => {
@@ -298,7 +304,7 @@ function StrategyPills({
             {isRecommended && (
               <span className="absolute top-1.5 right-1.5 text-[8px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-md"
                 style={{ background: `${meta.color}25`, color: meta.color }}>
-                Conseillé
+                {t('planner.advised')}
               </span>
             )}
             <div className="flex items-center gap-1.5">
@@ -331,15 +337,16 @@ function StrategyPills({
 // ─── Comparative table ───────────────────────────────────────────────────────
 
 function ComparatifTable({ report }: { report: RaceStrategyReport }) {
+  const { t } = useTranslation()
   const rows: Array<{ label: string; key: string; format: (s: StrategyPlan) => string; highlight?: boolean }> = [
-    { label: 'Temps total',       key: 'time',    format: (s) => s.totalTimeFormatted, highlight: true },
-    { label: 'Allure moy.',       key: 'pace',    format: (s) => s.avgPaceFormatted },
-    { label: 'FC moy.',           key: 'hr',      format: (s) => `${s.avgHR} bpm` },
-    { label: 'FC max estimee',    key: 'maxhr',   format: (s) => `${s.maxHREstimated} bpm` },
-    { label: 'Fatigue moy.',      key: 'fatigue', format: (s) => `${(s.avgFatigue * 100).toFixed(1)}%` },
-    { label: 'Seg. marche',       key: 'walk',    format: (s) => `${s.walkingSegments}` },
-    { label: 'Calories',          key: 'cal',     format: (s) => `${s.totalCalories} kcal` },
-    { label: 'Risque explosion',  key: 'risk',    format: (s) => s.blowupRisk },
+    { label: t('planner.comparativeTable.totalTime'),   key: 'time',    format: (s) => s.totalTimeFormatted, highlight: true },
+    { label: t('planner.comparativeTable.avgPace'),     key: 'pace',    format: (s) => s.avgPaceFormatted },
+    { label: t('planner.comparativeTable.avgHR'),       key: 'hr',      format: (s) => `${s.avgHR} bpm` },
+    { label: t('planner.comparativeTable.maxHR'),       key: 'maxhr',   format: (s) => `${s.maxHREstimated} bpm` },
+    { label: t('planner.comparativeTable.avgFatigue'),  key: 'fatigue', format: (s) => `${(s.avgFatigue * 100).toFixed(1)}%` },
+    { label: t('planner.comparativeTable.walkSegments'),key: 'walk',    format: (s) => `${s.walkingSegments}` },
+    { label: t('planner.comparativeTable.calories'),    key: 'cal',     format: (s) => `${s.totalCalories} kcal` },
+    { label: t('planner.comparativeTable.blowupRisk'),  key: 'risk',    format: (s) => s.blowupRisk },
   ]
 
   return (
@@ -388,6 +395,7 @@ function ComparatifTable({ report }: { report: RaceStrategyReport }) {
 // ─── Strategy detail card ────────────────────────────────────────────────────
 
 function StrategyDetail({ plan }: { plan: StrategyPlan }) {
+  const { t } = useTranslation()
   const meta = STRATEGY_META[plan.id]
 
   return (
@@ -416,7 +424,7 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
-            <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">Phases</h3>
+            <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.phases')}</h3>
           </div>
 
           {/* Mobile */}
@@ -520,6 +528,7 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
 // ─── Charts ──────────────────────────────────────────────────────────────────
 
 function PaceChart({ strategies }: { strategies: StrategyPlan[] }) {
+  const { t } = useTranslation()
   const data = useMemo(() => {
     const maxLen = Math.max(...strategies.map((s) => s.chartData.length))
     return Array.from({ length: maxLen }, (_, i) => {
@@ -537,7 +546,7 @@ function PaceChart({ strategies }: { strategies: StrategyPlan[] }) {
     <div className="glass rounded-2xl p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-4">
         <span className="w-1 h-5 rounded-full bg-indigo-500 shrink-0" />
-        <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">Allures (s/km)</h3>
+        <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.paces')}</h3>
       </div>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 5, right: 15, left: 0, bottom: 5 }}>
@@ -566,6 +575,7 @@ function PaceChart({ strategies }: { strategies: StrategyPlan[] }) {
 }
 
 function HRChart({ strategies }: { strategies: StrategyPlan[] }) {
+  const { t } = useTranslation()
   const data = useMemo(() => {
     const maxLen = Math.max(...strategies.map((s) => s.chartData.length))
     return Array.from({ length: maxLen }, (_, i) => {
@@ -583,7 +593,7 @@ function HRChart({ strategies }: { strategies: StrategyPlan[] }) {
     <div className="glass rounded-2xl p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-4">
         <span className="w-1 h-5 rounded-full bg-rose-500 shrink-0" />
-        <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">FC cible (bpm)</h3>
+        <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.targetHR')}</h3>
       </div>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 5, right: 15, left: 0, bottom: 5 }}>
@@ -614,6 +624,7 @@ function HRChart({ strategies }: { strategies: StrategyPlan[] }) {
 // ─── Lecture du parcours ─────────────────────────────────────────────────────
 
 function LectureSection({ report }: { report: RaceStrategyReport }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   return (
     <div className="glass rounded-2xl overflow-hidden">
@@ -621,7 +632,7 @@ function LectureSection({ report }: { report: RaceStrategyReport }) {
         className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5">
         <div className="flex items-center gap-2">
           <span className="w-1 h-5 rounded-full bg-indigo-500 shrink-0" />
-          <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">Lecture du parcours</h3>
+          <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.trackReading')}</h3>
         </div>
         <span className="text-slate-500 text-xs">{open ? '▲' : '▼'}</span>
       </button>

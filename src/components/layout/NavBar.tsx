@@ -4,7 +4,9 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 
 export type Page = 'accueil' | 'planificateur' | 'profil' | 'compte'
 
@@ -13,13 +15,14 @@ interface NavBarProps {
   onNavigate: (page: Page) => void
 }
 
-const NAV_LINKS: { id: Page; label: string }[] = [
-  { id: 'profil',        label: 'Dashboard' },
-  { id: 'planificateur', label: 'Planner' },
-]
-
 export function NavBar({ activePage, onNavigate }: NavBarProps) {
+  const { t } = useTranslation()
   const { user, signOut } = useAuthStore()
+
+  const NAV_LINKS: { id: Page; label: string }[] = [
+    { id: 'profil',        label: t('nav.dashboard') },
+    { id: 'planificateur', label: t('nav.planner') },
+  ]
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -96,6 +99,7 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
 
         {/* Right: avatar/login + burger */}
         <div className="flex items-center gap-3">
+          <LanguageSwitcher />
           {user ? (
             /* ── Utilisateur connecte : avatar + dropdown ── */
             <div className="relative" ref={dropdownRef}>
@@ -134,7 +138,7 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
                         <circle cx="7" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.2" />
                         <path d="M2.5 12.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                       </svg>
-                      Mon compte
+                      {t('nav.myAccount')}
                     </button>
                     <button
                       onClick={() => { setDropdownOpen(false); signOut() }}
@@ -144,7 +148,7 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M5 2H3.5a1 1 0 00-1 1v8a1 1 0 001 1H5M9 10l2.5-3L9 4M11.5 7H5.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      Se deconnecter
+                      {t('nav.signOut')}
                     </button>
                   </div>
                 </div>
@@ -161,7 +165,7 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
                 color: '#341100',
               }}
             >
-              Se connecter
+              {t('nav.signIn')}
             </button>
           )}
 

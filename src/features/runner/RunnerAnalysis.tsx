@@ -4,6 +4,7 @@
  */
 
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Cell,
@@ -88,6 +89,7 @@ function StatCard({ icon, label, value, sub, color = 'text-white' }: {
 // ─── Carte force/faiblesse ────────────────────────────────────────────────────
 
 function InsightCard({ item }: { item: StrengthWeakness }) {
+  const { t } = useTranslation()
   const colors = {
     force: 'border-emerald-800/40 bg-emerald-950/20',
     faiblesse: 'border-red-800/40 bg-red-950/20',
@@ -99,9 +101,9 @@ function InsightCard({ item }: { item: StrengthWeakness }) {
     neutre: 'text-slate-400',
   }
   const badges = {
-    force: '✅ Force',
-    faiblesse: '⚠️ À travailler',
-    neutre: 'ℹ️ Info',
+    force: `✅ ${t('analysis.strength')}`,
+    faiblesse: `⚠️ ${t('analysis.weakness')}`,
+    neutre: `ℹ️ ${t('analysis.neutral')}`,
   }
 
   return (
@@ -130,6 +132,7 @@ function InsightCard({ item }: { item: StrengthWeakness }) {
 // ─── Section : Tendance allure ────────────────────────────────────────────────
 
 function PaceTrendChart({ data }: { data: RunnerAnalysisType['performanceTrend'] }) {
+  const { t } = useTranslation()
   if (!data.length) return null
 
   const chartData = data.map(p => ({
@@ -158,7 +161,7 @@ function PaceTrendChart({ data }: { data: RunnerAnalysisType['performanceTrend']
         <div className="flex items-center gap-2">
           <span className="w-1 h-5 rounded-full bg-indigo-500 inline-block" />
           <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
-            Évolution de l'allure
+            {t('analysis.paceEvolution')}
           </h3>
         </div>
         <span className={`text-xs px-2 py-1 rounded-full ${
@@ -166,7 +169,7 @@ function PaceTrendChart({ data }: { data: RunnerAnalysisType['performanceTrend']
             ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/40'
             : 'bg-amber-900/30 text-amber-400 border border-amber-800/40'
         }`}>
-          {improving ? '📈 Progression détectée' : '➡️ Allure stable'}
+          {improving ? `📈 ${t('analysis.progressionDetected')}` : `➡️ ${t('analysis.stablePace')}`}
         </span>
       </div>
       <ResponsiveContainer width="100%" height={200}>
@@ -200,7 +203,7 @@ function PaceTrendChart({ data }: { data: RunnerAnalysisType['performanceTrend']
         </LineChart>
       </ResponsiveContainer>
       <p className="text-xs text-slate-600 mt-2 text-center">
-        Axe Y inversé : une valeur plus basse = une allure plus rapide
+        {t('analysis.invertedYAxis')}
       </p>
     </div>
   )
@@ -209,9 +212,10 @@ function PaceTrendChart({ data }: { data: RunnerAnalysisType['performanceTrend']
 // ─── Section : Courbe vitesse/pente ─────��────────────────────────────────────
 
 function GradePaceChart({ data }: { data: RunnerAnalysisType['gradePaceCurve'] }) {
+  const { t } = useTranslation()
   if (!data.length) return (
     <div className="glass rounded-2xl p-4 sm:p-5 flex items-center justify-center text-slate-600 text-sm h-40">
-      Pas assez de streams GPS pour la courbe vitesse/pente
+      {t('analysis.noStreamsData')}
     </div>
   )
 
@@ -228,9 +232,9 @@ function GradePaceChart({ data }: { data: RunnerAnalysisType['gradePaceCurve'] }
       <div className="flex items-center gap-2 mb-4">
         <span className="w-1 h-5 rounded-full bg-orange-500 inline-block" />
         <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
-          Vitesse réelle par pente
+          {t('analysis.realSpeedByGrade')}
         </h3>
-        <span className="text-xs text-slate-600 ml-auto">données GPS réelles</span>
+        <span className="text-xs text-slate-600 ml-auto">{t('analysis.realGpsData')}</span>
       </div>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>

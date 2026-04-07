@@ -4,6 +4,7 @@
  */
 
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
 import { useStravaStore } from '@/stores/stravaStore'
 import { RunnerAnalysisPanel } from '@/features/runner/RunnerAnalysis'
@@ -199,6 +200,7 @@ function StatCard({
 }
 
 function Vo2Card({ data }: { data: VO2Data }) {
+  const { t } = useTranslation()
   const { vo2max, trend, percentileLabel, history } = data
 
   if (vo2max === 0) {
@@ -206,11 +208,11 @@ function Vo2Card({ data }: { data: VO2Data }) {
       <div className="flex flex-col justify-between p-6 rounded-2xl"
         style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}>
         <p className="text-[10px] font-medium tracking-[1.5px] uppercase text-[rgba(218,226,253,0.5)] mb-3">
-          VO2 Max Trend
+          {t('profile.vo2maxTrend')}
         </p>
         <p className="text-[18px] font-black text-[rgba(218,226,253,0.2)] mb-1">—</p>
         <p className="text-[11px] text-[rgba(218,226,253,0.4)]">
-          Pas assez de sessions plates (10-120 min) pour estimer
+          {t('profile.notEnoughSessions')}
         </p>
       </div>
     )
@@ -221,7 +223,7 @@ function Vo2Card({ data }: { data: VO2Data }) {
       style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.06)' }}>
       <div className="flex items-start justify-between mb-3">
         <p className="text-[10px] font-medium tracking-[1.5px] uppercase text-[rgba(218,226,253,0.5)]">
-          VO2 Max Trend
+          {t('profile.vo2maxTrend')}
         </p>
         {percentileLabel && (
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -235,8 +237,8 @@ function Vo2Card({ data }: { data: VO2Data }) {
       </div>
       <p className="text-[11px] text-[rgba(218,226,253,0.5)] mb-4">
         {trend !== null
-          ? `${trend >= 0 ? '+' : ''}${trend.toFixed(1)}% vs 2 mois précédents`
-          : 'Pas assez de données pour la tendance'}
+          ? `${trend >= 0 ? '+' : ''}${trend.toFixed(1)}% ${t('profile.vsPrevious2months')}`
+          : t('profile.notEnoughTrendData')}
       </p>
       {/* Mini bar chart — historique VDOT sur 7 périodes de 4 semaines */}
       <div className="flex items-end gap-[3px] h-[40px]">
@@ -506,6 +508,7 @@ function AiStatsCard({ sessions, profile }: {
   sessions: SessionInput[]
   profile: { basePaceSecPerKm: number; heartRateModel: { restingHR: number; maxHR: number }; enduranceScore: number; lactateThresholdSpeed?: number }
 }) {
+  const { t } = useTranslation()
   const stats = useMemo(() => computeAiStats(sessions, profile), [sessions, profile])
 
   const DeltaBadge = ({ value, unit, inverted = false }: { value: number | null; unit?: string; inverted?: boolean }) => {
@@ -531,7 +534,7 @@ function AiStatsCard({ sessions, profile }: {
       <div className="flex items-center gap-2 mb-5">
         <div className="w-2 h-2 rounded-full bg-[#ff6d00]" />
         <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-white">
-          Statistiques avancées
+          {t('profile.advancedStats')}
         </span>
       </div>
 
@@ -539,7 +542,7 @@ function AiStatsCard({ sessions, profile }: {
         {/* Seuil lactique */}
         <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-[9px] tracking-[1px] uppercase text-[rgba(218,226,253,0.4)] mb-2">
-            Seuil Lactique
+            {t('profile.lactateThreshold')}
           </p>
           <p className="text-[22px] font-black text-white leading-none">
             {formatPaceSec(stats.lactateThresholdPace)}
@@ -551,7 +554,7 @@ function AiStatsCard({ sessions, profile }: {
         {/* Prédiction marathon */}
         <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-[9px] tracking-[1px] uppercase text-[rgba(218,226,253,0.4)] mb-2">
-            Marathon prédit
+            {t('profile.marathonPredicted')}
           </p>
           {stats.marathonPrediction ? (
             <>
@@ -563,13 +566,13 @@ function AiStatsCard({ sessions, profile }: {
                   <circle cx="4" cy="4" r="3" stroke="currentColor" strokeWidth="1" />
                   <path d="M4 2.5V4l1 1" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
                 </svg>
-                Riegel depuis {stats.marathonSource}
+                {t('profile.riegelFrom')} {stats.marathonSource}
               </p>
             </>
           ) : (
             <>
               <p className="text-[16px] font-black text-[rgba(218,226,253,0.2)] leading-none">—</p>
-              <p className="text-[9px] text-[rgba(218,226,253,0.3)] mt-1">Besoin d'un effort 5K+</p>
+              <p className="text-[9px] text-[rgba(218,226,253,0.3)] mt-1">{t('profile.need5kEffort')}</p>
             </>
           )}
         </div>
@@ -577,7 +580,7 @@ function AiStatsCard({ sessions, profile }: {
         {/* Économie de course */}
         <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-[9px] tracking-[1px] uppercase text-[rgba(218,226,253,0.4)] mb-2">
-            Économie de course
+            {t('profile.runningEconomy')}
           </p>
           {stats.runningEconomy !== null ? (
             <>
@@ -590,7 +593,7 @@ function AiStatsCard({ sessions, profile }: {
           ) : (
             <>
               <p className="text-[16px] font-black text-[rgba(218,226,253,0.2)] leading-none">—</p>
-              <p className="text-[9px] text-[rgba(218,226,253,0.3)] mt-1">Données FC nécessaires</p>
+              <p className="text-[9px] text-[rgba(218,226,253,0.3)] mt-1">{t('profile.hrDataNeeded')}</p>
             </>
           )}
         </div>
@@ -598,7 +601,7 @@ function AiStatsCard({ sessions, profile }: {
         {/* Volume hebdomadaire */}
         <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-[9px] tracking-[1px] uppercase text-[rgba(218,226,253,0.4)] mb-2">
-            Volume / Semaine
+            {t('profile.weeklyVolume')}
           </p>
           <p className="text-[22px] font-black text-white leading-none">
             {stats.weeklyVolume.toFixed(0)}
@@ -620,15 +623,16 @@ function AiStatsCard({ sessions, profile }: {
 }
 
 function PersonalBestsCard({ sessions }: { sessions: Array<{ distance: number; duration: number; date: Date; name: string; fastestKm?: number; fastest5k?: number }> }) {
+  const { t } = useTranslation()
   // Meilleurs splits Garmin (toutes sessions confondues)
   const bestGarmin5k = sessions
     .map(s => s.fastest5k)
     .filter((t): t is number => t != null && t > 0)
     .sort((a, b) => a - b)[0]
   const distances: Array<{ label: string; min: number; max: number; unit: string }> = [
-    { label: '5 Kilomètre',  min: 4500,  max: 5500,  unit: 'MIN' },
-    { label: '10 Kilomètre', min: 9500,  max: 10500, unit: 'MIN' },
-    { label: 'Marathon',     min: 40000, max: 44000, unit: 'HRS' },
+    { label: t('profile.kilometre5'),  min: 4500,  max: 5500,  unit: 'MIN' },
+    { label: t('profile.kilometre10'), min: 9500,  max: 10500, unit: 'MIN' },
+    { label: t('profile.marathon'),    min: 40000, max: 44000, unit: 'HRS' },
   ]
 
   const bests = distances.map(({ label, min, max, unit }) => {
@@ -654,7 +658,7 @@ function PersonalBestsCard({ sessions }: { sessions: Array<{ distance: number; d
             fill="#f59e0b" stroke="#f59e0b" strokeWidth="0.5"/>
         </svg>
         <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-white">
-          Personal Bests
+          {t('profile.personalBests')}
         </span>
       </div>
 
@@ -670,7 +674,7 @@ function PersonalBestsCard({ sessions }: { sessions: Array<{ distance: number; d
                 </p>
               ) : (
                 <p className="text-[9px] tracking-[0.5px] uppercase text-[rgba(218,226,253,0.25)]">
-                  Aucune séance
+                  {t('profile.noSession')}
                 </p>
               )}
             </div>
@@ -707,6 +711,7 @@ function ConnectionBadge({ label, connected }: { label: string; connected: boole
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export function ProfilPage() {
+  const { t } = useTranslation()
   const { profile, sessions } = useAppStore()
   const { athlete, token } = useStravaStore()
 
@@ -782,14 +787,14 @@ export function ProfilPage() {
       {/* ── Stats row ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
-          label="Total Kilomètre Année"
+          label={t('profile.totalKmYear')}
           value={formatNumber(totalKmYear)}
           unit="KM"
           accent="#ff6d00"
           progress={Math.min(100, (totalKmYear / 3000) * 100)}
         />
         <StatCard
-          label="Total Dénivelé Année"
+          label={t('profile.totalElevYear')}
           value={formatNumber(totalElevYear)}
           unit="M"
           accent="#3b82f6"

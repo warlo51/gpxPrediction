@@ -5,6 +5,7 @@
 
 import { useCallback, useState } from 'react'
 import type { DragEvent, ChangeEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { GpxTrack } from '@/types'
 import { parseGpxFile } from '@/services/gpxParser.service'
 
@@ -20,11 +21,12 @@ type GpxImportProps = {
 }
 
 export function GpxImport({ onTrackLoaded }: GpxImportProps) {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<GpxImportStatus>({ state: 'idle' })
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.name.endsWith('.gpx')) {
-      setStatus({ state: 'error', message: 'Le fichier doit être au format .gpx' })
+      setStatus({ state: 'error', message: t('gpxImport.mustBeGpx') })
       return
     }
 

@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getGlobalGpxCount } from '@/services/supabase.service'
 
 interface AccueilPageProps {
@@ -51,6 +52,7 @@ const IconChart = () => (
 // ── Composant ────────────────────────────────────────────────────────────────
 
 export function AccueilPage({ onNavigate }: AccueilPageProps) {
+  const { t } = useTranslation()
   const [gpxCount, setGpxCount] = useState<number | null>(null)
 
   useEffect(() => {
@@ -92,7 +94,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
             >
               <IconBolt />
               <span className="text-[10px] tracking-[2px] uppercase" style={{ color: '#ffb692' }}>
-                Open Source Trail Analytics
+                {t('home.badge')}
               </span>
             </div>
             {gpxCount !== null && gpxCount > 0 && (
@@ -103,7 +105,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
                 <span style={{ fontSize: 12 }}>🗺️</span>
                 <span className="text-[10px]" style={{ color: '#e2bfb0' }}>
                   <strong style={{ color: '#ffb692' }}>{gpxCount.toLocaleString('fr-FR')}</strong>
-                  {' '}parcours sauvegardés
+                  {' '}{t('home.savedTracks')}
                 </span>
               </div>
             )}
@@ -114,18 +116,16 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
             className="font-black uppercase leading-none"
             style={{ fontSize: 'clamp(48px, 8vw, 96px)', letterSpacing: '-0.05em' }}
           >
-            <span style={{ color: '#dae2fd' }}>Analysez.</span>
+            <span style={{ color: '#dae2fd' }}>{t('home.heading1')}</span>
             <br />
-            <span style={{ color: '#ffb692' }}>Simulez.</span>
+            <span style={{ color: '#ffb692' }}>{t('home.heading2')}</span>
             <br />
-            <span style={{ color: '#dae2fd' }}>Performez.</span>
+            <span style={{ color: '#dae2fd' }}>{t('home.heading3')}</span>
           </h1>
 
           {/* Subtitle */}
           <p className="text-[18px] leading-[1.65] max-w-lg" style={{ color: '#e2bfb0' }}>
-            Importez votre trace GPX, connectez Strava ou Garmin,
-            et obtenez une simulation segment par segment de votre prochaine course.
-            Allure, fréquence cardiaque, énergie, fatigue — tout est calculé.
+            {t('home.subtitle')}
           </p>
 
           {/* CTA buttons */}
@@ -138,7 +138,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
                 color: '#341100',
               }}
             >
-              Commencer l'analyse
+              {t('home.ctaAnalysis')}
             </button>
             <button
               onClick={() => onNavigate('planificateur')}
@@ -149,7 +149,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
                 color: '#dae2fd',
               }}
             >
-              Importer un GPX
+              {t('home.ctaImportGpx')}
             </button>
           </div>
         </div>
@@ -164,15 +164,15 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
           }}
         >
           <span className="text-[10px] tracking-[1px] uppercase" style={{ color: '#e2bfb0' }}>
-            Ce que vous obtenez
+            {t('home.whatYouGet')}
           </span>
           <ul className="flex flex-col gap-2.5 text-[13px]" style={{ color: '#dae2fd' }}>
             {[
-              'Simulation de course segment par segment',
-              'Prédiction d\'allure par pente (Minetti)',
-              'Modèle de fatigue calibré sur vos données',
-              'Zones FC personnalisées (Karvonen)',
-              'Comparaison de stratégies de course',
+              t('home.feature1'),
+              t('home.feature2'),
+              t('home.feature3'),
+              t('home.feature4'),
+              t('home.feature5'),
             ].map(item => (
               <li key={item} className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#ff6d00' }} />
@@ -189,7 +189,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
         {/* Section header */}
         <div className="flex flex-col gap-3">
           <h2 className="font-bold text-[36px] uppercase tracking-wide" style={{ color: '#dae2fd' }}>
-            Comment ça marche
+            {t('home.howItWorks')}
           </h2>
           <div
             className="h-1 w-24 rounded-full"
@@ -209,17 +209,15 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
               <div className="flex items-center gap-4">
                 <IconMap />
                 <h3 className="font-black text-[28px] uppercase" style={{ color: '#dae2fd' }}>
-                  Analyse GPX complète
+                  {t('home.gpxAnalysisTitle')}
                 </h3>
               </div>
               <p className="text-[17px] leading-[1.65] max-w-lg" style={{ color: '#e2bfb0' }}>
-                Importez votre fichier GPX — le moteur découpe automatiquement le parcours
-                en segments par type de terrain (plat, montée, descente), calcule les pentes,
-                distances et dénivelés, et génère le profil altimétrique interactif.
+                {t('home.gpxAnalysisDesc')}
               </p>
             </div>
             <div className="flex gap-3 mt-8 flex-wrap">
-              {['Segmentation auto', 'Profil altimétrique', 'Vue 3D', 'Carte interactive'].map(tag => (
+              {[t('home.autoSegmentation'), t('home.elevationProfile'), t('home.view3d'), t('home.interactiveMap')].map(tag => (
                 <span key={tag} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wide"
                   style={{ background: 'rgba(255,109,0,0.1)', color: '#ffb692', border: '1px solid rgba(255,109,0,0.2)' }}>
                   {tag}
@@ -237,20 +235,19 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
               <IconSync />
             </div>
             <h3 className="font-black text-[22px] uppercase leading-tight mb-4" style={{ color: '#582100' }}>
-              Import de<br />données
+              {t('home.dataImportTitle')}
             </h3>
             <p className="text-[15px] leading-[1.65] opacity-90" style={{ color: '#582100' }}>
-              Connectez votre compte Strava pour importer automatiquement
-              votre historique, ou importez vos fichiers FIT depuis Garmin.
+              {t('home.dataImportDesc')}
             </p>
             <div className="flex gap-3 mt-8">
               <div className="px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide"
                 style={{ background: 'rgba(88,33,0,0.2)', color: '#582100' }}>
-                Strava API
+                {t('home.stravaApi')}
               </div>
               <div className="px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide"
                 style={{ background: 'rgba(88,33,0,0.2)', color: '#582100' }}>
-                Fichiers FIT
+                {t('home.fitFiles')}
               </div>
             </div>
           </div>
@@ -265,12 +262,10 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
             </div>
             <div>
               <h3 className="font-black text-[22px] uppercase mb-3" style={{ color: '#dae2fd' }}>
-                Simulation de course
+                {t('home.simulationTitle')}
               </h3>
               <p className="text-[13px] leading-[1.65]" style={{ color: '#e2bfb0' }}>
-                Le moteur simule votre course segment par segment :
-                allure ajustée par la pente (modèle Minetti), fatigue progressive,
-                fréquence cardiaque estimée et consommation énergétique.
+                {t('home.simulationDesc')}
               </p>
             </div>
           </div>
@@ -285,12 +280,10 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
             </div>
             <div>
               <h3 className="font-black text-[22px] uppercase mb-3" style={{ color: '#dae2fd' }}>
-                Visualisation 3D
+                {t('home.visualization3dTitle')}
               </h3>
               <p className="text-[13px] leading-[1.65]" style={{ color: '#e2bfb0' }}>
-                Visualisez votre parcours en 3D avec exagération du relief,
-                coloration par type de terrain, et rotation interactive.
-                Le profil altimétrique accompagne chaque analyse.
+                {t('home.visualization3dDesc')}
               </p>
             </div>
           </div>
@@ -305,12 +298,10 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
             </div>
             <div>
               <h3 className="font-black text-[22px] uppercase mb-3" style={{ color: '#dae2fd' }}>
-                Profil coureur
+                {t('home.runnerProfileTitle')}
               </h3>
               <p className="text-[13px] leading-[1.65]" style={{ color: '#e2bfb0' }}>
-                Calibration automatique depuis votre historique : seuil lactique,
-                zones FC, économie de course, prédiction marathon (Riegel),
-                forces et faiblesses détectées.
+                {t('home.runnerProfileDesc')}
               </p>
             </div>
           </div>
@@ -324,7 +315,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
           style={{ background: '#060e20', border: '1px solid rgba(89,65,54,0.1)' }}
         >
           <p className="text-[14px]" style={{ color: '#e2bfb0' }}>
-            Prêt à analyser votre prochaine course ?
+            {t('home.ctaReady')}
           </p>
           <button
             onClick={() => onNavigate('planificateur')}
@@ -335,7 +326,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
               boxShadow: '0 8px 24px rgba(255,109,0,0.25)',
             }}
           >
-            Importer un fichier GPX
+            {t('home.ctaImportFile')}
           </button>
         </div>
       </section>
@@ -351,20 +342,19 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
               PacePrecision
             </span>
             <p className="text-[13px] leading-[1.65]" style={{ color: '#e2bfb0' }}>
-              Outil d'analyse et de simulation pour le trail running.
-              Importez vos données, calibrez votre profil, simulez vos courses.
+              {t('home.footerDesc')}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-12">
             <div className="flex flex-col gap-5">
               <span className="text-[11px] font-semibold tracking-[1.2px] uppercase" style={{ color: '#dae2fd' }}>
-                Fonctionnalités
+                {t('home.features')}
               </span>
               <ul className="flex flex-col gap-3">
                 {[
-                  { label: 'Analyse GPX & Stratégie', page: 'planificateur' },
-                  { label: 'Profil coureur', page: 'profil' },
+                  { label: t('home.gpxStrategy'), page: 'planificateur' },
+                  { label: t('home.runnerProfile'), page: 'profil' },
                 ].map(item => (
                   <li key={item.label}>
                     <button
@@ -380,10 +370,10 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
             </div>
             <div className="flex flex-col gap-5">
               <span className="text-[11px] font-semibold tracking-[1.2px] uppercase" style={{ color: '#dae2fd' }}>
-                Sources de données
+                {t('home.dataSources')}
               </span>
               <ul className="flex flex-col gap-3">
-                {['Strava (OAuth)', 'Garmin (FIT)', 'Fichiers GPX'].map(label => (
+                {['Strava (OAuth)', 'Garmin (FIT)', t('home.gpxFiles')].map(label => (
                   <li key={label} className="text-[13px]" style={{ color: '#e2bfb0' }}>
                     {label}
                   </li>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
 import { useSupabaseSync } from '@/hooks/useSupabaseSync'
 import './App.css'
@@ -12,6 +13,7 @@ import { AccountPage } from '@/features/account/AccountPage'
 // ── Loading screen ───────────────────────────────────────────────────────────
 
 function LoadingScreen() {
+  const { t } = useTranslation()
   return (
     <div
       className="w-full min-h-screen flex items-center justify-center"
@@ -20,7 +22,7 @@ function LoadingScreen() {
       <div className="flex flex-col items-center gap-4">
         <div className="w-8 h-8 border-2 border-[#ff6d00] border-t-transparent rounded-full animate-spin" />
         <span className="text-[13px] text-[rgba(218,226,253,0.5)] tracking-wide">
-          Chargement…
+          {t('common.loading')}
         </span>
       </div>
     </div>

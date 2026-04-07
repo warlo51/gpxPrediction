@@ -5,6 +5,7 @@
  */
 
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
 import { useStravaStore } from '@/stores/stravaStore'
 import type { Page } from './NavBar'
@@ -16,10 +17,10 @@ interface SideBarProps {
   onClose: () => void
 }
 
-const NAV_ITEMS: { id: Page; label: string; icon: ReactNode }[] = [
+const NAV_ITEMS: { id: Page; labelKey: string; icon: ReactNode }[] = [
   {
     id: 'profil',
-    label: 'Dashboard',
+    labelKey: 'nav.dashboard',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <rect x="1"    y="1"    width="6.5" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
@@ -31,7 +32,7 @@ const NAV_ITEMS: { id: Page; label: string; icon: ReactNode }[] = [
   },
   {
     id: 'planificateur',
-    label: 'Course Planner',
+    labelKey: 'sidebar.coursePlanner',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <path d="M2 4.5L6 3L12 6L16 4.5V14L12 15.5L6 12.5L2 14V4.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
@@ -50,6 +51,7 @@ const IconPlus = () => (
 )
 
 export function SideBar({ activePage, onNavigate, isOpen, onClose }: SideBarProps) {
+  const { t } = useTranslation()
   const { profile } = useAppStore()
   const { athlete }  = useStravaStore()
 
@@ -59,10 +61,10 @@ export function SideBar({ activePage, onNavigate, isOpen, onClose }: SideBarProp
 
   const runnerLevel =
     profile?.enduranceScore !== undefined
-      ? profile.enduranceScore >= 0.8 ? 'Elite Level'
-        : profile.enduranceScore >= 0.5 ? 'Intermediate'
-        : 'Beginner'
-      : 'Elite Level'
+      ? profile.enduranceScore >= 0.8 ? t('sidebar.eliteLevel')
+        : profile.enduranceScore >= 0.5 ? t('sidebar.intermediate')
+        : t('sidebar.beginner')
+      : t('sidebar.eliteLevel')
 
   const handleNavClick = (page: Page) => {
     onNavigate(page)
@@ -109,7 +111,7 @@ export function SideBar({ activePage, onNavigate, isOpen, onClose }: SideBarProp
                          text-[10px] font-normal leading-[15px] tracking-[1px] uppercase
                          text-[rgba(255,182,146,0.6)]"
             >
-              Current Profile
+              {t('sidebar.currentProfile')}
             </span>
             {/* Runner name */}
             <span
@@ -152,7 +154,7 @@ export function SideBar({ activePage, onNavigate, isOpen, onClose }: SideBarProp
                     {item.icon}
                   </span>
                   <span className="text-[10px] font-normal leading-[15px] tracking-[1px] uppercase">
-                    {item.label}
+                    {t(item.labelKey)}
                   </span>
                 </button>
               )
@@ -172,7 +174,7 @@ export function SideBar({ activePage, onNavigate, isOpen, onClose }: SideBarProp
                        hover:bg-[#363d55] transition-colors"
           >
             <IconPlus />
-            New Strategy
+            {t('sidebar.newStrategy')}
           </button>
         </div>
 
