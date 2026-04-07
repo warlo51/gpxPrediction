@@ -7,7 +7,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
-import { useStravaStore } from '@/stores/stravaStore'
 import type { Page } from './NavBar'
 
 interface SideBarProps {
@@ -53,11 +52,8 @@ const IconPlus = () => (
 export function SideBar({ activePage, onNavigate, isOpen, onClose }: SideBarProps) {
   const { t } = useTranslation()
   const { profile } = useAppStore()
-  const { athlete }  = useStravaStore()
 
-  const runnerName = athlete?.firstname
-    ? `${athlete.firstname} ${athlete.lastname ?? ''}`.trim()
-    : profile?.name ?? 'Pro Runner'
+  const runnerName = profile?.name ?? 'Pro Runner'
 
   const runnerLevel =
     profile?.enduranceScore !== undefined

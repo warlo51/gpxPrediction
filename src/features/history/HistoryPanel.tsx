@@ -6,7 +6,6 @@ import { useState } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { calibrateRunner, getCalibrationSummary } from '@/services/calibration.service'
 import { formatPace } from '@/services/simulationEngine.service'
-import { StravaConnect } from '@/features/strava/StravaConnect'
 import { FitImport } from './FitImport'
 import { GarminConnect } from './GarminConnect'
 import { PremiumGate } from '@/components/PremiumGate'
@@ -366,7 +365,6 @@ export function HistoryPanel() {
   return (
     <div className="w-full flex flex-col gap-6">
       <PremiumGate>
-        <StravaConnect />
         <GarminConnect />
       </PremiumGate>
       <FitImport />
@@ -439,13 +437,11 @@ function SourceBadge({ source, id }: { source: TrainingSession['source']; id?: s
   }
   const styles: Record<TrainingSession['source'], string> = {
     manual: 'bg-slate-700 text-slate-300',
-    strava: 'bg-orange-900/50 text-orange-400',
     garmin: 'bg-sky-900/50 text-sky-400',
     gpx: 'bg-indigo-900/50 text-indigo-400',
   }
   const labels: Record<TrainingSession['source'], string> = {
     manual: 'Manuel',
-    strava: 'Strava',
     garmin: '🏔️ Garmin',
     gpx: 'GPX',
   }

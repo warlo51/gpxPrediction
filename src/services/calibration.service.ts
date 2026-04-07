@@ -477,13 +477,9 @@ export function calibrateRunner(
 ): RunnerProfile {
   if (history.length === 0) return baseProfile
 
-  // ── 0. Priorité Garmin > Strava
-  // Les données Garmin (FIT files) sont plus complètes que Strava (streams API limités).
-  // Si l'utilisateur a des sessions Garmin, on exclut les sessions Strava de la calibration.
+  // ── 0. Sélection de l'historique de calibration
   const hasGarminSessions = history.some(s => s.source === 'garmin')
-  const calibrationHistory = hasGarminSessions
-    ? history.filter(s => s.source !== 'strava')
-    : history
+  const calibrationHistory = history
 
   // ── 1. Extraction des métriques
   const metrics = calibrationHistory
@@ -540,11 +536,7 @@ export function calibrateRunner(
   const calibratedWalkingSpeed = calibrateWalkingSpeed(metrics)
 
   // ── 7. Assemblage du profil calibré
-  const calibrationSource: CalibrationSource = hasGarminSessions
-    ? 'garmin'
-    : calibrationHistory.some(s => s.source === 'strava')
-      ? 'strava'
-      : 'mixed'
+  const calibrationSource: CalibrationSource = hasGarminSessions ? 'garmin' : 'mixed'
 
   return {
     ...baseProfile,

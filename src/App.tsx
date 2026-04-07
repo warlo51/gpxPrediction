@@ -10,6 +10,9 @@ import { PlanificateurPage } from '@/features/gpx/PlanificateurPage'
 import { ProfilPage } from '@/features/runner/ProfilPage'
 import { AccountPage } from '@/features/account/AccountPage'
 
+// Migration : purger les données Strava persistées en localStorage
+localStorage.removeItem('strava-store')
+
 // ── Loading screen ───────────────────────────────────────────────────────────
 
 function LoadingScreen() {
@@ -41,15 +44,6 @@ function App() {
     const unsubscribe = initialize()
     return unsubscribe
   }, [initialize])
-
-  // Retour du callback OAuth Strava → aller sur le compte (import historique)
-  useEffect(() => {
-    if (!window.location.pathname.includes('/strava/callback')) return
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('code') || params.get('error')) {
-      setActivePage('compte')
-    }
-  }, [])
 
   if (loading) return <LoadingScreen />
 

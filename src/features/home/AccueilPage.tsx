@@ -243,10 +243,6 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
             <div className="flex gap-3 mt-8">
               <div className="px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide"
                 style={{ background: 'rgba(88,33,0,0.2)', color: '#582100' }}>
-                {t('home.stravaApi')}
-              </div>
-              <div className="px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide"
-                style={{ background: 'rgba(88,33,0,0.2)', color: '#582100' }}>
                 {t('home.fitFiles')}
               </div>
             </div>
@@ -373,7 +369,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
                 {t('home.dataSources')}
               </span>
               <ul className="flex flex-col gap-3">
-                {['Strava (OAuth)', 'Garmin (FIT)', t('home.gpxFiles')].map(label => (
+                {['Garmin (FIT)', t('home.gpxFiles')].map(label => (
                   <li key={label} className="text-[13px]" style={{ color: '#e2bfb0' }}>
                     {label}
                   </li>

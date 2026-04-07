@@ -431,7 +431,7 @@ export function RunnerAnalysisPanel() {
         <span className="text-5xl">📊</span>
         <h3 className="text-white font-bold text-lg">Aucun historique disponible</h3>
         <p className="text-slate-500 text-sm max-w-sm">
-          Connectez votre compte Strava dans l'onglet <strong className="text-slate-300">Historique</strong> pour débloquer l'analyse complète de votre profil.
+          Importez vos fichiers FIT Garmin dans l'onglet <strong className="text-slate-300">Historique</strong> pour débloquer l'analyse complète de votre profil.
         </p>
       </div>
     )
