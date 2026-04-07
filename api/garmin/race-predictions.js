@@ -115,11 +115,36 @@ export default async function handler(req, res) {
             halfMarathon = find('HALFMARATHON')
             marathon = find('MARATHON')
           } else {
-            // Forme objet plate
-            fiveK = racePredictions.raceTime5K ?? racePredictions.time5K ?? null
-            tenK = racePredictions.raceTime10K ?? racePredictions.time10K ?? null
-            halfMarathon = racePredictions.raceTimeHalf ?? racePredictions.raceTimeHalfMarathon ?? racePredictions.timeHalf ?? null
-            marathon = racePredictions.raceTimeMarathon ?? racePredictions.timeMarathon ?? null
+            // Forme objet plate — scan tolérant des clés (Garmin varie selon les versions)
+            // On cherche par mots-clés dans les noms de champs pour rester robuste.
+            const entries = Object.entries(racePredictions)
+            const findByKeyword = (keywords, exclude = []) => {
+              for (const [key, value] of entries) {
+                const lower = key.toLowerCase()
+                if (typeof value !== 'number' || value <= 0) continue
+                if (exclude.some(ex => lower.includes(ex))) continue
+                if (keywords.every(kw => lower.includes(kw))) return value
+              }
+              return null
+            }
+
+            // 5K : clé contenant "5k" (mais pas "15k"). Exclure marathon/half.
+            fiveK = findByKeyword(['5k'], ['15k', 'half', 'marathon'])
+              ?? racePredictions.raceTime5K ?? racePredictions.time5K ?? null
+            // 10K
+            tenK = findByKeyword(['10k'], ['half', 'marathon'])
+              ?? racePredictions.raceTime10K ?? racePredictions.time10K ?? null
+            // Semi-marathon : "half" ou "21k"
+            halfMarathon = findByKeyword(['half'])
+              ?? findByKeyword(['21k'])
+              ?? racePredictions.raceTimeHalf
+              ?? racePredictions.raceTimeHalfMarathon
+              ?? racePredictions.raceTimeHM
+              ?? null
+            // Marathon (pas half)
+            marathon = findByKeyword(['marathon'], ['half'])
+              ?? racePredictions.raceTimeMarathon
+              ?? null
           }
         }
 
