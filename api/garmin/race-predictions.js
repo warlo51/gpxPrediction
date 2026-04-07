@@ -14,21 +14,34 @@ const { GarminConnect } = pkg
 // ─── Fallback : prédictions depuis VO2max (Jack Daniels) ──────────────────────
 
 /**
- * Estime les temps de course depuis le VO2max via la formule de Jack Daniels.
- * vVO2max (m/s) = VO2max * 0.0345 + 0.182
- * Pourcentages d'utilisation par distance (basés sur la table VDOT) :
- *   5K  ≈ 97.5%  vVO2max
- *   10K ≈ 93%    vVO2max
- *   HM  ≈ 86%    vVO2max
- *   M   ≈ 78%    vVO2max
+ * Calcule la vitesse à VO2max (m/s) depuis le VO2max (mL/kg/min)
+ * en inversant la formule de Daniels :
+ *   VO2 = 0.000104 × v² + 0.182258 × v - 4.60   (v en m/min)
+ * Résolution quadratique → v en m/s
+ */
+function vVo2maxFromVo2max(vo2max) {
+  const a = 0.000104
+  const b = 0.182258
+  const c = -(vo2max + 4.60)
+  const vMperMin = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a)
+  return vMperMin / 60 // m/s
+}
+
+/**
+ * Estime les temps de course depuis le VO2max via la table VDOT de Daniels.
+ * Pourcentages d'utilisation par distance :
+ *   5K  ≈ 98%  vVO2max
+ *   10K ≈ 90%  vVO2max
+ *   HM  ≈ 84%  vVO2max
+ *   M   ≈ 76%  vVO2max
  */
 function computePredictionsFromVo2max(vo2max) {
-  const vVo2max = vo2max * 0.0345 + 0.182 // m/s à VO2max
+  const vVo2max = vVo2maxFromVo2max(vo2max)
   return {
-    fiveK: Math.round(5000 / (vVo2max * 0.975)),
-    tenK: Math.round(10000 / (vVo2max * 0.93)),
-    halfMarathon: Math.round(21097 / (vVo2max * 0.86)),
-    marathon: Math.round(42195 / (vVo2max * 0.78)),
+    fiveK: Math.round(5000 / (vVo2max * 0.98)),
+    tenK: Math.round(10000 / (vVo2max * 0.90)),
+    halfMarathon: Math.round(21097 / (vVo2max * 0.84)),
+    marathon: Math.round(42195 / (vVo2max * 0.76)),
     source: 'computed',
     updatedAt: new Date().toISOString(),
   }
@@ -64,7 +77,7 @@ export default async function handler(req, res) {
     const client = new GarminConnect({ username: '', password: '' })
     client.loadToken(oauth1, oauth2)
 
-    // ── 1. Récupérer le profileId + VO2max en parallèle
+    // ── 1. Récupérer le profil (displayName) + VO2max en parallèle
     const [profileResult, settingsResult] = await Promise.allSettled([
       client.getUserProfile(),
       client.getUserSettings(),
@@ -73,29 +86,49 @@ export default async function handler(req, res) {
     const profile = profileResult.status === 'fulfilled' ? profileResult.value : null
     const settings = settingsResult.status === 'fulfilled' ? settingsResult.value : null
     const vo2max = settings?.userData?.vo2MaxRunning ?? null
-    const profileId = profile?.profileId ?? null
+    const displayName = profile?.displayName ?? profile?.userName ?? null
 
-    // ── 2. Tenter l'endpoint race predictor natif Garmin
-    if (profileId) {
+    // ── 2. Tenter l'endpoint Firstbeat race predictor natif Garmin
+    //    Endpoint authentique : /metrics-service/metrics/racepredictions/latest/{displayName}
+    //    Retourne les prédictions Firstbeat (basées sur VO2max + historique récent + VFC)
+    if (displayName) {
       try {
         const racePredictions = await client.get(
-          `/proxy/runningracepredictor-service/racePredictions/running/${profileId}`,
+          `/metrics-service/metrics/racepredictions/latest/${encodeURIComponent(displayName)}`,
         )
-        // L'API Garmin retourne les temps en secondes dans racePredictions[]
-        // Chaque élément : { raceDistance: '5K'|'10K'|'HALF_MARATHON'|'MARATHON', raceTime: seconds }
-        if (Array.isArray(racePredictions) && racePredictions.length > 0) {
-          const find = (key) => {
-            const entry = racePredictions.find(p =>
-              (p.raceDistance ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '') === key
-            )
-            return entry?.raceTime ?? null
-          }
+        console.log('[race-predictions] raw Garmin response:', JSON.stringify(racePredictions))
 
+        // La réponse Garmin peut être un objet { raceTime5K, raceTime10K, raceTimeHalf, raceTimeMarathon }
+        // ou un tableau d'objets avec raceDistance/raceTime selon la version de l'API.
+        let fiveK = null, tenK = null, halfMarathon = null, marathon = null
+
+        if (racePredictions && typeof racePredictions === 'object') {
+          if (Array.isArray(racePredictions)) {
+            const find = (key) => {
+              const entry = racePredictions.find(p =>
+                (p.raceDistance ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '') === key
+              )
+              return entry?.raceTime ?? null
+            }
+            fiveK = find('5K')
+            tenK = find('10K')
+            halfMarathon = find('HALFMARATHON')
+            marathon = find('MARATHON')
+          } else {
+            // Forme objet plate
+            fiveK = racePredictions.raceTime5K ?? racePredictions.time5K ?? null
+            tenK = racePredictions.raceTime10K ?? racePredictions.time10K ?? null
+            halfMarathon = racePredictions.raceTimeHalf ?? racePredictions.raceTimeHalfMarathon ?? racePredictions.timeHalf ?? null
+            marathon = racePredictions.raceTimeMarathon ?? racePredictions.timeMarathon ?? null
+          }
+        }
+
+        if (fiveK || tenK || halfMarathon || marathon) {
           return res.status(200).json({
-            fiveK: find('5K'),
-            tenK: find('10K'),
-            halfMarathon: find('HALFMARATHON'),
-            marathon: find('MARATHON'),
+            fiveK,
+            tenK,
+            halfMarathon,
+            marathon,
             source: 'garmin',
             updatedAt: new Date().toISOString(),
           })

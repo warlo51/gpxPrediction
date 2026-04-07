@@ -458,6 +458,37 @@ export async function fetchGarminRacePredictions(
   return data
 }
 
+// ─── Calcul prédictions depuis VO2max (Jack Daniels) ────────────────────────
+
+/**
+ * Calcule la vitesse à VO2max (m/s) en inversant la formule de Jack Daniels :
+ *   VO2 = 0.000104 × v² + 0.182258 × v - 4.60   (v en m/min)
+ * Résolution quadratique → v en m/s
+ */
+function vVo2maxFromVo2max(vo2max: number): number {
+  const a = 0.000104
+  const b = 0.182258
+  const c = -(vo2max + 4.60)
+  const vMperMin = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a)
+  return vMperMin / 60 // m/s
+}
+
+/**
+ * Estime les temps de course depuis le VO2max via la table VDOT de Daniels.
+ * Pourcentages d'utilisation : 5K=98%, 10K=90%, HM=84%, M=76% de vVO2max.
+ */
+function computeRacePredictionsFromVo2max(vo2max: number): GarminRacePredictions {
+  const vVo2max = vVo2maxFromVo2max(vo2max)
+  return {
+    fiveK: Math.round(5000 / (vVo2max * 0.98)),
+    tenK: Math.round(10000 / (vVo2max * 0.90)),
+    halfMarathon: Math.round(21097 / (vVo2max * 0.84)),
+    marathon: Math.round(42195 / (vVo2max * 0.76)),
+    source: 'computed',
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 // ─── Sync Garmin profile (stats + prédictions + wellness) ────────────────────
 
 export type GarminSyncResult = {
@@ -510,15 +541,7 @@ export async function syncGarminProfile(
   // ── Fallback client-side : si le backend race-predictions n'a pas pu fournir
   // de données mais qu'on a un VO2max, on calcule les prédictions ici
   if (racePredictions.source === 'unavailable' && userStats.vo2MaxRunning && userStats.vo2MaxRunning > 20) {
-    const vVo2max = userStats.vo2MaxRunning * 0.0345 + 0.182
-    racePredictions = {
-      fiveK: Math.round(5000 / (vVo2max * 0.975)),
-      tenK: Math.round(10000 / (vVo2max * 0.93)),
-      halfMarathon: Math.round(21097 / (vVo2max * 0.86)),
-      marathon: Math.round(42195 / (vVo2max * 0.78)),
-      source: 'computed',
-      updatedAt: new Date().toISOString(),
-    }
+    racePredictions = computeRacePredictionsFromVo2max(userStats.vo2MaxRunning)
     console.log('[Garmin] Race predictions computed client-side from VO2max:', racePredictions)
   }
 
@@ -567,10 +590,10 @@ export function buildProfileFromGarminStats(
     basePaceSecPerKm = Math.round(1000 / (flatSpeed * 0.87))
     console.log('[buildProfile] flatSpeed from 5K prediction:', { v5K, flatSpeed })
   } else if (userStats.vo2MaxRunning && userStats.vo2MaxRunning > 20) {
-    const vVo2max = userStats.vo2MaxRunning * 0.0345 + 0.182
-    flatSpeed = vVo2max * 0.87  // vitesse à ~87% vVO2max (allure marathon ~80%, 10K ~93%, plat moyen ≈ 87%)
-    basePaceSecPerKm = Math.round(1000 / (vVo2max * 0.93))
-    console.log('[buildProfile] flatSpeed from VO2max:', { vo2max: userStats.vo2MaxRunning, flatSpeed })
+    const vVo2max = vVo2maxFromVo2max(userStats.vo2MaxRunning)
+    flatSpeed = vVo2max * 0.87  // vitesse à ~87% vVO2max (allure marathon ~80%, 10K ~90%, plat moyen ≈ 87%)
+    basePaceSecPerKm = Math.round(1000 / (vVo2max * 0.90))
+    console.log('[buildProfile] flatSpeed from VO2max:', { vo2max: userStats.vo2MaxRunning, vVo2max, flatSpeed })
   }
 
   // ── Seuil lactate (vitesse)
