@@ -254,16 +254,7 @@
     "connectingToGarmin": "Conectando con Garmin\u2026",
     "validateCode": "Validar c\u00f3digo",
     "connectToGarmin": "Conectar con Garmin Connect",
-    "sessionsImported": "{{count}} sesi\u00f3n(es) importada(s)",
-    "updateFromGarmin": "Actualizar desde Garmin",
-    "importGarminActivities": "Importar mis actividades Garmin",
-    "importInProgress": "Importaci\u00f3n en curso\u2026",
-    "newActivitiesImported": "{{count}} nueva(s) actividad(es) importada(s)",
-    "withFitData": "incluyendo {{count}} con datos FIT completos",
-    "profileRecalibrated": "Perfil recalibrado con datos brutos de Garmin \u2014 potencia, cadencia y Running Dynamics ahora est\u00e1n integrados en el modelo de simulaci\u00f3n.",
-    "fetchingActivities": "Recuperando actividades\u2026 {{loaded}}/{{total}}",
-    "fetchingFit": "FIT {{current}}/{{total}} \u2014 {{name}}",
-    "calibratingGarmin": "Calibrando perfil con datos de Garmin\u2026"
+    "updateFromGarmin": "Actualizar desde Garmin"
   },
   "elevation": {
     "flat": "Llano",

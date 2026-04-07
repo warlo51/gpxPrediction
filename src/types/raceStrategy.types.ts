@@ -72,6 +72,21 @@ export interface StrategyRecommendation {
   reason: string
 }
 
+export interface GarminCurveAnchor {
+  /** Temps total prédit par la courbe Garmin + km-effort (secondes) */
+  totalTimeSeconds: number
+  /** Distance km-effort en km (plat + majoration D+/D-) */
+  kmEffortDistanceKm: number
+  /** Exposant de Riegel calibré sur les données Garmin du coureur */
+  riegelExponent: number
+  /** Fiabilité selon le nombre de prédictions Garmin disponibles */
+  confidence: 'high' | 'medium' | 'low'
+  /** Source des prédictions Garmin (garmin / computed / unavailable) */
+  predictionSource: 'garmin' | 'computed' | 'unavailable'
+  /** Facteur appliqué au flatSpeed du profil pour caler la simulation sur la courbe */
+  flatSpeedScaleFactor: number
+}
+
 export interface RaceStrategyReport {
   generatedAt: Date
   trackName: string
@@ -82,4 +97,6 @@ export interface RaceStrategyReport {
   lecture: LectureBullet[]
   carbToleranceGPerHour: number
   recommendation: StrategyRecommendation
+  /** Ancrage sur la courbe Garmin — présent si des prédictions Garmin étaient disponibles */
+  garminCurveAnchor?: GarminCurveAnchor
 }

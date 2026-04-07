@@ -99,6 +99,17 @@ export type RunnerProfile = {
   lactateThresholdSpeed?: number
 }
 
+/** Prédictions de course calculées par Garmin/Firstbeat */
+export type GarminRacePredictions = {
+  fiveK: number | null        // secondes
+  tenK: number | null
+  halfMarathon: number | null
+  marathon: number | null
+  /** 'garmin' = endpoint natif Firstbeat, 'computed' = calculé depuis VO2max */
+  source: 'garmin' | 'computed' | 'unavailable'
+  updatedAt: string | null
+}
+
 /** Stats agrégées calculées depuis l'historique */
 export type RunnerStats = {
   totalSessions: number

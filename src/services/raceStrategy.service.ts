@@ -4,7 +4,7 @@
  * à partir d'un GpxTrack + RunnerProfile, sans appel API externe.
  */
 
-import type { GpxTrack, RunnerProfile, SegmentSimulation } from '@/types'
+import type { GpxTrack, RunnerProfile, SegmentSimulation, GarminRacePredictions } from '@/types'
 import type {
   RaceStrategyReport,
   StrategyPlan,
@@ -14,8 +14,10 @@ import type {
   NutritionVerdict,
   RaceStrategyId,
   StrategyRecommendation,
+  GarminCurveAnchor,
 } from '@/types/raceStrategy.types'
 import { runSimulation, formatDuration, formatPace } from './simulationEngine.service'
+import { predictFromGarminCurve } from './racePredictor.service'
 
 // ─── Configs des 3 stratégies ──────────────────────────────────────────────────
 
@@ -380,17 +382,83 @@ function computeRecommendation(
 
 // ─── Fonction principale ───────────────────────────────────────────────────────
 
+/**
+ * Calcule le profil ajusté pour que la simulation Minetti (stratégie "objectif" neutre)
+ * colle au temps prédit par la courbe Garmin + km-effort.
+ *
+ * L'idée : on garde toute la granularité du modèle Minetti (FC, fatigue, phases…) mais
+ * on cale la vitesse de base pour que le temps total reflète les prédictions réelles
+ * du Firstbeat (ou Daniels fallback). Les 3 stratégies continuent ensuite de différer
+ * via leur courbe d'effort.
+ */
+function anchorProfileOnGarminCurve(
+  track: GpxTrack,
+  profile: RunnerProfile,
+  garminPredictions: GarminRacePredictions,
+): { profile: RunnerProfile; anchor: GarminCurveAnchor } | null {
+  // Besoin d'au moins une prédiction Garmin exploitable
+  const hasPrediction =
+    !!garminPredictions.fiveK ||
+    !!garminPredictions.tenK ||
+    !!garminPredictions.halfMarathon ||
+    !!garminPredictions.marathon
+  if (!hasPrediction) return null
+
+  const curvePrediction = predictFromGarminCurve(garminPredictions, track)
+  if (curvePrediction.totalTimeSeconds <= 0) return null
+
+  // Baseline Minetti avec stratégie "objectif" neutre (effortFactor 1.0)
+  const baseline = runSimulation(track, profile, {
+    strategyId: 'performance',
+    effortFactor: 1.0,
+    applyFatigue: true,
+    applyCardiacDrift: true,
+  })
+  if (baseline.totalDuration <= 0) return null
+
+  // Ratio pour recaler la vitesse : si Minetti prédit plus lent que Garmin,
+  // on accélère (scale > 1), sinon on ralentit.
+  const flatSpeedScaleFactor = baseline.totalDuration / curvePrediction.totalTimeSeconds
+
+  const adjustedProfile: RunnerProfile = {
+    ...profile,
+    speedModel: {
+      ...profile.speedModel,
+      flatSpeed: profile.speedModel.flatSpeed * flatSpeedScaleFactor,
+    },
+  }
+
+  const anchor: GarminCurveAnchor = {
+    totalTimeSeconds: curvePrediction.totalTimeSeconds,
+    kmEffortDistanceKm: Math.round(curvePrediction.kmEffortDistanceKm * 10) / 10,
+    riegelExponent: Math.round(curvePrediction.riegelExponent * 1000) / 1000,
+    confidence: curvePrediction.confidence,
+    predictionSource: curvePrediction.predictionSource,
+    flatSpeedScaleFactor: Math.round(flatSpeedScaleFactor * 1000) / 1000,
+  }
+
+  return { profile: adjustedProfile, anchor }
+}
+
 export function generateRaceStrategy(
   track: GpxTrack,
   profile: RunnerProfile,
   carbToleranceGPerHour = 60,
+  garminPredictions?: GarminRacePredictions | null,
 ): RaceStrategyReport {
-  const maxHR   = profile.heartRateModel.maxHR
+  // Ancrage optionnel sur la courbe Garmin : si les prédictions Firstbeat sont
+  // disponibles, on recale le flatSpeed du profil pour que les temps totaux y collent.
+  const anchoring = garminPredictions
+    ? anchorProfileOnGarminCurve(track, profile, garminPredictions)
+    : null
+  const simProfile = anchoring?.profile ?? profile
+
+  const maxHR   = simProfile.heartRateModel.maxHR
   const simMap  = new Map<RaceStrategyId, SegmentSimulation[]>()
   const plans: StrategyPlan[] = []
 
   for (const config of STRATEGY_CONFIGS) {
-    const result = runSimulation(track, profile, {
+    const result = runSimulation(track, simProfile, {
       strategyId:       config.strategyId,
       effortFactor:     config.effortFactor,
       applyFatigue:     true,
@@ -443,7 +511,7 @@ export function generateRaceStrategy(
     track,
     simMap.get('objectif')!,
     simMap.get('ambitieuse')!,
-    profile,
+    simProfile,
   )
 
   const recommendation = computeRecommendation(track, profile, plans)
@@ -458,5 +526,6 @@ export function generateRaceStrategy(
     lecture,
     carbToleranceGPerHour,
     recommendation,
+    ...(anchoring?.anchor && { garminCurveAnchor: anchoring.anchor }),
   }
 }

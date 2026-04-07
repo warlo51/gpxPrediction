@@ -8,10 +8,9 @@ import { useState, useCallback } from 'react'
 import { useGarminStore } from '@/stores/garminStore'
 import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
-import { calibrateRunner } from '@/services/calibration.service'
-import { garminLogin, importGarminActivities, fetchGarminUserStats } from '@/services/garmin.service'
-import { saveSessions, saveRunnerProfile, saveGarminConnection } from '@/services/supabase.service'
-import type { GarminImportProgress } from '@/services/garmin.service'
+import { garminLogin, syncGarminProfile, buildProfileFromGarminStats } from '@/services/garmin.service'
+import { saveRunnerProfile, saveGarminConnection } from '@/services/supabase.service'
+import { formatRaceTime } from '@/services/racePredictor.service'
 
 // ─── Formulaire de connexion ──────────────────────────────────────────────────
 
@@ -187,137 +186,54 @@ function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
   )
 }
 
-// ─── Panel d'import ───────────────────────────────────────────────────────────
+// ─── Panel de synchronisation Garmin ─────────────────────────────────────────
 
-function GarminImportPanel() {
+function GarminSyncPanel() {
   const { oauth1, oauth2, profile, disconnect } = useGarminStore()
-  const { sessions, addSession, clearSessions, profile: runnerProfile, setProfile } = useAppStore()
-  const [importState, setImportState] = useState<GarminImportProgress | null>(null)
-  const [lastResult, setLastResult] = useState<{
-    imported: number; skipped: number; withFit: number
-  } | null>(null)
+  const { profile: runnerProfile, setProfile, garminRacePredictions, setGarminRacePredictions } = useAppStore()
+  const [syncing, setSyncing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [syncedAt, setSyncedAt] = useState<Date | null>(
+    garminRacePredictions?.updatedAt ? new Date(garminRacePredictions.updatedAt) : null
+  )
 
-  const sessionsFromGarmin = sessions.filter(s => s.id.startsWith('garmin-'))
-
-  const handleImport = useCallback(async () => {
+  const handleSync = useCallback(async () => {
     if (!oauth1 || !oauth2) return
-    setLastResult(null)
+    setSyncing(true)
+    setError(null)
 
     try {
-      // Garder uniquement les sessions Garmin existantes (virer Strava/demo/manual)
-      const garminSessions = sessions.filter(s => s.source === 'garmin')
-      const existingIds = new Set(garminSessions.map(s => s.id))
+      console.log('[GarminSync] Starting sync…')
+      const syncResult = await syncGarminProfile(oauth1, oauth2)
 
-      console.log('[GarminImport] Starting import — clearing non-Garmin sessions')
-      console.log('[GarminImport] Current sessions:', sessions.length, '(garmin:', garminSessions.length, ', other:', sessions.length - garminSessions.length, ')')
+      // Construire le profil depuis les stats Garmin directes
+      const updatedProfile = buildProfileFromGarminStats(syncResult, runnerProfile)
+      setProfile(updatedProfile)
+      setGarminRacePredictions(syncResult.racePredictions)
+      setSyncedAt(new Date())
 
-      const { sessions: newSessions, withFit, skipped } = await importGarminActivities(
-        oauth1, oauth2, existingIds,
-        (state) => setImportState(state),
-      )
+      console.log('[GarminSync] Profile updated:', {
+        vo2Max: updatedProfile.vo2Max,
+        flatSpeed: updatedProfile.speedModel.flatSpeed,
+        racePredictions: syncResult.racePredictions.source,
+      })
 
-      console.log('[GarminImport] Import result:', { new: newSessions.length, withFit, skipped })
-
-      // Reset le store : vider tout et remettre uniquement les sessions Garmin
-      clearSessions()
-      console.log('[GarminImport] Store cleared — re-adding Garmin sessions')
-
-      // Re-ajouter les sessions Garmin existantes + les nouvelles
-      for (const s of garminSessions) addSession(s)
-      for (const s of newSessions) addSession(s)
-
-      const allGarminSessions = [...garminSessions, ...newSessions]
-      console.log('[GarminImport] Total Garmin sessions in store:', allGarminSessions.length)
-
-      // Recalibrer le profil avec toutes les sessions Garmin
-      setImportState({ phase: 'calibrating' })
-      const calibrated = calibrateRunner(allGarminSessions, runnerProfile)
-
-      // Récupérer la VO2max officielle Garmin et l'injecter dans le profil
-      try {
-        const userStats = await fetchGarminUserStats(oauth1, oauth2)
-        if (userStats.vo2MaxRunning) {
-          console.log('[GarminImport] Garmin VO2max:', userStats.vo2MaxRunning)
-          calibrated.vo2Max = userStats.vo2MaxRunning
-        }
-        if (userStats.lactateThresholdHeartRate) {
-          console.log('[GarminImport] Garmin lactate threshold HR:', userStats.lactateThresholdHeartRate)
-          calibrated.heartRateModel = {
-            ...calibrated.heartRateModel,
-            lactateThresholdHR: userStats.lactateThresholdHeartRate,
-          }
-        }
-        if (userStats.lactateThresholdSpeed) {
-          // L'API Garmin Connect renvoie lactateThresholdSpeed dans une unité non documentée.
-          // Valeur attendue en m/s pour un coureur : 2.0–6.0 (≈ 2:47–8:20/km).
-          // Si la valeur brute est < 1.0, c'est vraisemblablement un facteur ×10 manquant.
-          let ltSpeed = userStats.lactateThresholdSpeed
-          console.log('[GarminImport] Garmin lactate threshold speed raw:', ltSpeed)
-          if (ltSpeed > 0 && ltSpeed < 1.0) {
-            ltSpeed = ltSpeed * 10
-            console.log('[GarminImport] Normalized LT speed (×10):', ltSpeed, 'm/s')
-          }
-          calibrated.lactateThresholdSpeed = ltSpeed
-        }
-      } catch (err) {
-        console.warn('[GarminImport] Could not fetch Garmin user-stats:', err)
-      }
-
-      setProfile(calibrated)
-      console.log('[GarminImport] Profile recalibrated:', { vo2Max: calibrated.vo2Max, sessionCount: calibrated.sessionCount })
-
-      // Sauvegarder en DB pour tout utilisateur authentifié
+      // Sauvegarder en DB
       const { user } = useAuthStore.getState()
       if (user) {
-        try {
-          console.log('[GarminImport] Saving sessions to DB:', allGarminSessions.length)
-          await saveSessions(user.id, allGarminSessions)
-          console.log('[GarminImport] Sessions saved to DB successfully')
-        } catch (err) {
-          console.error('[GarminImport] Error saving sessions to DB:', err)
-        }
-        try {
-          console.log('[GarminImport] Saving runner profile to DB')
-          await saveRunnerProfile(user.id, calibrated)
-          console.log('[GarminImport] Runner profile saved to DB successfully')
-        } catch (err) {
-          console.error('[GarminImport] Error saving runner profile to DB:', err)
-        }
-      } else {
-        console.warn('[GarminImport] No authenticated user — skipping DB save')
+        saveRunnerProfile(user.id, updatedProfile).catch(err => {
+          console.error('[GarminSync] Error saving profile to DB:', err)
+        })
       }
-
-      setLastResult({ imported: newSessions.length, skipped, withFit })
-      setImportState(null)
     } catch (err) {
-      console.error('[GarminImport] Import failed:', err)
-      setImportState({
-        phase: 'error',
-        message: err instanceof Error ? err.message : 'Erreur import',
-      })
+      console.error('[GarminSync] Sync failed:', err)
+      setError(err instanceof Error ? err.message : 'Erreur de synchronisation')
+    } finally {
+      setSyncing(false)
     }
-  }, [oauth1, oauth2, sessions, addSession, clearSessions, runnerProfile, setProfile])
+  }, [oauth1, oauth2, runnerProfile, setProfile, setGarminRacePredictions])
 
-  const isImporting = importState !== null && importState.phase !== 'error'
-
-  // Barre de progression
-  const progressLabel = importState
-    ? importState.phase === 'activities'
-      ? `Récupération des activités… ${importState.loaded}/${importState.total}`
-      : importState.phase === 'fit'
-        ? `FIT ${importState.current}/${importState.total} — ${importState.activityName}`
-        : importState.phase === 'calibrating'
-          ? 'Calibration du profil avec les données Garmin…'
-          : ''
-    : ''
-
-  const progressValue = importState
-    ? importState.phase === 'activities'
-      ? importState.total > 0 ? importState.loaded / importState.total : null
-      : importState.phase === 'fit'
-        ? importState.current / importState.total
-        : null
-    : null
+  const predictions = garminRacePredictions
 
   return (
     <div className="space-y-4">
@@ -334,110 +250,114 @@ function GarminImportPanel() {
           )}
           <div>
             <div className="text-white font-semibold text-sm">{profile?.displayName ?? 'Garmin Connect'}</div>
-            <div className="text-slate-500 text-xs">{sessionsFromGarmin.length} séance{sessionsFromGarmin.length > 1 ? 's' : ''} importée{sessionsFromGarmin.length > 1 ? 's' : ''}</div>
+            <div className="text-slate-500 text-xs">
+              {syncedAt
+                ? `Synchro : ${syncedAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                : 'Pas encore synchronisé'}
+            </div>
           </div>
           <span className="text-xs px-2 py-0.5 bg-sky-900/40 text-sky-400 rounded-full border border-sky-800/40">
-            ✅ Connecté
+            Connecté
           </span>
         </div>
-        <button onClick={disconnect} className="text-xs text-slate-500 hover:text-red-400 transition-colors">
+        <button type="button" onClick={disconnect} className="text-xs text-slate-500 hover:text-red-400 transition-colors">
           Déconnecter
         </button>
       </div>
 
-      {/* Avantages données Garmin vs Strava */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[
-          { icon: '⚡', label: 'Running Power', sub: 'Epix Pro natif' },
-          { icon: '🦵', label: 'Cadence + GCT', sub: 'Ceinture HRM' },
-          { icon: '📈', label: 'VO2max Garmin', sub: 'Estimé montre' },
-          { icon: '🎯', label: 'Training Effect', sub: 'Aérobie + anaérobie' },
-        ].map(item => (
-          <div key={item.label} className="bg-sky-950/20 border border-sky-800/20 rounded-xl p-2.5 text-center">
-            <div className="text-base mb-1">{item.icon}</div>
-            <div className="text-sky-300 text-xs font-medium">{item.label}</div>
-            <div className="text-slate-600 text-[10px]">{item.sub}</div>
-          </div>
-        ))}
-      </div>
+      {/* Stats physiologiques (après sync) */}
+      {runnerProfile.vo2Max && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {[
+            {
+              icon: '📈',
+              label: 'VO2max',
+              value: `${runnerProfile.vo2Max.toFixed(1)} ml/kg/min`,
+            },
+            {
+              icon: '🎯',
+              label: 'Seuil lactate',
+              value: runnerProfile.heartRateModel.lactateThresholdHR
+                ? `${runnerProfile.heartRateModel.lactateThresholdHR} bpm`
+                : '—',
+            },
+            {
+              icon: '❤️',
+              label: 'FC repos',
+              value: `${runnerProfile.heartRateModel.restingHR} bpm`,
+            },
+            {
+              icon: '⚡',
+              label: 'Allure 10K',
+              value: runnerProfile.basePaceSecPerKm > 0
+                ? `${Math.floor(runnerProfile.basePaceSecPerKm / 60)}:${String(runnerProfile.basePaceSecPerKm % 60).padStart(2, '0')}/km`
+                : '—',
+            },
+          ].map(item => (
+            <div key={item.label} className="bg-sky-950/20 border border-sky-800/20 rounded-xl p-2.5 text-center">
+              <div className="text-base mb-1">{item.icon}</div>
+              <div className="text-sky-300 text-xs font-medium">{item.label}</div>
+              <div className="text-white text-xs font-semibold mt-0.5">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Bouton import */}
+      {/* Prédictions de course Garmin */}
+      {predictions && (
+        <div className="bg-black/20 border border-white/6 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+              Prédictions Garmin — plat
+            </span>
+            <span className="text-[10px] text-slate-600">
+              {predictions.source === 'garmin'
+                ? 'Firstbeat Analytics'
+                : predictions.source === 'computed'
+                  ? 'Calculé depuis VO2max'
+                  : 'Indisponible'}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: '5K', value: predictions.fiveK },
+              { label: '10K', value: predictions.tenK },
+              { label: 'Semi', value: predictions.halfMarathon },
+              { label: 'Marathon', value: predictions.marathon },
+            ].map(({ label, value }) => (
+              <div key={label} className="text-center">
+                <div className="text-slate-500 text-[10px] mb-0.5">{label}</div>
+                <div className="text-white text-sm font-semibold">
+                  {value ? formatRaceTime(value) : '—'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Bouton sync */}
       <button
-        onClick={() => void handleImport()}
-        disabled={isImporting}
+        type="button"
+        onClick={() => void handleSync()}
+        disabled={syncing}
         className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50
                    text-white font-semibold text-sm transition-all flex items-center justify-center gap-2"
       >
-        {isImporting ? (
+        {syncing ? (
           <>
             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            Import en cours…
+            Synchronisation…
           </>
         ) : (
-          `⬇️ ${sessionsFromGarmin.length > 0 ? 'Mettre à jour depuis Garmin' : 'Importer mes activités Garmin'}`
+          'Synchroniser les données Garmin'
         )}
       </button>
 
-      {/* Progression */}
-      {isImporting && progressLabel && (
-        <div className="space-y-1.5">
-          <p className="text-xs text-slate-400 truncate">{progressLabel}</p>
-          <div className="h-1.5 bg-white/6 rounded-full overflow-hidden">
-            {progressValue !== null ? (
-              <div
-                className="h-full bg-sky-500 rounded-full transition-all duration-300"
-                style={{ width: `${progressValue * 100}%` }}
-              />
-            ) : (
-              <div className="h-full bg-sky-500 rounded-full animate-pulse w-2/5" />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Erreur */}
-      {importState?.phase === 'error' && (
+      {error && (
         <div className="bg-red-900/20 border border-red-800/40 rounded-xl p-3 text-xs text-red-400 flex items-start gap-2">
           <span className="shrink-0">⚠️</span>
-          <span>{importState.message}</span>
-        </div>
-      )}
-
-      {/* Résultat */}
-      {lastResult && (
-        <div className="space-y-2">
-          <div className={[
-            'rounded-xl p-3 text-sm flex items-start gap-2',
-            lastResult.imported > 0
-              ? 'bg-emerald-900/30 border border-emerald-700/50 text-emerald-400'
-              : 'bg-slate-800/50 border border-white/6 text-slate-400',
-          ].join(' ')}>
-            <span>{lastResult.imported > 0 ? '✅' : 'ℹ️'}</span>
-            <span>
-              {lastResult.imported > 0
-                ? <><strong>{lastResult.imported}</strong> nouvelle{lastResult.imported > 1 ? 's' : ''} activité{lastResult.imported > 1 ? 's' : ''} importée{lastResult.imported > 1 ? 's' : ''}</>
-                : 'Déjà à jour —'
-              }
-              {lastResult.withFit > 0 && (
-                <span className="text-sky-400 ml-1">
-                  dont <strong>{lastResult.withFit}</strong> avec données FIT complètes
-                </span>
-              )}
-              {lastResult.skipped > 0 && (
-                <span className="text-slate-500 ml-1">
-                  · {lastResult.skipped} déjà présentes
-                </span>
-              )}
-            </span>
-          </div>
-          {lastResult.imported > 0 && (
-            <div className="bg-sky-950/30 border border-sky-800/40 rounded-xl p-3 text-xs text-sky-400 flex items-start gap-2">
-              <span className="shrink-0">🧠</span>
-              <span>
-                Profil recalibré avec les données brutes Garmin — puissance, cadence et Running Dynamics sont maintenant intégrés dans le modèle de simulation.
-              </span>
-            </div>
-          )}
+          <span>{error}</span>
         </div>
       )}
     </div>
@@ -453,6 +373,7 @@ export function GarminConnect() {
   return (
     <div className="glass rounded-2xl p-4 sm:p-5">
       <button
+        type="button"
         onClick={() => setShowForm(v => !v)}
         className="w-full flex items-center justify-between gap-3"
       >
@@ -464,8 +385,8 @@ export function GarminConnect() {
             <h3 className="text-slate-200 font-semibold text-sm">Garmin Connect</h3>
             <p className="text-slate-500 text-xs">
               {isConnected()
-                ? 'Connecté — données FIT brutes disponibles'
-                : 'Données brutes + Running Power + Cadence + HRM-Pro'}
+                ? 'Connecté — synchronisation des données physiologiques et prédictions Firstbeat'
+                : 'VO2max, seuil lactate, FC repos et prédictions de course Firstbeat'}
             </p>
           </div>
         </div>
@@ -482,7 +403,7 @@ export function GarminConnect() {
       {showForm && (
         <div className="mt-4 pt-4 border-t border-white/6">
           {isConnected() ? (
-            <GarminImportPanel />
+            <GarminSyncPanel />
           ) : (
             <GarminLoginForm onConnected={() => setShowForm(false)} />
           )}
