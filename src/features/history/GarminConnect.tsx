@@ -385,8 +385,8 @@ export function GarminConnect() {
             <h3 className="text-slate-200 font-semibold text-sm">Garmin Connect</h3>
             <p className="text-slate-500 text-xs">
               {isConnected()
-                ? 'Connecté — données FIT brutes disponibles'
-                : 'Données brutes + Running Power + Cadence + HRM-Pro'}
+                ? 'Connecté — synchronisation des données physiologiques et prédictions Firstbeat'
+                : 'VO2max, seuil lactate, FC repos et prédictions de course Firstbeat'}
             </p>
           </div>
         </div>

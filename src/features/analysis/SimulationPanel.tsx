@@ -9,8 +9,9 @@ import {
 } from 'recharts'
 import { useAppStore } from '@/stores/appStore'
 import { runSimulation, formatDuration, formatPace } from '@/services/simulationEngine.service'
+import { predictFromGarminCurve, formatRaceTime } from '@/services/racePredictor.service'
 import { STRATEGY_LIST } from '@/models/strategies'
-import type { SimulationResult, SimulationParams, StrategyId } from '@/types'
+import type { SimulationResult, SimulationParams, StrategyId, GpxTrack, GarminRacePredictions } from '@/types'
 
 // ─── Sélecteur de stratégie ───────────────────────────────────────────────────
 
@@ -344,10 +345,85 @@ function SummaryCard({
   )
 }
 
+// ─── Carte prédiction Garmin (courbe Riegel + km-effort) ─────────────────────
+
+function GarminCurveCard({
+  track,
+  predictions,
+}: {
+  track: GpxTrack
+  predictions: GarminRacePredictions
+}) {
+  const result = predictFromGarminCurve(predictions, track)
+  const sourceLabel =
+    predictions.source === 'garmin' ? 'Firstbeat Analytics'
+    : predictions.source === 'computed' ? 'Calculé depuis VO2max'
+    : 'Indisponible'
+  const confidenceLabel =
+    result.confidence === 'high' ? 'Élevée'
+    : result.confidence === 'medium' ? 'Moyenne'
+    : 'Faible'
+  const confidenceColor =
+    result.confidence === 'high' ? '#22c55e'
+    : result.confidence === 'medium' ? '#f59e0b'
+    : '#ef4444'
+
+  const flatDistanceKm = track.totalDistance / 1000
+  const effortDeltaKm = result.kmEffortDistanceKm - flatDistanceKm
+
+  return (
+    <div className="glass rounded-2xl border p-4 sm:p-5" style={{ borderColor: '#0ea5e930' }}>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="w-1 h-5 rounded-full inline-block bg-sky-500" />
+          <div className="text-sm font-semibold text-sky-400">
+            Estimation Garmin — courbe Riegel + km-effort
+          </div>
+        </div>
+        <span className="text-[10px] text-slate-500">{sourceLabel}</span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-3">
+        <SummaryCard
+          icon="⏱️"
+          label="Temps estimé"
+          value={formatRaceTime(result.totalTimeSeconds)}
+          accent
+        />
+        <SummaryCard
+          icon="📏"
+          label="Distance km-effort"
+          value={`${result.kmEffortDistanceKm.toFixed(1)} km`}
+        />
+        <SummaryCard
+          icon="📈"
+          label="Exposant Riegel"
+          value={result.riegelExponent.toFixed(3)}
+        />
+        <div className="rounded-xl p-3 sm:p-4 text-center border bg-white/3 border-white/6">
+          <div className="text-xl mb-1">🎯</div>
+          <div className="text-slate-500 text-xs mb-1">Fiabilité</div>
+          <div className="font-bold text-sm sm:text-base" style={{ color: confidenceColor }}>
+            {confidenceLabel}
+          </div>
+        </div>
+      </div>
+
+      <div className="text-xs text-slate-500 leading-relaxed">
+        Calculé depuis tes prédictions Garmin (5K, 10K, semi, marathon) ajustées par la courbe de Riegel,
+        appliquées à la distance équivalente plat&nbsp;:
+        {' '}{flatDistanceKm.toFixed(1)} km plat
+        {' '}+ {effortDeltaKm.toFixed(1)} km de pénalité dénivelé
+        {' '}(+1 km/100 m D+, +0,5 km/100 m D-).
+      </div>
+    </div>
+  )
+}
+
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function SimulationPanel() {
-  const { track, profile } = useAppStore()
+  const { track, profile, garminRacePredictions } = useAppStore()
 
   const [strategyId, setStrategyId] = useState<StrategyId>('performance')
   const [effortFactor, setEffortFactor] = useState(1.0)
@@ -490,7 +566,12 @@ export function SimulationPanel() {
         </button>
       </div>
 
-      {/* Résultats */}
+      {/* Estimation Garmin (toujours visible si données disponibles) */}
+      {garminRacePredictions && (garminRacePredictions.tenK || garminRacePredictions.fiveK) && (
+        <GarminCurveCard track={track} predictions={garminRacePredictions} />
+      )}
+
+      {/* Résultats simulation Minetti */}
       {result && (
         <>
           <ResultSummary result={result} />
