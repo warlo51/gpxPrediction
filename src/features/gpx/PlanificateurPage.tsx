@@ -6,15 +6,11 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import type { DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
-} from 'recharts'
 import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
 import { parseGpxFile } from '@/services/gpxParser.service'
 import { generateRaceStrategy } from '@/services/raceStrategy.service'
-import { formatPace, formatDuration } from '@/services/simulationEngine.service'
+import { formatDuration } from '@/services/simulationEngine.service'
 import { getGpxTracks } from '@/services/supabase.service'
 import { useGpxSave } from '@/hooks/useGpxSave'
 import { TrackMap } from './TrackMap'
@@ -22,7 +18,7 @@ import { Track3DView } from './Track3DView'
 import { ElevationChart } from './ElevationChart'
 import type { GpxTrack } from '@/types'
 import type { GpxTrackRow, TrackProfile } from '@/services/supabase.service'
-import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation, GarminCurveAnchor } from '@/types/raceStrategy.types'
+import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation, GarminCurveAnchor, LectureBullet } from '@/types/raceStrategy.types'
 
 // ─── Strategy metadata ──────────────────────────────────────────────────────
 
@@ -176,7 +172,7 @@ function TrackHeader({
 
 // ─── Track visualization (collapsible) ──────────────────────────────────────
 
-function TrackVisualization({ track }: { track: GpxTrack }) {
+function TrackVisualization({ track, lecture }: { track: GpxTrack; lecture?: LectureBullet[] }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(true)
   const [viewMode, setViewMode] = useState<'map' | '3d'>('map')
@@ -222,6 +218,30 @@ function TrackVisualization({ track }: { track: GpxTrack }) {
           )}
 
           <ElevationChart track={track} />
+
+          {/* Lecture du parcours — intégrée dans la section Parcours */}
+          {lecture && lecture.length > 0 && (
+            <div className="flex flex-col gap-3 pt-3 border-t border-white/[0.06]">
+              <div className="flex items-center gap-2">
+                <span className="w-1 h-5 rounded-full bg-indigo-500 shrink-0" />
+                <h4 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.trackReading')}</h4>
+              </div>
+              <ul className="flex flex-col gap-3">
+                {lecture.map((bullet, i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <span className={`shrink-0 mt-0.5 text-xs font-mono px-2 py-0.5 rounded-md whitespace-nowrap ${
+                      bullet.isWarning
+                        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        : 'bg-white/[0.04] text-slate-500 border border-white/[0.06]'
+                    }`}>{bullet.kmRange}</span>
+                    <span className={`text-xs leading-relaxed ${bullet.isWarning ? 'text-slate-200' : 'text-slate-400'}`}>
+                      {bullet.content}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -593,137 +613,6 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
   )
 }
 
-// ─── Charts ──────────────────────────────────────────────────────────────────
-
-function PaceChart({ strategies }: { strategies: StrategyPlan[] }) {
-  const { t } = useTranslation()
-  const data = useMemo(() => {
-    const maxLen = Math.max(...strategies.map((s) => s.chartData.length))
-    return Array.from({ length: maxLen }, (_, i) => {
-      const point: Record<string, number | string> = {
-        km: strategies[0]?.chartData[i]?.km.toFixed(1) ?? '0',
-      }
-      for (const s of strategies) {
-        if (s.chartData[i]) point[s.id] = s.chartData[i].pace
-      }
-      return point
-    })
-  }, [strategies])
-
-  return (
-    <div className="glass rounded-2xl p-4 sm:p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-1 h-5 rounded-full bg-indigo-500 shrink-0" />
-        <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.paces')}</h3>
-      </div>
-      <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 5, right: 15, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="km" tickFormatter={(v: string) => `${v}km`}
-            tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} interval="preserveStartEnd" />
-          <YAxis tickFormatter={(v: number) => { const m = Math.floor(v / 60); const s = Math.floor(v % 60); return `${m}:${String(s).padStart(2, '0')}` }}
-            tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} width={45} reversed />
-          <Tooltip
-            formatter={(value) => { const v = typeof value === 'number' ? value : parseFloat(String(value ?? 0)); return [formatPace(v), 'Allure'] }}
-            labelFormatter={(label) => `${String(label)} km`}
-            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px', fontSize: '12px' }}
-          />
-          <Legend formatter={(value: string) => {
-            const meta = STRATEGY_META[value as RaceStrategyId]
-            return meta ? <span style={{ color: meta.color, fontSize: 11 }}>{meta.name}</span> : value
-          }} />
-          {strategies.map((s) => (
-            <Line key={s.id} type="monotone" dataKey={s.id} stroke={STRATEGY_META[s.id].color}
-              strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-function HRChart({ strategies }: { strategies: StrategyPlan[] }) {
-  const { t } = useTranslation()
-  const data = useMemo(() => {
-    const maxLen = Math.max(...strategies.map((s) => s.chartData.length))
-    return Array.from({ length: maxLen }, (_, i) => {
-      const point: Record<string, number | string> = {
-        km: strategies[0]?.chartData[i]?.km.toFixed(1) ?? '0',
-      }
-      for (const s of strategies) {
-        if (s.chartData[i]) point[s.id] = s.chartData[i].hr
-      }
-      return point
-    })
-  }, [strategies])
-
-  return (
-    <div className="glass rounded-2xl p-4 sm:p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-1 h-5 rounded-full bg-rose-500 shrink-0" />
-        <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.targetHR')}</h3>
-      </div>
-      <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 5, right: 15, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="km" tickFormatter={(v: string) => `${v}km`}
-            tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} interval="preserveStartEnd" />
-          <YAxis tickFormatter={(v: number) => `${v}`}
-            tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} width={38} />
-          <Tooltip
-            formatter={(value) => [`${String(value)} bpm`, 'FC']}
-            labelFormatter={(label) => `${String(label)} km`}
-            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px', fontSize: '12px' }}
-          />
-          <Legend formatter={(value: string) => {
-            const meta = STRATEGY_META[value as RaceStrategyId]
-            return meta ? <span style={{ color: meta.color, fontSize: 11 }}>{meta.name}</span> : value
-          }} />
-          {strategies.map((s) => (
-            <Line key={s.id} type="monotone" dataKey={s.id} stroke={STRATEGY_META[s.id].color}
-              strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-// ─── Lecture du parcours ─────────────────────────────────────────────────────
-
-function LectureSection({ report }: { report: RaceStrategyReport }) {
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="glass rounded-2xl overflow-hidden">
-      <button onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5">
-        <div className="flex items-center gap-2">
-          <span className="w-1 h-5 rounded-full bg-indigo-500 shrink-0" />
-          <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.trackReading')}</h3>
-        </div>
-        <span className="text-slate-500 text-xs">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <ul className="flex flex-col gap-3 px-4 sm:px-5 pb-4">
-          {report.lecture.map((bullet, i) => (
-            <li key={i} className="flex items-start gap-3">
-              <span className={`shrink-0 mt-0.5 text-xs font-mono px-2 py-0.5 rounded-md whitespace-nowrap ${
-                bullet.isWarning
-                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                  : 'bg-white/[0.04] text-slate-500 border border-white/[0.06]'
-              }`}>{bullet.kmRange}</span>
-              <span className={`text-xs leading-relaxed ${bullet.isWarning ? 'text-slate-200' : 'text-slate-400'}`}>
-                {bullet.content}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 // ─── Filtres bibliothèque GPX ────────────────────────────────────────────────
@@ -994,8 +883,8 @@ export function PlanificateurPage() {
         />
       )}
 
-      {/* Parcours (carte + élévation, repliable) */}
-      <TrackVisualization track={track} />
+      {/* Parcours (carte + élévation + lecture, repliable) */}
+      <TrackVisualization track={track} lecture={report?.lecture} />
 
       {/* Stratégie */}
       {report && (
@@ -1039,15 +928,6 @@ export function PlanificateurPage() {
 
           {/* Détail stratégie active */}
           {activePlan && <StrategyDetail plan={activePlan} />}
-
-          {/* Graphiques */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <PaceChart strategies={report.strategies} />
-            <HRChart strategies={report.strategies} />
-          </div>
-
-          {/* Lecture du parcours */}
-          <LectureSection report={report} />
         </>
       )}
     </div>
