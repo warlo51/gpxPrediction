@@ -50,15 +50,13 @@ function Calibrated({
   label, value, sub, color = 'text-white', source,
 }: {
   label: string; value: string; sub?: string
-  color?: string; source: 'strava' | 'garmin' | 'calculé'
+  color?: string; source: 'garmin' | 'calculé'
 }) {
   const sourceStyles = {
-    strava: 'bg-orange-900/50 text-orange-400 border border-orange-800/40',
     garmin: 'bg-sky-900/50 text-sky-400 border border-sky-800/40',
     calculé: 'bg-indigo-900/50 text-indigo-400 border border-indigo-800/40',
   }
   const sourceLabels = {
-    strava: '⚡ Strava',
     garmin: '🏔️ Garmin',
     calculé: '🧮 Calculé',
   }
@@ -94,7 +92,7 @@ export function RunnerProfileForm() {
 
   const hasHistory = sessions.length > 0
   const hasGarmin = sessions.some(s => s.source === 'garmin')
-  const dataSource: 'garmin' | 'strava' = hasGarmin ? 'garmin' : 'strava'
+  const dataSource: 'garmin' | 'calculé' = hasGarmin ? 'garmin' : 'calculé'
 
   // ── Grade max réellement observé dans les streams
   const maxObservedGrade = (() => {
@@ -206,12 +204,6 @@ export function RunnerProfileForm() {
               <span>Calibré depuis Garmin ({profile.sessionCount} séances)</span>
             </div>
           )}
-          {profile.calibrationSource === 'strava' && (
-            <div className="flex items-center gap-2 text-xs text-orange-400 bg-orange-900/20 px-3 py-1.5 rounded-full border border-orange-800/30">
-              <span>⚡</span>
-              <span>Calibré depuis Strava ({profile.sessionCount} séances)</span>
-            </div>
-          )}
           {!profile.calibrationSource && sessions.length > 0 && (
             <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/40 px-3 py-1.5 rounded-full">
               <span>🧮</span>
@@ -240,8 +232,7 @@ export function RunnerProfileForm() {
             />
           </Field>
 
-          <Field label="FC au repos" unit="bpm"
-            hint="Non disponible depuis Strava">
+          <Field label="FC au repos" unit="bpm">
             <NumberInput
               value={restingHR} min={30} max={80}
               onChange={setRestingHR}
@@ -433,7 +424,7 @@ export function RunnerProfileForm() {
           <div className="mt-4 bg-black/20 border border-white/4 rounded-xl p-3 text-xs text-slate-500 flex items-start gap-2">
             <span className="text-indigo-400 mt-0.5">💡</span>
             <span>
-              Connectez votre compte Strava dans l'onglet <strong className="text-slate-400">Historique</strong> pour que
+              Importez vos fichiers FIT Garmin dans l'onglet <strong className="text-slate-400">Historique</strong> pour que
               ces valeurs soient automatiquement calibrées sur vos vraies performances.
             </span>
           </div>

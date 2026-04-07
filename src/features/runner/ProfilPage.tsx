@@ -6,7 +6,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
-import { useStravaStore } from '@/stores/stravaStore'
 import { RunnerAnalysisPanel } from '@/features/runner/RunnerAnalysis'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -713,23 +712,18 @@ function ConnectionBadge({ label, connected }: { label: string; connected: boole
 export function ProfilPage() {
   const { t } = useTranslation()
   const { profile, sessions } = useAppStore()
-  const { athlete, token } = useStravaStore()
 
-  const stravaConnected = !!(athlete && token)
-  const garminConnected = sessions.some(s => s.id.startsWith('garmin-'))
+  const garminConnected = sessions.some(s => s.source === 'garmin')
 
   const currentYear = new Date().getFullYear()
   const yearSessions = sessions.filter(s => new Date(s.date).getFullYear() === currentYear)
   const totalKmYear = yearSessions.reduce((acc, s) => acc + s.distance / 1000, 0)
   const totalElevYear = yearSessions.reduce((acc, s) => acc + s.elevationGain, 0)
 
-  const runnerName = athlete
-    ? `${athlete.firstname} ${athlete.lastname ?? ''}`.trim().toUpperCase()
-    : (profile.name || 'Trail Runner').toUpperCase()
-  const location = athlete?.city ? `${athlete.city}, ${athlete.country ?? ''}`.replace(/, $/, '') : null
+  const runnerName = (profile.name || 'Trail Runner').toUpperCase()
+  const location = null
 
   // VO2max : priorité Garmin (Firstbeat), fallback VDOT Jack Daniels
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const vo2Data = useMemo(() => computeVO2Data(sessions, profile.vo2Max), [sessions, profile.vo2Max])
   const level = vo2Data.level
 
@@ -744,11 +738,7 @@ export function ProfilPage() {
           <div className="relative shrink-0">
             <div className="w-[90px] h-[90px] rounded-2xl overflow-hidden"
               style={{ background: '#111827', border: '2px solid rgba(255,109,0,0.3)' }}>
-              {athlete?.profile ? (
-                <img src={athlete.profile} alt={runnerName} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl">🏃</div>
-              )}
+              <div className="w-full h-full flex items-center justify-center text-4xl">🏃</div>
             </div>
             {/* Status dot */}
             <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-[#0b1326] bg-[#22c55e]" />
@@ -779,8 +769,7 @@ export function ProfilPage() {
 
         {/* Right: connections */}
         <div className="flex items-center gap-3 shrink-0">
-          <ConnectionBadge label="Strava"  connected={stravaConnected} />
-          <ConnectionBadge label="Garmin"  connected={garminConnected} />
+          <ConnectionBadge label="Garmin" connected={garminConnected} />
         </div>
       </div>
 

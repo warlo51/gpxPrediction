@@ -6,9 +6,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
-import { useStravaStore } from '@/stores/stravaStore'
 import { useGarminStore } from '@/stores/garminStore'
-import { StravaConnect } from '@/features/strava/StravaConnect'
 import { GarminConnect } from '@/features/history/GarminConnect'
 import { PremiumGate } from '@/components/PremiumGate'
 import {
@@ -156,12 +154,9 @@ function AccountContent({
 }) {
   const { t } = useTranslation()
   const { profile, updateProfile } = useAppStore()
-  const stravaAthlete = useStravaStore(s => s.athlete)
-  const stravaToken = useStravaStore(s => s.token)
   const garminOauth1 = useGarminStore(s => s.oauth1)
   const garminOauth2 = useGarminStore(s => s.oauth2)
 
-  const stravaConnected = !!(stravaAthlete && stravaToken)
   const garminConnected = !!(garminOauth1 && garminOauth2)
 
   const [weight, setWeight] = useState(profile.energyModel.weightKg.toString())
@@ -346,13 +341,11 @@ function AccountContent({
             {t('account.connections')}
           </span>
           <div className="flex items-center gap-2 ml-auto">
-            <StatusPill label="Strava" connected={stravaConnected} />
             <StatusPill label="Garmin" connected={garminConnected} />
           </div>
         </div>
 
         <PremiumGate>
-          <StravaConnect />
           <GarminConnect />
         </PremiumGate>
       </section>

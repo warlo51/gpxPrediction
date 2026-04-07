@@ -4,20 +4,18 @@
  * - Non-premium ou anonyme : charge les données demo
  *
  * La sauvegarde en DB se fait directement dans les composants d'import
- * (StravaConnect, GarminConnect) après chaque import réussi.
+ * (GarminConnect) après chaque import réussi.
  */
 
 import { useEffect, useRef } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
-import { useStravaStore } from '@/stores/stravaStore'
 import { useGarminStore } from '@/stores/garminStore'
 import {
   getRunnerProfile,
   getDemoRunnerProfile,
   getSessions,
   getDemoSessions,
-  getStravaConnection,
   getGarminConnection,
 } from '@/services/supabase.service'
 
@@ -27,9 +25,6 @@ export function useSupabaseSync() {
   const setProfile = useAppStore((s) => s.setProfile)
   const addSession = useAppStore((s) => s.addSession)
   const clearSessions = useAppStore((s) => s.clearSessions)
-  const setStravaCredentials = useStravaStore((s) => s.setCredentials)
-  const setStravaToken = useStravaStore((s) => s.setToken)
-  const setStravaAthlete = useStravaStore((s) => s.setAthlete)
   const setGarminTokens = useGarminStore((s) => s.setTokens)
 
   // Track quel user a été synchronisé pour relancer si login/logout
@@ -65,14 +60,12 @@ export function useSupabaseSync() {
     Promise.all([
       getRunnerProfile(user.id),
       getSessions(user.id),
-      getStravaConnection(user.id),
       getGarminConnection(user.id),
-    ]).then(async ([dbProfile, dbSessions, strava, garmin]) => {
+    ]).then(async ([dbProfile, dbSessions, garmin]) => {
       console.log('[SupabaseSync] DB data loaded:', {
         profile: !!dbProfile,
         sessions: dbSessions.length,
         sessionSources: dbSessions.reduce((acc, s) => { acc[s.source] = (acc[s.source] ?? 0) + 1; return acc }, {} as Record<string, number>),
-        hasStrava: !!strava,
         hasGarmin: !!garmin,
       })
 
@@ -96,13 +89,7 @@ export function useSupabaseSync() {
         for (const s of demoSessions) addSession(s)
       }
 
-      // Restaurer les connexions dans tous les cas
-      if (strava) {
-        console.log('[SupabaseSync] Restoring Strava connection')
-        setStravaCredentials(strava.credentials)
-        setStravaToken(strava.token)
-        setStravaAthlete(strava.athlete)
-      }
+      // Restaurer la connexion Garmin
       if (garmin) {
         console.log('[SupabaseSync] Restoring Garmin connection')
         setGarminTokens(garmin.oauth1, garmin.oauth2, garmin.profile)
@@ -110,5 +97,5 @@ export function useSupabaseSync() {
     }).catch((err) =>
       console.error('[SupabaseSync] Error loading user data:', err),
     )
-  }, [loading, user, setProfile, addSession, clearSessions, setStravaCredentials, setStravaToken, setStravaAthlete, setGarminTokens])
+  }, [loading, user, setProfile, addSession, clearSessions, setGarminTokens])
 }

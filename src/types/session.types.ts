@@ -4,7 +4,7 @@
  */
 
 /** Source de la séance */
-export type SessionSource = 'strava' | 'garmin' | 'manual' | 'gpx'
+export type SessionSource = 'garmin' | 'manual' | 'gpx'
 
 /** Streams bruts récupérés depuis l'API Strava */
 export type ActivityStreams = {
@@ -39,9 +39,6 @@ export type TrainingSession = {
   maxHeartRate?: number
   /** Streams détaillés (optionnel, chargement à la demande) */
   streams?: ActivityStreams
-  /** ID Strava si la séance vient de Strava */
-  stravaId?: number
-
   // ── Données Garmin enrichies (optionnelles) ──
 
   /** Type d'activité (ex: "trail_running", "running") */

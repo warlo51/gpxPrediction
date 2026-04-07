@@ -3,7 +3,7 @@
  */
 
 /** Source de données utilisée pour la calibration du profil */
-export type CalibrationSource = 'garmin' | 'strava' | 'manual' | 'mixed'
+export type CalibrationSource = 'garmin' | 'manual' | 'mixed'
 
 /** Plage de valeurs (min/max) pour une estimation probabiliste */
 export type ValueRange = {

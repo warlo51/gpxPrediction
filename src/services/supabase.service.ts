@@ -3,8 +3,7 @@
  */
 
 import { supabase } from '@/lib/supabase'
-import type { RunnerProfile, GpxTrack, TrainingSession, StravaToken, StravaAthlete } from '@/types'
-import type { StravaCredentials } from '@/stores/stravaStore'
+import type { RunnerProfile, GpxTrack, TrainingSession } from '@/types'
 import type { GarminOAuth1Token, GarminOAuth2Token, GarminProfile } from '@/stores/garminStore'
 
 // ─── Profil utilisateur (email, poids, âge) ─────────────────────────────────
@@ -177,7 +176,6 @@ export async function saveSessions(userId: string, sessions: TrainingSession[]) 
     avg_pace: s.avgPace,
     avg_heart_rate: s.avgHeartRate ?? null,
     max_heart_rate: s.maxHeartRate ?? null,
-    strava_id: s.stravaId ?? null,
     streams: s.streams ?? null,
   }))
 
@@ -212,7 +210,6 @@ export async function getSessions(userId: string): Promise<TrainingSession[]> {
     avgPace: r.avg_pace,
     avgHeartRate: r.avg_heart_rate ?? undefined,
     maxHeartRate: r.max_heart_rate ?? undefined,
-    stravaId: r.strava_id ?? undefined,
     streams: r.streams ?? undefined,
   }))
 }
@@ -240,50 +237,12 @@ export async function getDemoSessions(): Promise<TrainingSession[]> {
   }))
 }
 
-// ─── Connexions Strava / Garmin ──────────────────────────────────────────────
-
-export type StravaConnectionData = {
-  credentials: StravaCredentials
-  token: StravaToken
-  athlete: StravaAthlete
-}
+// ─── Connexions Garmin ───────────────────────────────────────────────────────
 
 export type GarminConnectionData = {
   oauth1: GarminOAuth1Token
   oauth2: GarminOAuth2Token
   profile: GarminProfile
-}
-
-export async function saveStravaConnection(userId: string, data: StravaConnectionData) {
-  const { error } = await supabase
-    .from('connections')
-    .upsert({
-      user_id: userId,
-      provider: 'strava',
-      data,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,provider' })
-  if (error) throw error
-}
-
-export async function getStravaConnection(userId: string): Promise<StravaConnectionData | null> {
-  const { data, error } = await supabase
-    .from('connections')
-    .select('data')
-    .eq('user_id', userId)
-    .eq('provider', 'strava')
-    .single()
-  if (error && error.code !== 'PGRST116') throw error
-  return (data?.data as StravaConnectionData) ?? null
-}
-
-export async function deleteStravaConnection(userId: string) {
-  const { error } = await supabase
-    .from('connections')
-    .delete()
-    .eq('user_id', userId)
-    .eq('provider', 'strava')
-  if (error) throw error
 }
 
 export async function saveGarminConnection(userId: string, data: GarminConnectionData) {

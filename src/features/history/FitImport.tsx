@@ -124,7 +124,7 @@ export function FitImport() {
       {/* Avantages vs Strava */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         {[
-          { icon: '📍', label: 'GPS brut', sub: 'Non lissé par Strava' },
+          { icon: '📍', label: 'GPS brut', sub: 'Données GPS complètes' },
           { icon: '❤️', label: 'FC détaillée', sub: 'Chaque seconde' },
           { icon: '🦵', label: 'Cadence', sub: 'Pas/min' },
           { icon: '⚡', label: 'Puissance', sub: 'Si capteur Running Power' },
