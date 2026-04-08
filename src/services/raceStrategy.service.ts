@@ -4,7 +4,7 @@
  * à partir d'un GpxTrack + RunnerProfile, sans appel API externe.
  */
 
-import type { GpxTrack, RunnerProfile, SegmentSimulation, GarminRacePredictions } from '@/types'
+import type { GpxTrack, RunnerProfile, SegmentSimulation, GarminRacePredictions, EnvironmentConditions } from '@/types'
 import type {
   RaceStrategyReport,
   StrategyPlan,
@@ -445,9 +445,12 @@ export function generateRaceStrategy(
   profile: RunnerProfile,
   carbToleranceGPerHour = 60,
   garminPredictions?: GarminRacePredictions | null,
+  environment?: EnvironmentConditions,
 ): RaceStrategyReport {
   // Ancrage optionnel sur la courbe Garmin : si les prédictions Firstbeat sont
   // disponibles, on recale le flatSpeed du profil pour que les temps totaux y collent.
+  // ⚠️ L'ancrage reste indépendant des conditions météo — c'est une calibration
+  // physiologique sur la courbe de prédiction Firstbeat, pas un ajustement climatique.
   const anchoring = garminPredictions
     ? anchorProfileOnGarminCurve(track, profile, garminPredictions)
     : null
@@ -463,6 +466,7 @@ export function generateRaceStrategy(
       effortFactor:     config.effortFactor,
       applyFatigue:     true,
       applyCardiacDrift: true,
+      ...(environment && { environment }),
     })
 
     simMap.set(config.id, result.segments)

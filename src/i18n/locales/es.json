@@ -117,6 +117,14 @@
       "calories": "Calorías",
       "blowupRisk": "Riesgo explosión"
     },
+    "conditions": {
+      "title": "Condiciones de carrera",
+      "hint": "Ajusta la simulación según la meteorología prevista el día de la carrera.",
+      "temperature": "Temperatura",
+      "humidity": "Humedad",
+      "impact": "Impacto en el tiempo total",
+      "reset": "Restablecer"
+    },
     "phases": "Fases",
     "phase": "Fase",
     "elevation": "D+",

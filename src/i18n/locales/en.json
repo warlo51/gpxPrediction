@@ -117,6 +117,14 @@
       "calories": "Calories",
       "blowupRisk": "Blowup risk"
     },
+    "conditions": {
+      "title": "Race conditions",
+      "hint": "Adjust the simulation to match the expected weather on race day.",
+      "temperature": "Temperature",
+      "humidity": "Humidity",
+      "impact": "Impact on total time",
+      "reset": "Reset"
+    },
     "phases": "Phases",
     "phase": "Phase",
     "elevation": "Elev. gain",
