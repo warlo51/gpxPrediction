@@ -34,6 +34,46 @@ export interface NutritionVerdict {
   status: 'Suffisant' | 'Limite' | 'Insuffisant'
   deficitKcal: number
   message: string
+  /** g/h supplémentaires nécessaires pour combler le déficit (0 si pas de déficit) */
+  extraCarbsPerHour: number
+  /** g/h totaux recommandés pour finir sans crash (= tolérance courante + extra) */
+  recommendedCarbsPerHour: number
+}
+
+/** Une barrière horaire (km cible + temps cumulé maximum depuis le départ) */
+export interface RaceCheckpoint {
+  /** Distance depuis le départ en km */
+  km: number
+  /** Temps cumulé maximum en secondes pour atteindre ce point */
+  cutoffSeconds: number
+  /** Libellé optionnel (ex. nom du ravito) */
+  label?: string
+}
+
+/** Verdict de faisabilité pour un checkpoint donné */
+export interface CheckpointVerdict {
+  km: number
+  label?: string
+  cutoffSeconds: number
+  /** Temps prédit par la simulation pour atteindre ce point (s) */
+  predictedSeconds: number
+  /** Marge en secondes (positive = avance, négative = hors-délai) */
+  marginSeconds: number
+  level: 'safe' | 'tight' | 'fail'
+}
+
+/** Verdict de faisabilité global pour une stratégie face à un set de barrières */
+export interface FeasibilityVerdict {
+  /** Détail par checkpoint, trié par km croissant */
+  checkpoints: CheckpointVerdict[]
+  /** Le checkpoint avec la plus petite marge (= verdict global) */
+  worst: CheckpointVerdict
+  /** True si tous les checkpoints passent */
+  passes: boolean
+  /** Marge globale = celle du worst checkpoint (rétro-compat affichage) */
+  marginSeconds: number
+  /** Niveau global = celui du worst checkpoint */
+  level: 'safe' | 'tight' | 'fail'
 }
 
 export interface StrategyChartPoint {
@@ -56,7 +96,10 @@ export interface StrategyPlan {
   walkingSegments: number
   phases: RacePhase[]
   riskZones: RiskZone[]
-  nutrition: NutritionVerdict
+  /** Verdict nutrition — `null` quand l'utilisateur a désactivé l'analyse glucidique */
+  nutrition: NutritionVerdict | null
+  /** Verdict de faisabilité barrière horaire — `null` si aucune barrière n'est renseignée */
+  feasibility: FeasibilityVerdict | null
   blowupRisk: 'Faible' | 'Modéré' | 'Élevé'
   chartData: StrategyChartPoint[]
 }
@@ -95,7 +138,10 @@ export interface RaceStrategyReport {
   totalElevationLoss: number
   strategies: StrategyPlan[]
   lecture: LectureBullet[]
-  carbToleranceGPerHour: number
+  /** Tolérance glucidique en g/h utilisée pour l'analyse — `null` si l'utilisateur l'a désactivée */
+  carbToleranceGPerHour: number | null
+  /** Liste des barrières horaires utilisées — `null` si aucune n'a été renseignée */
+  cutoffs: RaceCheckpoint[] | null
   recommendation: StrategyRecommendation
   /** Ancrage sur la courbe Garmin — présent si des prédictions Garmin étaient disponibles */
   garminCurveAnchor?: GarminCurveAnchor

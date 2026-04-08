@@ -12,6 +12,9 @@ import type {
   LectureBullet,
   RiskZone,
   NutritionVerdict,
+  FeasibilityVerdict,
+  CheckpointVerdict,
+  RaceCheckpoint,
   RaceStrategyId,
   StrategyRecommendation,
   GarminCurveAnchor,
@@ -194,35 +197,208 @@ function detectRiskZones(simSegments: SegmentSimulation[], maxHR: number): RiskZ
   return zones
 }
 
+// ─── Barrière horaire ──────────────────────────────────────────────────────────
+
+/**
+ * Formate une marge en secondes au format compact `+1h05` / `−25 min` / `+12 min`.
+ * Exporté pour réutilisation côté UI.
+ */
+export function formatMargin(seconds: number): string {
+  const sign = seconds >= 0 ? '+' : '−'
+  const abs  = Math.abs(seconds)
+  const h    = Math.floor(abs / 3600)
+  const m    = Math.round((abs % 3600) / 60)
+  if (h > 0) return `${sign}${h}h${String(m).padStart(2, '0')}`
+  return `${sign}${m} min`
+}
+
+/**
+ * Niveau de confort d'une marge :
+ *  - `safe`  : marge > 15 min (confortable)
+ *  - `tight` : passe mais marge ≤ 15 min (à surveiller)
+ *  - `fail`  : hors-délai
+ */
+function marginLevel(marginSeconds: number): CheckpointVerdict['level'] {
+  if (marginSeconds < 0)    return 'fail'
+  if (marginSeconds <= 900) return 'tight'
+  return 'safe'
+}
+
+/**
+ * Interpole le temps cumulé prédit pour une distance donnée (en km), en se
+ * basant sur les segments de la simulation. Linéaire à l'intérieur d'un segment.
+ */
+function predictTimeAtKm(segments: SegmentSimulation[], km: number): number {
+  if (segments.length === 0) return 0
+  const targetM = km * 1000
+  if (targetM <= 0) return 0
+
+  const lastSeg = segments[segments.length - 1]!
+  if (targetM >= lastSeg.segment.cumulativeDistance) return lastSeg.cumulativeTime
+
+  for (const seg of segments) {
+    const segEndM   = seg.segment.cumulativeDistance
+    const segStartM = segEndM - seg.segment.distance
+    if (targetM >= segStartM && targetM <= segEndM) {
+      const fraction      = seg.segment.distance > 0 ? (targetM - segStartM) / seg.segment.distance : 0
+      const segStartTime  = seg.cumulativeTime - seg.estimatedDuration
+      return segStartTime + fraction * seg.estimatedDuration
+    }
+  }
+  return lastSeg.cumulativeTime
+}
+
+/**
+ * Verdict de faisabilité d'une stratégie face à un set de barrières horaires.
+ * Pour chaque checkpoint, on interpole le temps prédit et on calcule la marge.
+ * Le verdict global = celui du checkpoint avec la plus petite marge (worst).
+ */
+function computeFeasibility(
+  segments: SegmentSimulation[],
+  totalTimeSeconds: number,
+  cutoffs: RaceCheckpoint[],
+): FeasibilityVerdict | null {
+  if (cutoffs.length === 0) return null
+
+  const totalKm = segments.length > 0
+    ? segments[segments.length - 1]!.segment.cumulativeDistance / 1000
+    : 0
+
+  const checkpoints: CheckpointVerdict[] = cutoffs
+    .map((cp): CheckpointVerdict => {
+      // km >= totalKm → utilise le temps total simulé (évite l'extrapolation)
+      const predicted     = cp.km >= totalKm ? totalTimeSeconds : predictTimeAtKm(segments, cp.km)
+      const marginSeconds = cp.cutoffSeconds - predicted
+      return {
+        km: cp.km,
+        ...(cp.label !== undefined && { label: cp.label }),
+        cutoffSeconds: cp.cutoffSeconds,
+        predictedSeconds: predicted,
+        marginSeconds,
+        level: marginLevel(marginSeconds),
+      }
+    })
+    .sort((a, b) => a.km - b.km)
+
+  const worst = checkpoints.reduce((w, c) => (c.marginSeconds < w.marginSeconds ? c : w), checkpoints[0]!)
+
+  return {
+    checkpoints,
+    worst,
+    passes: checkpoints.every(c => c.marginSeconds >= 0),
+    marginSeconds: worst.marginSeconds,
+    level: worst.level,
+  }
+}
+
 // ─── Nutrition ─────────────────────────────────────────────────────────────────
 
+/**
+ * Fraction des calories brûlées qui provient du glycogène (vs lipides),
+ * estimée à partir de l'intensité relative (% FCmax).
+ *
+ * Référence : à intensité faible (~50% FCmax) la part lipidique domine (~70%
+ * lipides, 30% CHO). Au-delà du seuil lactique, les glucides deviennent
+ * majoritaires et atteignent ~95% à intensité maximale.
+ *
+ * Approximation linéaire entre 50% et 95% FCmax, bornée [0.30, 0.95].
+ */
+function carbFractionFromIntensity(hrFraction: number): number {
+  return Math.max(0.3, Math.min(0.95, 0.3 + (hrFraction - 0.5) * 1.5))
+}
+
+/**
+ * Verdict nutritionnel basé sur un bilan de glycogène segment par segment :
+ *
+ *   réserve_initiale = poids × 18 kcal/kg  (glycogène mobilisable)
+ *   pour chaque segment :
+ *     CHO_brûlés = calories_segment × fractionCHO(% FCmax)
+ *     CHO_apportés = (carbToleranceGPerHour × 4 / 3600) × durée_segment
+ *     solde += CHO_apportés − CHO_brûlés
+ *
+ * Le verdict est déterminé par :
+ *  - le km où le solde croise zéro (= fringale prédite), s'il y en a un
+ *  - la marge de glycogène restante en fin de course sinon
+ */
 function computeNutritionVerdict(
-  totalCalories: number,
+  segments: SegmentSimulation[],
   totalTimeSeconds: number,
   carbToleranceGPerHour: number,
+  profile: RunnerProfile,
 ): NutritionVerdict {
-  const durationHours      = totalTimeSeconds / 3600
-  const maxAbsorbableKcal  = carbToleranceGPerHour * durationHours * 4
-  const deficit            = Math.round(totalCalories - maxAbsorbableKcal)
+  const weightKg = profile.energyModel.weightKg
+  const maxHR    = profile.heartRateModel.maxHR
 
-  // Km estimé où le déficit devient critique (80% du budget carbs épuisé)
-  const critKm = Math.round((maxAbsorbableKcal * 0.8 / totalCalories) * (totalCalories / 65))
+  // Réserve glycogène mobilisable au départ (~18 kcal/kg pour un coureur entraîné)
+  const initialGlycogenKcal = weightKg * 18
 
-  if (deficit < 400) {
-    return {
-      icon: '✅', status: 'Suffisant', deficitKcal: deficit,
-      message: `Déficit ~${deficit} kcal — tolérable sur cette durée`,
+  // Apport exogène en kcal/seconde (g/h × 4 kcal/g ÷ 3600 s/h)
+  const exoKcalPerSec = (carbToleranceGPerHour * 4) / 3600
+
+  let glycogenBalance = initialGlycogenKcal
+  let crashKm: number | null = null
+
+  for (const seg of segments) {
+    const hrFraction   = seg.heartRateRange.target / maxHR
+    const fractionCHO  = carbFractionFromIntensity(hrFraction)
+
+    const segCarbBurnKcal = seg.caloriesBurned * fractionCHO
+    const segExoKcal      = exoKcalPerSec * seg.estimatedDuration
+
+    glycogenBalance += segExoKcal - segCarbBurnKcal
+
+    if (glycogenBalance <= 0 && crashKm === null) {
+      crashKm = Math.round(seg.segment.cumulativeDistance / 1000)
     }
-  } else if (deficit < 800) {
-    return {
-      icon: '⚠️', status: 'Limite', deficitKcal: deficit,
-      message: `Déficit ~${deficit} kcal — surveiller l'énergie à partir de km ${critKm}`,
+  }
+
+  const lastSeg          = segments[segments.length - 1]
+  const totalKm          = lastSeg ? Math.round(lastSeg.segment.cumulativeDistance / 1000) : 0
+  const finalBalance     = Math.round(glycogenBalance)
+  const finalDeficitKcal = Math.max(0, -finalBalance)
+
+  // Combien de g/h supplémentaires combleraient exactement le déficit
+  const durationHours    = totalTimeSeconds / 3600
+  const extraCarbsPerHour = finalDeficitKcal > 0 && durationHours > 0
+    ? Math.round(finalDeficitKcal / (4 * durationHours))
+    : 0
+
+  const recommendedCarbsPerHour = carbToleranceGPerHour + extraCarbsPerHour
+
+  // ── Pas de crash : verdict selon la marge restante ──
+  if (crashKm === null) {
+    if (finalBalance > 200) {
+      return {
+        icon: '✅', status: 'Suffisant', deficitKcal: 0,
+        extraCarbsPerHour: 0,
+        recommendedCarbsPerHour: carbToleranceGPerHour,
+        message: `Réserves glycogène OK — marge ~${finalBalance} kcal en fin de course`,
+      }
     }
-  } else {
     return {
-      icon: '❌', status: 'Insuffisant', deficitKcal: deficit,
-      message: `Déficit ~${deficit} kcal — risque de fringale vers km ${critKm}. Envisager de dépasser ta tolérance habituelle`,
+      icon: '⚠️', status: 'Limite', deficitKcal: 0,
+      extraCarbsPerHour: 0,
+      recommendedCarbsPerHour: carbToleranceGPerHour,
+      message: `Marge glycogène serrée ~${finalBalance} kcal — peu de tolérance si l'effort dépasse ce qui est planifié`,
     }
+  }
+
+  // ── Crash en toute fin de course : limite mais finissable ──
+  if (totalKm > 0 && crashKm / totalKm > 0.9) {
+    return {
+      icon: '⚠️', status: 'Limite', deficitKcal: finalDeficitKcal,
+      extraCarbsPerHour,
+      recommendedCarbsPerHour,
+      message: `Réserves limites en fin de course (épuisement vers km ${crashKm}/${totalKm}) — viser ~${extraCarbsPerHour} g/h en plus suffirait`,
+    }
+  }
+
+  // ── Crash significativement avant l'arrivée : insuffisant ──
+  return {
+    icon: '❌', status: 'Insuffisant', deficitKcal: finalDeficitKcal,
+    extraCarbsPerHour,
+    recommendedCarbsPerHour,
+    message: `Fringale prédite vers km ${crashKm}/${totalKm} — il faudrait absorber ~${extraCarbsPerHour} g/h en plus, ou réduire l'intensité`,
   }
 }
 
@@ -329,10 +505,25 @@ function generateLecture(
 
 // ─── Recommandation ───────────────────────────────────────────────────────────
 
+/**
+ * Construit un suffixe d'avertissement nutritionnel quand on est forcé de pousser
+ * sur une stratégie qui creuse un déficit glucidique.
+ *
+ * Exemple de retour : ` Attention : à cette intensité prévoir ~75 g/h au lieu de 60.`
+ * Retourne une chaîne vide si la nutrition est désactivée ou suffisante.
+ */
+function nutritionWarningFor(plan: StrategyPlan): string {
+  const n = plan.nutrition
+  if (!n) return ''
+  if (n.icon === '✅') return ''
+  return ` ⚠️ À cette intensité, prévoir ~${n.recommendedCarbsPerHour} g/h pour éviter la fringale.`
+}
+
 function computeRecommendation(
   track: GpxTrack,
   profile: RunnerProfile,
   plans: StrategyPlan[],
+  cutoffs: RaceCheckpoint[] | null,
 ): StrategyRecommendation {
   const totalKm      = track.totalDistance / 1000
   const dPlus        = track.totalElevationGain
@@ -343,6 +534,54 @@ function computeRecommendation(
   const objectif   = plans.find(p => p.id === 'objectif')!
   const ambitieuse = plans.find(p => p.id === 'ambitieuse')!
 
+  // ── Branche barrière horaire : si au moins une barrière est renseignée, elle prime
+  //    sur les autres règles. On recommande la stratégie la plus prudente qui passe
+  //    *tous* les checkpoints avec une marge confortable.
+  if (cutoffs !== null && cutoffs.length > 0) {
+    const prudentePasses   = prudente.feasibility?.passes ?? false
+    const prudenteMargin   = prudente.feasibility?.marginSeconds ?? 0
+    const prudenteWorstKm  = prudente.feasibility?.worst.km
+    const objectifPasses   = objectif.feasibility?.passes ?? false
+    const objectifMargin   = objectif.feasibility?.marginSeconds ?? 0
+    const ambitieusePasses = ambitieuse.feasibility?.passes ?? false
+    const ambitieuseMargin = ambitieuse.feasibility?.marginSeconds ?? 0
+
+    // Lorsque plusieurs barrières existent, préciser le checkpoint le plus serré
+    const checkpointHint = (km: number | undefined): string => {
+      if (km === undefined || cutoffs.length <= 1) return ''
+      return ` (point critique : km ${km})`
+    }
+
+    // Prudente passe confortablement partout (> 15 min de marge sur le worst)
+    if (prudentePasses && prudenteMargin > 900) {
+      return {
+        id: 'prudente',
+        reason: `Tu passes toutes les barrières avec au moins ${formatMargin(prudenteMargin)} de marge en Prudente${checkpointHint(prudenteWorstKm)} — pas besoin de pousser, garde la sécurité.`,
+      }
+    }
+
+    // Prudente trop juste / hors-délai → tenter Objectif (marge > 10 min)
+    if (objectifPasses && objectifMargin > 600) {
+      const base = prudentePasses
+        ? `Prudente est trop tendue sur la barrière la plus serrée${checkpointHint(prudenteWorstKm)} (${formatMargin(prudenteMargin)}) — Objectif te donne ${formatMargin(objectifMargin)} de marge.`
+        : `Prudente est hors-délai${checkpointHint(prudenteWorstKm)} (${formatMargin(prudenteMargin)}) — il faut viser Objectif, qui passe avec ${formatMargin(objectifMargin)}.`
+      return { id: 'objectif', reason: base + nutritionWarningFor(objectif) }
+    }
+
+    // Seule l'Ambitieuse passe → recommandation forcée avec mise en garde
+    if (ambitieusePasses) {
+      const base = `Les stratégies plus prudentes sont hors-délai ou trop tendues — il faut viser Ambitieuse pour passer toutes les barrières (${formatMargin(ambitieuseMargin)}). Risque d'explosion à surveiller.`
+      return { id: 'ambitieuse', reason: base + nutritionWarningFor(ambitieuse) }
+    }
+
+    // Aucune stratégie ne respecte les barrières → on pointe la moins pire
+    return {
+      id: 'ambitieuse',
+      reason: `⚠️ Aucune stratégie ne respecte les barrières — même Ambitieuse est hors-délai (${formatMargin(ambitieuseMargin)}). Course non finissable en l'état avec ce profil.`,
+    }
+  }
+
+  // ── Branche sans barrière : logique d'origine basée sur endurance / nutrition / D+
   // Course ultra/longue (>50 km) ou très montagneux (>60 m D+/km)
   if (totalKm > 50 || ratioD > 60) {
     return {
@@ -354,7 +593,9 @@ function computeRecommendation(
   }
 
   // Si faible endurance ou nutrition insuffisante sur objectif
-  if (endurance < 0.4 || objectif.nutrition.icon === '❌') {
+  // (analyse glucidique ignorée si l'utilisateur l'a désactivée — nutrition === null)
+  const nutritionInsufficient = objectif.nutrition?.icon === '❌'
+  if (endurance < 0.4 || nutritionInsufficient) {
     return {
       id: 'prudente',
       reason: endurance < 0.4
@@ -443,9 +684,10 @@ function anchorProfileOnGarminCurve(
 export function generateRaceStrategy(
   track: GpxTrack,
   profile: RunnerProfile,
-  carbToleranceGPerHour = 60,
+  carbToleranceGPerHour: number | null = 60,
   garminPredictions?: GarminRacePredictions | null,
   environment?: EnvironmentConditions,
+  cutoffs: RaceCheckpoint[] | null = null,
 ): RaceStrategyReport {
   // Ancrage optionnel sur la courbe Garmin : si les prédictions Firstbeat sont
   // disponibles, on recale le flatSpeed du profil pour que les temps totaux y collent.
@@ -475,7 +717,12 @@ export function generateRaceStrategy(
       buildPhase(idx, group, maxHR)
     )
     const riskZones = detectRiskZones(result.segments, maxHR)
-    const nutrition = computeNutritionVerdict(result.totalCalories, result.totalDuration, carbToleranceGPerHour)
+    const nutrition = carbToleranceGPerHour !== null
+      ? computeNutritionVerdict(result.segments, result.totalDuration, carbToleranceGPerHour, simProfile)
+      : null
+    const feasibility = cutoffs !== null && cutoffs.length > 0
+      ? computeFeasibility(result.segments, result.totalDuration, cutoffs)
+      : null
 
     const avgHR          = Math.round(
       result.segments.reduce((s, seg) => s + seg.heartRateRange.target, 0) / result.segments.length
@@ -506,6 +753,7 @@ export function generateRaceStrategy(
       phases,
       riskZones,
       nutrition,
+      feasibility,
       blowupRisk:          config.blowupRisk,
       chartData,
     })
@@ -518,7 +766,7 @@ export function generateRaceStrategy(
     simProfile,
   )
 
-  const recommendation = computeRecommendation(track, profile, plans)
+  const recommendation = computeRecommendation(track, profile, plans, cutoffs)
 
   return {
     generatedAt:        new Date(),
@@ -529,6 +777,7 @@ export function generateRaceStrategy(
     strategies:         plans,
     lecture,
     carbToleranceGPerHour,
+    cutoffs:            cutoffs && cutoffs.length > 0 ? cutoffs : null,
     recommendation,
     ...(anchoring?.anchor && { garminCurveAnchor: anchoring.anchor }),
   }

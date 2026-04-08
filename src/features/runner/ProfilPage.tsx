@@ -5,7 +5,7 @@
  *  - Édition      : paramètres personnels (poids, FC, allure par défaut, unités)
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -130,7 +130,13 @@ export function ProfilPage() {
   const { oauth1, oauth2, isConnected: isGarminConnected } = useGarminStore()
 
   const [unit, setUnit] = useState<DistanceUnit>('km')
+  const [weightKg, setWeightKg] = useState<number>(profile.energyModel.weightKg)
   const [saved, setSaved] = useState(false)
+
+  // Resync local weight si le profil est mis à jour depuis l'extérieur (sync Garmin, recalibration…)
+  useEffect(() => {
+    setWeightKg(profile.energyModel.weightKg)
+  }, [profile.energyModel.weightKg])
   const [showGarminForm, setShowGarminForm] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -172,6 +178,16 @@ export function ProfilPage() {
   ]
 
   const handleSave = () => {
+    const updatedProfile = {
+      ...profile,
+      energyModel: { ...profile.energyModel, weightKg },
+    }
+    setProfile(updatedProfile)
+    if (user) {
+      saveRunnerProfile(user.id, updatedProfile).catch(err => {
+        console.error('[ProfilPage] Error saving profile to DB:', err)
+      })
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -309,6 +325,38 @@ export function ProfilPage() {
           </span>
         </button>
       ) : null}
+
+      {/* ── Section : Profil physique ── */}
+      <div>
+        <SectionTitle>{t('settings.physicalProfile')}</SectionTitle>
+        <Card>
+          <FieldRow
+            label={t('settings.weight')}
+            hint={t('settings.weightHint')}
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={weightKg}
+                min={30}
+                max={150}
+                step={0.5}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value)
+                  if (!Number.isNaN(v)) setWeightKg(v)
+                }}
+                className="w-20 px-3 py-1.5 text-[13px] font-medium text-right rounded-lg outline-none transition-colors focus:border-[#ff6d00]"
+                style={{
+                  background: 'var(--color-surface-2)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)',
+                }}
+              />
+              <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>kg</span>
+            </div>
+          </FieldRow>
+        </Card>
+      </div>
 
       {/* ── Section : Affichage ── */}
       <div>

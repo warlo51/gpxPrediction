@@ -142,12 +142,12 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
       <div className="p-4 sm:p-5 flex flex-col gap-5">
 
         {/* Stats strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className={`grid grid-cols-2 gap-2 ${plan.nutrition ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
           {[
             { label: 'FC moy',     value: `${plan.avgHR}`, unit: 'bpm' },
             { label: 'FC max est', value: `${plan.maxHREstimated}`, unit: 'bpm' },
             { label: 'Calories',   value: `${plan.totalCalories}`, unit: 'kcal' },
-            { label: 'Deficit',    value: `${plan.nutrition.deficitKcal}`, unit: 'kcal' },
+            ...(plan.nutrition ? [{ label: 'Deficit', value: `${plan.nutrition.deficitKcal}`, unit: 'kcal' }] : []),
           ].map(({ label, value, unit }) => (
             <div key={label} className="flex flex-col gap-0.5 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-center">
               <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
@@ -242,22 +242,24 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
         )}
 
         {/* Nutrition */}
-        <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
-          plan.nutrition.icon === '✅' ? 'bg-green-500/10 border-green-500/30' :
-          plan.nutrition.icon === '⚠️' ? 'bg-amber-500/10 border-amber-500/30' :
-                                         'bg-red-500/10 border-red-500/30'
-        }`}>
-          <span className="text-base shrink-0">{plan.nutrition.icon}</span>
-          <div>
-            <div className={`text-xs font-semibold ${
-              plan.nutrition.icon === '✅' ? 'text-green-400' :
-              plan.nutrition.icon === '⚠️' ? 'text-amber-400' : 'text-red-400'
-            }`}>
-              Nutrition — {plan.nutrition.status}
+        {plan.nutrition && (
+          <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
+            plan.nutrition.icon === '✅' ? 'bg-green-500/10 border-green-500/30' :
+            plan.nutrition.icon === '⚠️' ? 'bg-amber-500/10 border-amber-500/30' :
+                                           'bg-red-500/10 border-red-500/30'
+          }`}>
+            <span className="text-base shrink-0">{plan.nutrition.icon}</span>
+            <div>
+              <div className={`text-xs font-semibold ${
+                plan.nutrition.icon === '✅' ? 'text-green-400' :
+                plan.nutrition.icon === '⚠️' ? 'text-amber-400' : 'text-red-400'
+              }`}>
+                Nutrition — {plan.nutrition.status}
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">{plan.nutrition.message}</div>
             </div>
-            <div className="text-xs text-slate-400 mt-0.5">{plan.nutrition.message}</div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

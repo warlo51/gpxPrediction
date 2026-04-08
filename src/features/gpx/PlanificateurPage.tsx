@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
 import { parseGpxFile } from '@/services/gpxParser.service'
-import { generateRaceStrategy } from '@/services/raceStrategy.service'
+import { generateRaceStrategy, formatMargin } from '@/services/raceStrategy.service'
 import { formatDuration } from '@/services/simulationEngine.service'
 import { getGpxTracks } from '@/services/supabase.service'
 import { useGpxSave } from '@/hooks/useGpxSave'
@@ -19,7 +19,7 @@ import { ElevationChart } from './ElevationChart'
 import type { GpxTrack, EnvironmentConditions } from '@/types'
 import { NEUTRAL_ENVIRONMENT } from '@/types/simulation.types'
 import type { GpxTrackRow, TrackProfile } from '@/services/supabase.service'
-import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation, GarminCurveAnchor, LectureBullet } from '@/types/raceStrategy.types'
+import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation, GarminCurveAnchor, LectureBullet, RaceCheckpoint } from '@/types/raceStrategy.types'
 
 // ─── Strategy metadata ──────────────────────────────────────────────────────
 
@@ -27,6 +27,40 @@ const STRATEGY_META: Record<RaceStrategyId, { color: string; name: string; emoji
   prudente:   { color: '#15803d', name: 'Prudente',   emoji: '🟢' }, // green-700
   objectif:   { color: '#c2410c', name: 'Objectif',   emoji: '🟡' }, // orange-700
   ambitieuse: { color: '#b91c1c', name: 'Ambitieuse', emoji: '🔴' }, // red-700
+}
+
+/**
+ * Parse une chaîne au format `HH:mm` (ou `H:mm`) en secondes.
+ * Retourne `null` si la chaîne est vide ou invalide.
+ */
+function parseHHMMToSeconds(hhmm: string): number | null {
+  const trimmed = hhmm.trim()
+  if (!trimmed) return null
+  const match = /^(\d{1,2}):([0-5]\d)$/.exec(trimmed)
+  if (!match) return null
+  const hours   = parseInt(match[1]!, 10)
+  const minutes = parseInt(match[2]!, 10)
+  if (hours < 0 || hours > 99) return null
+  return hours * 3600 + minutes * 60
+}
+
+/** Une ligne de barrière en cours d'édition (km + HH:mm en string pour input UX) */
+type CutoffRow = { km: string; hhmm: string }
+
+/**
+ * Convertit la liste éditable en `RaceCheckpoint[]` exploitable par le service.
+ * Filtre les lignes invalides (km non parsable, hhmm invalide, km hors bornes).
+ */
+function rowsToCheckpoints(rows: CutoffRow[], totalKm: number): RaceCheckpoint[] {
+  const valid: RaceCheckpoint[] = []
+  for (const row of rows) {
+    const km = parseFloat(row.km)
+    if (Number.isNaN(km) || km <= 0 || km > totalKm + 0.5) continue
+    const seconds = parseHHMMToSeconds(row.hhmm)
+    if (seconds === null) continue
+    valid.push({ km, cutoffSeconds: seconds })
+  }
+  return valid
 }
 
 // ─── Drop zone (état initial) ────────────────────────────────────────────────
@@ -416,6 +450,17 @@ function StrategyPills({
                 {s.blowupRisk}
               </span>
             </div>
+            {s.feasibility && (
+              <div className={`text-[10px] font-semibold ${
+                s.feasibility.level === 'safe'  ? 'text-emerald-700' :
+                s.feasibility.level === 'tight' ? 'text-amber-600'   :
+                                                  'text-red-600'
+              }`}>
+                {s.feasibility.level === 'fail' ? '❌' : s.feasibility.level === 'tight' ? '⚠️' : '✅'}
+                {' Barrière '}
+                {formatMargin(s.feasibility.marginSeconds)}
+              </div>
+            )}
           </button>
         )
       })}
@@ -427,8 +472,10 @@ function StrategyPills({
 
 function ComparatifTable({ report }: { report: RaceStrategyReport }) {
   const { t } = useTranslation()
+  const hasCutoff = report.cutoffs !== null
   const rows: Array<{ label: string; key: string; format: (s: StrategyPlan) => string; highlight?: boolean }> = [
     { label: t('planner.comparativeTable.totalTime'),   key: 'time',    format: (s) => s.totalTimeFormatted, highlight: true },
+    ...(hasCutoff ? [{ label: 'Barrière', key: 'cutoff', format: (s: StrategyPlan) => s.feasibility ? formatMargin(s.feasibility.marginSeconds) : '—' }] : []),
     { label: t('planner.comparativeTable.avgPace'),     key: 'pace',    format: (s) => s.avgPaceFormatted },
     { label: t('planner.comparativeTable.avgHR'),       key: 'hr',      format: (s) => `${s.avgHR} bpm` },
     { label: t('planner.comparativeTable.maxHR'),       key: 'maxhr',   format: (s) => `${s.maxHREstimated} bpm` },
@@ -470,6 +517,12 @@ function ComparatifTable({ report }: { report: RaceStrategyReport }) {
                       s.avgFatigue < 0.1 ? 'text-emerald-700' :
                       s.avgFatigue < 0.25 ? 'text-amber-600' : 'text-red-600'
                     }>{row.format(s)}</span>
+                  ) : row.key === 'cutoff' && s.feasibility ? (
+                    <span className={
+                      s.feasibility.level === 'safe'  ? 'text-emerald-700 font-semibold' :
+                      s.feasibility.level === 'tight' ? 'text-amber-600 font-semibold'   :
+                                                        'text-red-600 font-semibold'
+                    }>{row.format(s)}</span>
                   ) : row.format(s)}
                 </td>
               ))}
@@ -493,12 +546,12 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
       <div className="p-4 sm:p-5 flex flex-col gap-5">
 
         {/* Stats strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className={`grid grid-cols-2 gap-2 ${plan.nutrition ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
           {[
             { label: 'FC moy',     value: `${plan.avgHR}`, unit: 'bpm' },
             { label: 'FC max est', value: `${plan.maxHREstimated}`, unit: 'bpm' },
             { label: 'Calories',   value: `${plan.totalCalories}`, unit: 'kcal' },
-            { label: 'Deficit',    value: `${plan.nutrition.deficitKcal}`, unit: 'kcal' },
+            ...(plan.nutrition ? [{ label: 'Deficit', value: `${plan.nutrition.deficitKcal}`, unit: 'kcal' }] : []),
           ].map(({ label, value, unit }) => (
             <div key={label} className="flex flex-col gap-0.5 px-3 py-2.5 rounded-xl bg-black/[0.03] border border-black/[0.08] text-center">
               <span className="text-[9px] sm:text-[10px] text-[#64748b] uppercase tracking-wider">{label}</span>
@@ -592,23 +645,67 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
           </div>
         )}
 
-        {/* Nutrition */}
-        <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
-          plan.nutrition.icon === '✅' ? 'bg-green-500/10 border-green-500/30' :
-          plan.nutrition.icon === '⚠️' ? 'bg-amber-500/10 border-amber-500/30' :
-                                         'bg-red-500/10 border-red-500/30'
-        }`}>
-          <span className="text-base shrink-0">{plan.nutrition.icon}</span>
+        {/* Barrières horaires */}
+        {plan.feasibility && (
           <div>
-            <div className={`text-xs font-semibold ${
-              plan.nutrition.icon === '✅' ? 'text-emerald-700' :
-              plan.nutrition.icon === '⚠️' ? 'text-amber-600' : 'text-red-600'
-            }`}>
-              Nutrition — {plan.nutrition.status}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
+              <h3 className="text-[#1a2033] font-semibold text-xs uppercase tracking-wider">Barrières horaires</h3>
             </div>
-            <div className="text-xs text-[#64748b] mt-0.5">{plan.nutrition.message}</div>
+            <div className="flex flex-col gap-1.5">
+              {plan.feasibility.checkpoints.map((cp, i) => {
+                const bgClass =
+                  cp.level === 'safe'  ? 'bg-green-500/10 border-green-500/30 text-emerald-700' :
+                  cp.level === 'tight' ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'   :
+                                         'bg-red-500/10 border-red-500/30 text-red-700'
+                const icon = cp.level === 'fail' ? '❌' : cp.level === 'tight' ? '⚠️' : '✅'
+                return (
+                  <div key={i} className={`flex items-center justify-between gap-3 px-3 py-2 rounded-xl border text-xs ${bgClass}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="shrink-0">{icon}</span>
+                      <span className="font-semibold shrink-0">km {cp.km.toFixed(1)}</span>
+                      {cp.label && (
+                        <span className="text-[#64748b] truncate">· {cp.label}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 font-mono text-[10px]">
+                      <span className="text-[#64748b]">
+                        {formatDuration(cp.predictedSeconds)} / {formatDuration(cp.cutoffSeconds)}
+                      </span>
+                      <span className="font-bold">{formatMargin(cp.marginSeconds)}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Nutrition */}
+        {plan.nutrition && (
+          <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
+            plan.nutrition.icon === '✅' ? 'bg-green-500/10 border-green-500/30' :
+            plan.nutrition.icon === '⚠️' ? 'bg-amber-500/10 border-amber-500/30' :
+                                           'bg-red-500/10 border-red-500/30'
+          }`}>
+            <span className="text-base shrink-0">{plan.nutrition.icon}</span>
+            <div>
+              <div className={`text-xs font-semibold ${
+                plan.nutrition.icon === '✅' ? 'text-emerald-700' :
+                plan.nutrition.icon === '⚠️' ? 'text-amber-600' : 'text-red-600'
+              }`}>
+                Nutrition — {plan.nutrition.status}
+              </div>
+              <div className="text-xs text-[#64748b] mt-0.5">{plan.nutrition.message}</div>
+              {plan.nutrition.extraCarbsPerHour > 0 && (
+                <div className="text-[10px] text-[#64748b] mt-1 font-mono">
+                  Cible recommandée : {plan.nutrition.recommendedCarbsPerHour} g/h
+                  {' '}(+{plan.nutrition.extraCarbsPerHour} g/h)
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -865,6 +962,9 @@ export function PlanificateurPage() {
   const [isParsing,  setIsParsing]  = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
   const [carbTolerance, setCarbTolerance] = useState(60)
+  const [carbAnalysisEnabled, setCarbAnalysisEnabled] = useState(true)
+  const [cutoffEnabled, setCutoffEnabled] = useState(false)
+  const [cutoffRows, setCutoffRows] = useState<CutoffRow[]>([])
   const [activeStrategy, setActiveStrategy] = useState<RaceStrategyId | null>(null)
   const [environment, setEnvironment] = useState<EnvironmentConditions>(NEUTRAL_ENVIRONMENT)
 
@@ -889,18 +989,35 @@ export function PlanificateurPage() {
   // Si des prédictions Garmin (Firstbeat) sont disponibles, on les utilise comme ancrage :
   // le flatSpeed du profil est recalé pour que le temps total Minetti colle à la courbe Garmin
   // + km-effort. Sans Garmin, on retombe sur le calcul Minetti pur.
+  const effectiveCarbTolerance = carbAnalysisEnabled ? carbTolerance : null
+  const trackTotalKm           = track ? track.totalDistance / 1000 : 0
+  const parsedCutoffs = useMemo<RaceCheckpoint[] | null>(() => {
+    if (!cutoffEnabled) return null
+    const checkpoints = rowsToCheckpoints(cutoffRows, trackTotalKm)
+    return checkpoints.length > 0 ? checkpoints : null
+  }, [cutoffEnabled, cutoffRows, trackTotalKm])
+
   const report = useMemo<RaceStrategyReport | null>(() => {
     if (!track) return null
-    return generateRaceStrategy(track, profile, carbTolerance, garminRacePredictions, environment)
-  }, [track, profile, carbTolerance, garminRacePredictions, environment])
+    return generateRaceStrategy(track, profile, effectiveCarbTolerance, garminRacePredictions, environment, parsedCutoffs)
+  }, [track, profile, effectiveCarbTolerance, garminRacePredictions, environment, parsedCutoffs])
 
   // Report de référence (conditions neutres) pour calculer le delta d'impact météo.
   // Recalculé uniquement si l'environnement est modifié — sinon c'est déjà le report principal.
   const baselineReport = useMemo<RaceStrategyReport | null>(() => {
     if (!track) return null
     if (isNeutralEnv) return report
-    return generateRaceStrategy(track, profile, carbTolerance, garminRacePredictions)
-  }, [track, profile, carbTolerance, garminRacePredictions, isNeutralEnv, report])
+    return generateRaceStrategy(track, profile, effectiveCarbTolerance, garminRacePredictions, undefined, parsedCutoffs)
+  }, [track, profile, effectiveCarbTolerance, garminRacePredictions, isNeutralEnv, report, parsedCutoffs])
+
+  // Seed une ligne par défaut (km = distance totale, hhmm vide) quand l'utilisateur
+  // active les barrières sans avoir encore saisi de checkpoint.
+  useEffect(() => {
+    if (cutoffEnabled && cutoffRows.length === 0 && track) {
+      const totalKm = track.totalDistance / 1000
+      setCutoffRows([{ km: totalKm.toFixed(1), hhmm: '' }])
+    }
+  }, [cutoffEnabled, cutoffRows.length, track])
 
   // Sélection auto de la stratégie recommandée quand le report change
   const effectiveStrategy = activeStrategy ?? report?.recommendation.id ?? 'objectif'
@@ -1034,18 +1151,109 @@ export function PlanificateurPage() {
       {/* Stratégie */}
       {report && (
         <>
-          {/* Titre section + slider glucides */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-2">
+          {/* Titre section + contrôles (glucides + barrière horaire) */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mt-2">
             <div className="flex items-center gap-3">
               <span className="w-1 h-8 rounded-full bg-[#ff6d00] shrink-0" />
               <h2 className="text-xl font-bold text-[#1a2033]">Plan de course</h2>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-[#64748b] uppercase tracking-wider whitespace-nowrap">Glucides</label>
-              <input type="range" min={30} max={120} step={5} value={carbTolerance}
-                onChange={(e) => setCarbTolerance(Number(e.target.value))}
-                className="w-20 sm:w-28 accent-[#ff6d00]" />
-              <span className="text-xs font-mono text-[#1a2033] w-12 shrink-0">{carbTolerance} g/h</span>
+            <div className="flex flex-col gap-2 sm:items-end">
+              {/* Glucides */}
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 cursor-pointer" title="Activer ou désactiver l'analyse glucidique">
+                  <input
+                    type="checkbox"
+                    checked={carbAnalysisEnabled}
+                    onChange={(e) => setCarbAnalysisEnabled(e.target.checked)}
+                    className="accent-[#ff6d00] cursor-pointer"
+                  />
+                  <span className="text-[10px] text-[#64748b] uppercase tracking-wider whitespace-nowrap">Glucides</span>
+                </label>
+                <input type="range" min={30} max={120} step={5} value={carbTolerance}
+                  disabled={!carbAnalysisEnabled}
+                  onChange={(e) => setCarbTolerance(Number(e.target.value))}
+                  className="w-20 sm:w-28 accent-[#ff6d00] disabled:opacity-40 disabled:cursor-not-allowed" />
+                <span className={`text-xs font-mono w-12 shrink-0 ${carbAnalysisEnabled ? 'text-[#1a2033]' : 'text-[#94a3b8]'}`}>
+                  {carbAnalysisEnabled ? `${carbTolerance} g/h` : 'off'}
+                </span>
+              </div>
+
+              {/* Barrières horaires */}
+              <div className="flex flex-col gap-1.5 sm:items-end">
+                <label className="flex items-center gap-1.5 cursor-pointer" title="Activer ou désactiver les barrières horaires">
+                  <input
+                    type="checkbox"
+                    checked={cutoffEnabled}
+                    onChange={(e) => setCutoffEnabled(e.target.checked)}
+                    className="accent-[#ff6d00] cursor-pointer"
+                  />
+                  <span className="text-[10px] text-[#64748b] uppercase tracking-wider whitespace-nowrap">Barrières horaires</span>
+                </label>
+                {cutoffEnabled && (
+                  <div className="flex flex-col gap-1.5 sm:items-end">
+                    {cutoffRows.map((row, idx) => {
+                      const km = parseFloat(row.km)
+                      const kmValid = !Number.isNaN(km) && km > 0 && km <= trackTotalKm + 0.5
+                      const hhmmValid = parseHHMMToSeconds(row.hhmm) !== null
+                      return (
+                        <div key={idx} className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step={0.1}
+                            placeholder="km"
+                            value={row.km}
+                            onChange={(e) => {
+                              const next = [...cutoffRows]
+                              next[idx] = { ...next[idx]!, km: e.target.value }
+                              setCutoffRows(next)
+                            }}
+                            aria-invalid={!kmValid && row.km.trim() !== ''}
+                            className="w-16 px-2 py-1 text-xs font-mono text-center rounded-lg border border-black/[0.12] bg-white text-[#1a2033] focus:outline-none focus:border-[#ff6d00] aria-[invalid=true]:border-red-500"
+                          />
+                          <span className="text-[10px] text-[#94a3b8]">km</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="HH:mm"
+                            value={row.hhmm}
+                            onChange={(e) => {
+                              const next = [...cutoffRows]
+                              next[idx] = { ...next[idx]!, hhmm: e.target.value }
+                              setCutoffRows(next)
+                            }}
+                            aria-invalid={!hhmmValid && row.hhmm.trim() !== ''}
+                            className="w-20 px-2 py-1 text-xs font-mono text-center rounded-lg border border-black/[0.12] bg-white text-[#1a2033] focus:outline-none focus:border-[#ff6d00] aria-[invalid=true]:border-red-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCutoffRows(cutoffRows.filter((_, i) => i !== idx))}
+                            className="w-6 h-6 flex items-center justify-center rounded-md text-[#94a3b8] hover:text-red-600 hover:bg-red-50 transition-colors"
+                            aria-label="Supprimer cette barrière"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const defaultKm = track
+                          ? (cutoffRows.length === 0
+                              ? (track.totalDistance / 1000).toFixed(1)
+                              : '')
+                          : ''
+                        setCutoffRows([...cutoffRows, { km: defaultKm, hhmm: '' }])
+                      }}
+                      className="self-start sm:self-end text-[10px] font-semibold text-[#ff6d00] hover:underline"
+                    >
+                      + ajouter une barrière
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
