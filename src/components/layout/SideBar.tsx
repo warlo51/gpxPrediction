@@ -7,7 +7,7 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
-import type { Page } from './NavBar'
+import type { Page } from '@/types/navigation.types'
 
 interface SideBarProps {
   activePage: Page

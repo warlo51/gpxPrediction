@@ -32,18 +32,18 @@ const SEGMENT_LABELS: Record<SegmentType, string> = {
 
 function buildPopupHtml(seg: GpxSegment): string {
   const gradeColor =
-    seg.avgGrade > 5 ? '#f97316' : seg.avgGrade < -5 ? '#38bdf8' : '#94a3b8'
+    seg.avgGrade > 5 ? '#c2410c' : seg.avgGrade < -5 ? '#0369a1' : '#475569'
   return `
     <div style="min-width:160px">
       <div style="font-weight:700;color:${SEGMENT_COLORS[seg.type]};margin-bottom:6px">
         ${SEGMENT_LABELS[seg.type]}
       </div>
-      <div style="color:#94a3b8;font-size:11px;line-height:1.8">
-        📏 Distance : <strong style="color:#f1f5f9">${(seg.distance / 1000).toFixed(2)} km</strong><br/>
+      <div style="color:#64748b;font-size:11px;line-height:1.8">
+        📏 Distance : <strong style="color:#1a2033">${(seg.distance / 1000).toFixed(2)} km</strong><br/>
         📐 Pente moy. : <strong style="color:${gradeColor}">${seg.avgGrade.toFixed(1)} %</strong><br/>
-        ⬆️ D+ : <strong style="color:#f97316">+${Math.round(seg.elevationGain)} m</strong><br/>
-        ⬇️ D- : <strong style="color:#38bdf8">-${Math.round(seg.elevationLoss)} m</strong><br/>
-        📍 Cumul : <strong style="color:#f1f5f9">${(seg.cumulativeDistance / 1000).toFixed(1)} km</strong>
+        ⬆️ D+ : <strong style="color:#c2410c">+${Math.round(seg.elevationGain)} m</strong><br/>
+        ⬇️ D- : <strong style="color:#0369a1">-${Math.round(seg.elevationLoss)} m</strong><br/>
+        📍 Cumul : <strong style="color:#1a2033">${(seg.cumulativeDistance / 1000).toFixed(1)} km</strong>
       </div>
     </div>
   `
@@ -181,22 +181,24 @@ export function TrackMap({ track, height = '320px' }: TrackMapProps) {
   }, [hoveredSegmentId])
 
   return (
-    <div className="glass rounded-2xl overflow-hidden">
+    <div className="rounded-2xl overflow-hidden"
+         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
       {/* En-tête */}
-      <div className="px-4 py-3 border-b border-white/6 flex items-center justify-between">
+      <div className="px-4 py-3 flex items-center justify-between"
+           style={{ borderBottom: '1px solid var(--color-border)' }}>
         <div className="flex items-center gap-2">
-          <span className="w-1 h-5 rounded-full bg-emerald-500 inline-block" />
-          <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          <span className="w-1 h-5 rounded-full bg-[#ff6d00] inline-block" />
+          <h3 className="text-[#1a2033] font-semibold text-sm uppercase tracking-wider">
             Carte du parcours
           </h3>
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-500">
+        <div className="flex items-center gap-3 text-xs text-[#64748b]">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500/80 ring-2 ring-emerald-500/20" />
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20" />
             Départ
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500/80 ring-2 ring-red-500/20" />
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-500/20" />
             Arrivée
           </span>
         </div>
@@ -210,9 +212,10 @@ export function TrackMap({ track, height = '320px' }: TrackMapProps) {
       />
 
       {/* Légende segments */}
-      <div className="px-4 py-3 border-t border-white/6 grid grid-cols-3 sm:flex sm:flex-wrap gap-2 sm:gap-3">
+      <div className="px-4 py-3 grid grid-cols-3 sm:flex sm:flex-wrap gap-2 sm:gap-3"
+           style={{ borderTop: '1px solid var(--color-border)' }}>
         {(Object.keys(SEGMENT_COLORS) as SegmentType[]).map((type) => (
-          <div key={type} className="flex items-center gap-1.5 text-xs text-slate-400">
+          <div key={type} className="flex items-center gap-1.5 text-xs text-[#64748b]">
             <span
               className="inline-block w-4 h-1.5 rounded-full"
               style={{ backgroundColor: SEGMENT_COLORS[type] }}

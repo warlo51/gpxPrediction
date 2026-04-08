@@ -38,7 +38,7 @@ function ScoreRing({ value, label, color, size = 80 }: {
   return (
     <div className="flex flex-col items-center gap-1.5">
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1e293b" strokeWidth={7} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={7} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none"
           stroke={color} strokeWidth={7}
@@ -48,8 +48,8 @@ function ScoreRing({ value, label, color, size = 80 }: {
         />
       </svg>
       <div className="text-center -mt-1">
-        <div className="font-bold text-white text-sm" style={{ color }}>{value}</div>
-        <div className="text-slate-500 text-[10px] leading-tight">{label}</div>
+        <div className="font-bold text-[#1a2033] text-sm" style={{ color }}>{value}</div>
+        <div className="text-[#64748b] text-[10px] leading-tight">{label}</div>
       </div>
     </div>
   )
@@ -60,10 +60,10 @@ function ScoreRing({ value, label, color, size = 80 }: {
 function PaceTip({ active, payload, label }: { active?: boolean; payload?: {value: number; name: string}[]; label?: string }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs">
-      <div className="text-slate-400 mb-1">{label}</div>
+    <div className="bg-white border border-black/10 rounded-xl px-3 py-2 text-xs">
+      <div className="text-[#64748b] mb-1">{label}</div>
       {payload.map((p, i) => (
-        <div key={i} className="text-white font-medium">
+        <div key={i} className="text-[#1a2033] font-medium">
           {p.name === 'paceSecPerKm' ? formatPace(p.value) + ' /km' : p.value}
         </div>
       ))}
@@ -73,15 +73,15 @@ function PaceTip({ active, payload, label }: { active?: boolean; payload?: {valu
 
 // ─── Carte stat ───────────────────────────────────────────────────────────────
 
-function StatCard({ icon, label, value, sub, color = 'text-white' }: {
+function StatCard({ icon, label, value, sub, color = 'text-[#1a2033]' }: {
   icon: string; label: string; value: string; sub?: string; color?: string
 }) {
   return (
-    <div className="bg-white/3 border border-white/6 rounded-xl p-3 sm:p-4">
+    <div className="bg-white border border-black/6 rounded-xl p-3 sm:p-4">
       <div className="text-xl mb-2">{icon}</div>
-      <div className="text-slate-500 text-xs mb-1">{label}</div>
+      <div className="text-[#64748b] text-xs mb-1">{label}</div>
       <div className={`font-bold text-sm sm:text-base ${color}`}>{value}</div>
-      {sub && <div className="text-slate-600 text-xs mt-0.5">{sub}</div>}
+      {sub && <div className="text-[#94a3b8] text-xs mt-0.5">{sub}</div>}
     </div>
   )
 }
@@ -91,14 +91,14 @@ function StatCard({ icon, label, value, sub, color = 'text-white' }: {
 function InsightCard({ item }: { item: StrengthWeakness }) {
   const { t } = useTranslation()
   const colors = {
-    force: 'border-emerald-800/40 bg-emerald-950/20',
-    faiblesse: 'border-red-800/40 bg-red-950/20',
-    neutre: 'border-white/6 bg-white/3',
+    force: 'border-emerald-200 bg-emerald-50',
+    faiblesse: 'border-red-200 bg-red-50',
+    neutre: 'border-black/6 bg-white',
   }
   const textColors = {
-    force: 'text-emerald-400',
-    faiblesse: 'text-red-400',
-    neutre: 'text-slate-400',
+    force: 'text-emerald-600',
+    faiblesse: 'text-red-600',
+    neutre: 'text-[#64748b]',
   }
   const badges = {
     force: `✅ ${t('analysis.strength')}`,
@@ -111,11 +111,11 @@ function InsightCard({ item }: { item: StrengthWeakness }) {
       <span className="text-2xl shrink-0">{item.icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-white font-semibold text-sm">{item.label}</span>
+          <span className="text-[#1a2033] font-semibold text-sm">{item.label}</span>
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
-            item.type === 'force' ? 'border-emerald-700/50 bg-emerald-900/30 text-emerald-400'
-            : item.type === 'faiblesse' ? 'border-red-700/50 bg-red-900/30 text-red-400'
-            : 'border-white/10 bg-white/5 text-slate-400'
+            item.type === 'force' ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+            : item.type === 'faiblesse' ? 'border-red-300 bg-red-100 text-red-700'
+            : 'border-black/10 bg-black/5 text-[#64748b]'
           }`}>
             {badges[item.type]}
           </span>
@@ -123,7 +123,7 @@ function InsightCard({ item }: { item: StrengthWeakness }) {
             <span className={`ml-auto font-bold text-sm ${textColors[item.type]}`}>{item.value}</span>
           )}
         </div>
-        <p className="text-slate-500 text-xs mt-1 leading-relaxed">{item.detail}</p>
+        <p className="text-[#64748b] text-xs mt-1 leading-relaxed">{item.detail}</p>
       </div>
     </div>
   )
@@ -160,27 +160,27 @@ function PaceTrendChart({ data }: { data: RunnerAnalysisType['performanceTrend']
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span className="w-1 h-5 rounded-full bg-indigo-500 inline-block" />
-          <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          <h3 className="text-[#1a2033] font-semibold text-sm uppercase tracking-wider">
             {t('analysis.paceEvolution')}
           </h3>
         </div>
         <span className={`text-xs px-2 py-1 rounded-full ${
           improving
-            ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/40'
-            : 'bg-amber-900/30 text-amber-400 border border-amber-800/40'
+            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+            : 'bg-amber-50 text-amber-600 border border-amber-200'
         }`}>
           {improving ? `📈 ${t('analysis.progressionDetected')}` : `➡️ ${t('analysis.stablePace')}`}
         </span>
       </div>
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
           <YAxis
             reversed
             tickFormatter={formatPace}
             tick={{ fill: '#64748b', fontSize: 10 }}
-            axisLine={{ stroke: '#334155' }}
+            axisLine={{ stroke: '#cbd5e1' }}
             tickLine={false}
             width={45}
           />
@@ -202,7 +202,7 @@ function PaceTrendChart({ data }: { data: RunnerAnalysisType['performanceTrend']
           />
         </LineChart>
       </ResponsiveContainer>
-      <p className="text-xs text-slate-600 mt-2 text-center">
+      <p className="text-xs text-[#94a3b8] mt-2 text-center">
         {t('analysis.invertedYAxis')}
       </p>
     </div>
@@ -214,7 +214,7 @@ function PaceTrendChart({ data }: { data: RunnerAnalysisType['performanceTrend']
 function GradePaceChart({ data }: { data: RunnerAnalysisType['gradePaceCurve'] }) {
   const { t } = useTranslation()
   if (!data.length) return (
-    <div className="glass rounded-2xl p-4 sm:p-5 flex items-center justify-center text-slate-600 text-sm h-40">
+    <div className="glass rounded-2xl p-4 sm:p-5 flex items-center justify-center text-[#94a3b8] text-sm h-40">
       {t('analysis.noStreamsData')}
     </div>
   )
@@ -231,18 +231,18 @@ function GradePaceChart({ data }: { data: RunnerAnalysisType['gradePaceCurve'] }
     <div className="glass rounded-2xl p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-4">
         <span className="w-1 h-5 rounded-full bg-orange-500 inline-block" />
-        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+        <h3 className="text-[#1a2033] font-semibold text-sm uppercase tracking-wider">
           {t('analysis.realSpeedByGrade')}
         </h3>
-        <span className="text-xs text-slate-600 ml-auto">{t('analysis.realGpsData')}</span>
+        <span className="text-xs text-[#94a3b8] ml-auto">{t('analysis.realGpsData')}</span>
       </div>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="grade" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={{ stroke: '#334155' }} tickLine={false} />
-          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} unit=" km/h" width={52} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="grade" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
+          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} unit=" km/h" width={52} />
           <Tooltip
-            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px', fontSize: '12px' }}
+            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '12px', color: '#1a2033' }}
             formatter={(v: unknown, name?: unknown) => {
               const num = typeof v === 'number' ? v : parseFloat(String(v ?? 0))
               return String(name) === 'vitesse' ? [`${num} km/h`, 'Vitesse'] : [`${formatPace(num)} /km`, 'Allure']
@@ -265,7 +265,7 @@ function GradePaceChart({ data }: { data: RunnerAnalysisType['gradePaceCurve'] }
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <div className="flex gap-3 mt-2 flex-wrap text-[10px] text-slate-500">
+      <div className="flex gap-3 mt-2 flex-wrap text-[10px] text-[#64748b]">
         <span><span className="inline-block w-2 h-2 rounded-full bg-indigo-500 mr-1" />Descente forte</span>
         <span><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />Plat</span>
         <span><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" />Montée modérée</span>
@@ -282,17 +282,17 @@ function WeeklyLoadChart({ data }: { data: RunnerAnalysisType['weeklyLoad'] }) {
     <div className="glass rounded-2xl p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-4">
         <span className="w-1 h-5 rounded-full bg-emerald-500 inline-block" />
-        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+        <h3 className="text-[#1a2033] font-semibold text-sm uppercase tracking-wider">
           Charge hebdomadaire — 12 semaines
         </h3>
       </div>
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="week" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={{ stroke: '#334155' }} tickLine={false} />
-          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} unit=" km" width={40} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="week" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
+          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} unit=" km" width={40} />
           <Tooltip
-            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px', fontSize: '12px' }}
+            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '12px', color: '#1a2033' }}
             formatter={(v: unknown, name?: unknown) => {
               const num = typeof v === 'number' ? v : parseFloat(String(v ?? 0))
               return String(name) === 'distanceKm' ? [`${num} km`, 'Distance'] : [`${num} m`, 'D+']
@@ -329,27 +329,27 @@ function ZoneList({
     <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col">
       <div className="flex items-center gap-2 mb-1">
         <span className="w-1 h-5 rounded-full inline-block" style={{ backgroundColor: accentColor }} />
-        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">{title}</h3>
+        <h3 className="text-[#1a2033] font-semibold text-sm uppercase tracking-wider">{title}</h3>
         {!hasHR && (
-          <span className="text-xs text-slate-600 ml-auto">Estimées</span>
+          <span className="text-xs text-[#94a3b8] ml-auto">Estimées</span>
         )}
       </div>
-      <p className="text-xs text-slate-600 mb-4 ml-3">{subtitle}</p>
+      <p className="text-xs text-[#94a3b8] mb-4 ml-3">{subtitle}</p>
       <div className="space-y-2.5 flex-1">
         {zones.map(z => (
           <div key={z.zone} className="flex items-center gap-2">
-            <span className="text-slate-500 text-xs w-3 shrink-0">{z.zone}</span>
+            <span className="text-[#64748b] text-xs w-3 shrink-0">{z.zone}</span>
             <div className="flex-1">
               <div className="flex items-center justify-between mb-0.5 gap-1">
                 <span className="text-xs truncate" style={{ color: z.color }}>{z.label}</span>
-                <span className="text-xs text-slate-500 shrink-0 tabular-nums">
+                <span className="text-xs text-[#64748b] shrink-0 tabular-nums">
                   {z.minHR}–{z.maxHR} bpm
                   {'minPct' in z && z.minPct !== undefined
                     ? ` (${z.minPct}–${z.maxPct}% ${pctLabel ?? 'FCR'})`
                     : ''}
                 </span>
               </div>
-              <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-2 rounded-full bg-black/5 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{ width: `${showPct ? z.pct : 0}%`, backgroundColor: z.color }}
@@ -365,9 +365,9 @@ function ZoneList({
         ))}
       </div>
       {/* Légende FC repos / max */}
-      <div className="mt-3 pt-3 border-t border-white/6 flex justify-between text-xs text-slate-600">
-        <span>FC repos : <span className="text-slate-400">{zones[0]?.minHR ? zones[0].minHR - 1 : '--'} bpm env.</span></span>
-        <span>FC max : <span className="text-slate-400">{zones[zones.length - 1]?.maxHR ?? '--'} bpm</span></span>
+      <div className="mt-3 pt-3 border-t border-black/6 flex justify-between text-xs text-[#94a3b8]">
+        <span>FC repos : <span className="text-[#64748b]">{zones[0]?.minHR ? zones[0].minHR - 1 : '--'} bpm env.</span></span>
+        <span>FC max : <span className="text-[#64748b]">{zones[zones.length - 1]?.maxHR ?? '--'} bpm</span></span>
       </div>
     </div>
   )
@@ -388,7 +388,7 @@ function TerrainBreakdown({ data, hasStreams }: {
     <div className="glass rounded-2xl p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-4">
         <span className="w-1 h-5 rounded-full bg-amber-500 inline-block" />
-        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+        <h3 className="text-[#1a2033] font-semibold text-sm uppercase tracking-wider">
           Répartition du terrain
         </h3>
       </div>
@@ -403,7 +403,7 @@ function TerrainBreakdown({ data, hasStreams }: {
           <div key={it.label} className="text-center">
             <div className="text-lg">{it.icon}</div>
             <div className="font-bold text-sm" style={{ color: it.color }}>{it.value}%</div>
-            <div className="text-slate-500 text-xs">{it.label}</div>
+            <div className="text-[#64748b] text-xs">{it.label}</div>
           </div>
         ))}
       </div>
@@ -429,9 +429,9 @@ export function RunnerAnalysisPanel() {
     return (
       <div className="glass rounded-2xl p-8 flex flex-col items-center gap-4 text-center">
         <span className="text-5xl">📊</span>
-        <h3 className="text-white font-bold text-lg">Aucun historique disponible</h3>
-        <p className="text-slate-500 text-sm max-w-sm">
-          Importez vos fichiers FIT Garmin dans l'onglet <strong className="text-slate-300">Historique</strong> pour débloquer l'analyse complète de votre profil.
+        <h3 className="text-[#1a2033] font-bold text-lg">Aucun historique disponible</h3>
+        <p className="text-[#64748b] text-sm max-w-sm">
+          Importez vos fichiers FIT Garmin dans l'onglet <strong className="text-[#1a2033]">Historique</strong> pour débloquer l'analyse complète de votre profil.
         </p>
       </div>
     )
@@ -444,7 +444,7 @@ export function RunnerAnalysisPanel() {
       <div className="glass rounded-2xl p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-5">
           <span className="w-1 h-5 rounded-full bg-indigo-500 inline-block" />
-          <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">Scores coureur</h3>
+          <h3 className="text-[#1a2033] font-semibold text-sm uppercase tracking-wider">Scores coureur</h3>
         </div>
         <div className="flex justify-around flex-wrap gap-4">
           <ScoreRing value={stats.consistencyScore} label="Régularité" color="#22c55e" />
@@ -458,7 +458,7 @@ export function RunnerAnalysisPanel() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
         <StatCard icon="📏" label="Distance totale" value={`${stats.totalDistanceKm} km`} color="text-indigo-300" />
         <StatCard icon="⛰️" label="D+ total" value={`${stats.totalElevationGain.toLocaleString('fr-FR')} m`} color="text-orange-400" />
-        <StatCard icon="⏱️" label="Temps total" value={`${stats.totalDurationHours.toFixed(0)} h`} color="text-slate-200" />
+        <StatCard icon="⏱️" label="Temps total" value={`${stats.totalDurationHours.toFixed(0)} h`} color="text-[#1a2033]" />
         <StatCard icon="🏃" label="Séances" value={`${stats.totalSessions}`} sub={`Moy. ${stats.avgDistanceKm} km`} />
         <StatCard icon="🏅" label="Plus longue" value={`${stats.longestRunKm} km`} color="text-emerald-400" />
         <StatCard icon="🔺" label="Plus grand D+" value={`${stats.biggestElevGain} m`} color="text-amber-400" />
@@ -468,7 +468,7 @@ export function RunnerAnalysisPanel() {
       <div className="glass rounded-2xl p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-4">
           <span className="w-1 h-5 rounded-full bg-amber-500 inline-block" />
-          <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">
+          <h3 className="text-[#1a2033] font-semibold text-sm uppercase tracking-wider">
             Forces &amp; points à améliorer
           </h3>
         </div>

@@ -6,9 +6,6 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
-import { useGarminStore } from '@/stores/garminStore'
-import { GarminConnect } from '@/features/history/GarminConnect'
-import { PremiumGate } from '@/components/PremiumGate'
 import {
   upsertUserProfile,
   getUserProfile,
@@ -154,10 +151,6 @@ function AccountContent({
 }) {
   const { t } = useTranslation()
   const { profile, updateProfile } = useAppStore()
-  const garminOauth1 = useGarminStore(s => s.oauth1)
-  const garminOauth2 = useGarminStore(s => s.oauth2)
-
-  const garminConnected = !!(garminOauth1 && garminOauth2)
 
   const [weight, setWeight] = useState(profile.energyModel.weightKg.toString())
   const [age, setAge] = useState(profile.age?.toString() ?? '')
@@ -333,23 +326,6 @@ function AccountContent({
         </div>
       </section>
 
-      {/* ── Connexions ── */}
-      <section className="flex flex-col gap-4">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[#ff6d00]" />
-          <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-white">
-            {t('account.connections')}
-          </span>
-          <div className="flex items-center gap-2 ml-auto">
-            <StatusPill label="Garmin" connected={garminConnected} />
-          </div>
-        </div>
-
-        <PremiumGate>
-          <GarminConnect />
-        </PremiumGate>
-      </section>
-
       {/* ── Deconnexion ── */}
       <section
         className="rounded-2xl p-6 flex items-center justify-between"
@@ -370,16 +346,6 @@ function AccountContent({
           {t('account.signOutBtn')}
         </button>
       </section>
-    </div>
-  )
-}
-
-function StatusPill({ label, connected }: { label: string; connected: boolean }) {
-  return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
-      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-      <span className={`w-[6px] h-[6px] rounded-full ${connected ? 'bg-[#22c55e]' : 'bg-[rgba(218,226,253,0.2)]'}`} />
-      <span className="text-[10px] font-medium text-[rgba(218,226,253,0.5)]">{label}</span>
     </div>
   )
 }
