@@ -128,17 +128,6 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
                   </div>
                   <div className="py-1">
                     <button
-                      onClick={() => { handleNavClick('compte'); setDropdownOpen(false) }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] text-[#64748b]
-                                 hover:bg-black/[0.03] hover:text-[#1a2033] transition-colors text-left"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <circle cx="7" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.2" />
-                        <path d="M2.5 12.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                      </svg>
-                      {t('nav.myAccount')}
-                    </button>
-                    <button
                       onClick={() => { setDropdownOpen(false); signOut() }}
                       className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] text-red-500/70
                                  hover:bg-black/[0.03] hover:text-red-500 transition-colors text-left"
