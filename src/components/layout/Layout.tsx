@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavBar } from './NavBar'
-import type { Page } from './NavBar'
+import type { Page } from '@/types/navigation.types'
 
 interface LayoutProps {
   activePage: Page
@@ -15,9 +15,9 @@ export function Layout({ activePage, onNavigate, children, fullWidth }: LayoutPr
       {/* Background decoration */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[500px]
-                        rounded-full bg-indigo-900/20 blur-3xl" />
+                        rounded-full bg-indigo-100/40 blur-3xl" />
         <div className="absolute top-1/3 -right-40 w-[500px] h-[500px]
-                        rounded-full bg-violet-900/15 blur-3xl" />
+                        rounded-full bg-violet-50/30 blur-3xl" />
       </div>
 
       <NavBar activePage={activePage} onNavigate={onNavigate} />

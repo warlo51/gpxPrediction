@@ -41,7 +41,7 @@ export function GpxImport({ onTrackLoaded }: GpxImportProps) {
         message: err instanceof Error ? err.message : 'Erreur inconnue lors du parsing',
       })
     }
-  }, [onTrackLoaded])
+  }, [onTrackLoaded, t])
 
   const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()

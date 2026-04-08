@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useSupabaseSync } from '@/hooks/useSupabaseSync'
 import './App.css'
 import { Layout } from '@/components/layout/Layout'
-import type { Page } from '@/components/layout/NavBar'
+import type { Page } from '@/types/navigation.types'
 import { AccueilPage } from '@/features/home/AccueilPage'
 import { PlanificateurPage } from '@/features/gpx/PlanificateurPage'
 import { ProfilPage } from '@/features/runner/ProfilPage'
@@ -20,11 +20,11 @@ function LoadingScreen() {
   return (
     <div
       className="w-full min-h-screen flex items-center justify-center"
-      style={{ background: '#0b1326' }}
+      style={{ background: 'var(--color-bg)' }}
     >
       <div className="flex flex-col items-center gap-4">
         <div className="w-8 h-8 border-2 border-[#ff6d00] border-t-transparent rounded-full animate-spin" />
-        <span className="text-[13px] text-[rgba(218,226,253,0.5)] tracking-wide">
+        <span className="text-[13px] tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
           {t('common.loading')}
         </span>
       </div>

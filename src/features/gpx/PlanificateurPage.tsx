@@ -23,9 +23,9 @@ import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommen
 // ─── Strategy metadata ──────────────────────────────────────────────────────
 
 const STRATEGY_META: Record<RaceStrategyId, { color: string; name: string; emoji: string }> = {
-  prudente:   { color: '#22c55e', name: 'Prudente',   emoji: '🟢' },
-  objectif:   { color: '#f97316', name: 'Objectif',   emoji: '🟡' },
-  ambitieuse: { color: '#ef4444', name: 'Ambitieuse', emoji: '🔴' },
+  prudente:   { color: '#15803d', name: 'Prudente',   emoji: '🟢' }, // green-700
+  objectif:   { color: '#c2410c', name: 'Objectif',   emoji: '🟡' }, // orange-700
+  ambitieuse: { color: '#b91c1c', name: 'Ambitieuse', emoji: '🔴' }, // red-700
 }
 
 // ─── Drop zone (état initial) ────────────────────────────────────────────────
@@ -60,10 +60,10 @@ function DropZone({
           'transition-all duration-200 px-8 py-16',
           isDragging
             ? 'border-2 border-dashed border-[#ff6d00] bg-[rgba(255,109,0,0.08)]'
-            : 'border-2 border-dashed border-white/10 hover:border-white/20 hover:bg-white/[0.02]',
+            : 'border-2 border-dashed border-black/10 hover:border-black/20 hover:bg-black/[0.02]',
           isParsing ? 'pointer-events-none opacity-60' : '',
         ].join(' ')}
-        style={{ background: isDragging ? undefined : '#0d1829' }}
+        style={{ background: isDragging ? undefined : 'var(--color-surface-2)' }}
       >
         <input
           ref={inputRef}
@@ -76,7 +76,7 @@ function DropZone({
         {isParsing ? (
           <>
             <div className="w-12 h-12 border-2 border-[#ff6d00] border-t-transparent rounded-full animate-spin" />
-            <p className="text-[rgba(218,226,253,0.6)] text-sm">{t('planner.analyzing')}</p>
+            <p className="text-[#64748b] text-sm">{t('planner.analyzing')}</p>
           </>
         ) : (
           <>
@@ -92,10 +92,10 @@ function DropZone({
             </div>
 
             <div className="text-center">
-              <p className="text-lg font-semibold text-white mb-2">
+              <p className="text-lg font-semibold text-[#1a2033] mb-2">
                 {isDragging ? t('planner.dropTitleDragging') : t('planner.dropTitle')}
               </p>
-              <p className="text-[13px] text-[rgba(218,226,253,0.45)] max-w-[280px] leading-relaxed">
+              <p className="text-[13px] text-[#64748b] max-w-[280px] leading-relaxed">
                 {t('planner.dropHint')}
               </p>
             </div>
@@ -103,9 +103,9 @@ function DropZone({
             <button
               type="button"
               className="px-6 py-2.5 rounded-xl text-[11px] font-bold tracking-[1.5px] uppercase
-                         text-[rgba(218,226,253,0.8)] transition-all
-                         hover:border-white/30 hover:text-white"
-              style={{ background: '#1a2540', border: '1px solid rgba(255,255,255,0.12)' }}
+                         text-[#1a2033] transition-all
+                         hover:border-black/30 hover:text-[#1a2033]"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
               onClick={e => { e.stopPropagation(); inputRef.current?.click() }}
             >
               {t('common.browse')}
@@ -148,20 +148,20 @@ function TrackHeader({
             </svg>
           </div>
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-white truncate">{track.name}</h2>
+            <h2 className="text-base font-semibold text-[#1a2033] truncate">{track.name}</h2>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs">
-              <span className="text-slate-300 font-medium">{(track.totalDistance / 1000).toFixed(1)} km</span>
-              <span className="text-orange-300">+{Math.round(track.totalElevationGain)} m</span>
-              <span className="text-sky-300">-{Math.round(track.totalElevationLoss)} m</span>
-              <span className="text-slate-500">{track.segments.length} seg.</span>
+              <span className="text-[#1a2033] font-medium">{(track.totalDistance / 1000).toFixed(1)} km</span>
+              <span className="text-orange-600">+{Math.round(track.totalElevationGain)} m</span>
+              <span className="text-sky-700">-{Math.round(track.totalElevationLoss)} m</span>
+              <span className="text-[#64748b]">{track.segments.length} seg.</span>
             </div>
           </div>
         </div>
         <button
           onClick={() => inputRef.current?.click()}
           className="shrink-0 px-3 py-2 rounded-lg text-[10px] font-semibold tracking-wider uppercase
-                     text-slate-400 hover:text-white border border-white/[0.08] hover:border-white/20
-                     bg-white/[0.03] transition-all"
+                     text-[#64748b] hover:text-[#1a2033] border border-black/[0.08] hover:border-black/20
+                     bg-black/[0.02] transition-all"
         >
           {t('planner.changeGpx')}
         </button>
@@ -185,9 +185,9 @@ function TrackVisualization({ track, lecture }: { track: GpxTrack; lecture?: Lec
       >
         <div className="flex items-center gap-2">
           <span className="w-1 h-5 rounded-full bg-[#ff6d00] shrink-0" />
-          <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.track')}</h3>
+          <h3 className="text-[#1a2033] font-semibold text-xs uppercase tracking-wider">{t('planner.track')}</h3>
         </div>
-        <span className="text-slate-500 text-xs">{expanded ? '▲' : '▼'}</span>
+        <span className="text-[#64748b] text-xs">{expanded ? '▲' : '▼'}</span>
       </button>
 
       {expanded && (
@@ -200,8 +200,8 @@ function TrackVisualization({ track, lecture }: { track: GpxTrack; lecture?: Lec
                 onClick={() => setViewMode(mode)}
                 className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold border transition-all ${
                   viewMode === mode
-                    ? 'bg-[#ff6d00]/15 border-[#ff6d00]/40 text-[#ffb692]'
-                    : 'bg-white/[0.03] border-white/[0.06] text-slate-500 hover:text-slate-300'
+                    ? 'bg-[#ff6d00]/10 border-[#ff6d00]/50 text-[#c2410c]'
+                    : 'bg-black/[0.02] border-black/[0.08] text-[#64748b] hover:text-[#1a2033]'
                 }`}
               >
                 {mode === 'map' ? t('planner.map2d') : t('planner.view3d')}
@@ -221,20 +221,20 @@ function TrackVisualization({ track, lecture }: { track: GpxTrack; lecture?: Lec
 
           {/* Lecture du parcours — intégrée dans la section Parcours */}
           {lecture && lecture.length > 0 && (
-            <div className="flex flex-col gap-3 pt-3 border-t border-white/[0.06]">
+            <div className="flex flex-col gap-3 pt-3 border-t border-black/[0.08]">
               <div className="flex items-center gap-2">
                 <span className="w-1 h-5 rounded-full bg-indigo-500 shrink-0" />
-                <h4 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.trackReading')}</h4>
+                <h4 className="text-[#1a2033] font-semibold text-xs uppercase tracking-wider">{t('planner.trackReading')}</h4>
               </div>
               <ul className="flex flex-col gap-3">
                 {lecture.map((bullet, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <span className={`shrink-0 mt-0.5 text-xs font-mono px-2 py-0.5 rounded-md whitespace-nowrap ${
                       bullet.isWarning
-                        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                        : 'bg-white/[0.04] text-slate-500 border border-white/[0.06]'
+                        ? 'bg-amber-500/15 text-amber-600 border border-amber-500/30'
+                        : 'bg-black/[0.03] text-[#64748b] border border-black/[0.08]'
                     }`}>{bullet.kmRange}</span>
-                    <span className={`text-xs leading-relaxed ${bullet.isWarning ? 'text-slate-200' : 'text-slate-400'}`}>
+                    <span className={`text-xs leading-relaxed ${bullet.isWarning ? 'text-[#1a2033]' : 'text-[#64748b]'}`}>
                       {bullet.content}
                     </span>
                   </li>
@@ -276,40 +276,40 @@ function GarminAnchorBanner({ anchor, track }: { anchor: GarminCurveAnchor; trac
     <div
       className="w-full px-4 sm:px-5 py-4 rounded-2xl border-2"
       style={{
-        borderColor: 'rgba(56,189,248,0.35)',
-        background: 'rgba(56,189,248,0.06)',
+        borderColor: 'rgba(2,132,199,0.35)',
+        background: 'rgba(2,132,199,0.06)',
       }}
     >
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-sky-400">
+        <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-sky-800">
           Ancrage Garmin · courbe Riegel + km-effort
         </span>
-        <span className="text-[9px] font-semibold text-sky-300/80 px-1.5 py-0.5 rounded-md bg-sky-400/10">
+        <span className="text-[9px] font-semibold text-sky-800 px-1.5 py-0.5 rounded-md bg-sky-100">
           {sourceLabel}
         </span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
         <div>
-          <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Temps ancre</div>
-          <div className="font-mono font-semibold text-white">{formatDuration(anchor.totalTimeSeconds)}</div>
+          <div className="text-[9px] text-[#64748b] uppercase tracking-wider mb-0.5">Temps ancre</div>
+          <div className="font-mono font-semibold text-[#1a2033]">{formatDuration(anchor.totalTimeSeconds)}</div>
         </div>
         <div>
-          <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Distance km-effort</div>
-          <div className="font-mono font-semibold text-white">
+          <div className="text-[9px] text-[#64748b] uppercase tracking-wider mb-0.5">Distance km-effort</div>
+          <div className="font-mono font-semibold text-[#1a2033]">
             {anchor.kmEffortDistanceKm.toFixed(1)} km
-            <span className="text-slate-500 font-normal"> (+{effortDelta.toFixed(1)} vs {flatKm})</span>
+            <span className="text-[#64748b] font-normal"> (+{effortDelta.toFixed(1)} vs {flatKm})</span>
           </div>
         </div>
         <div>
-          <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Exposant Riegel</div>
-          <div className="font-mono font-semibold text-white">{anchor.riegelExponent.toFixed(3)}</div>
+          <div className="text-[9px] text-[#64748b] uppercase tracking-wider mb-0.5">Exposant Riegel</div>
+          <div className="font-mono font-semibold text-[#1a2033]">{anchor.riegelExponent.toFixed(3)}</div>
         </div>
         <div>
-          <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Fiabilité</div>
-          <div className="font-mono font-semibold text-white">{confidenceLabel}</div>
+          <div className="text-[9px] text-[#64748b] uppercase tracking-wider mb-0.5">Fiabilité</div>
+          <div className="font-mono font-semibold text-[#1a2033]">{confidenceLabel}</div>
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-slate-400 leading-relaxed">
+      <p className="mt-2 text-[10px] text-[#64748b] leading-relaxed">
         Les temps des 3 stratégies ci-dessous sont calés sur ta courbe de prédiction Garmin appliquée à la distance km-effort du parcours. {scaleLabel}.
       </p>
     </div>
@@ -348,9 +348,9 @@ function RecommendationBanner({
           <span className="text-[10px] font-bold tracking-[1.5px] uppercase" style={{ color: meta.color }}>
             {t('planner.recommendedStrategy')}
           </span>
-          <span className="text-xs font-semibold text-white">{meta.name}</span>
+          <span className="text-xs font-semibold text-[#1a2033]">{meta.name}</span>
         </div>
-        <p className="text-xs text-slate-400 leading-relaxed">{recommendation.reason}</p>
+        <p className="text-xs text-[#64748b] leading-relaxed">{recommendation.reason}</p>
       </div>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 mt-1">
         <path d="M6 4l4 4-4 4" stroke={meta.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -385,8 +385,8 @@ function StrategyPills({
             onClick={() => onSelect(s.id)}
             className="relative flex flex-col gap-2 px-3 sm:px-4 py-3 rounded-xl transition-all border-2 text-left overflow-hidden"
             style={{
-              borderColor: isActive ? meta.color : 'rgba(255,255,255,0.06)',
-              background:  isActive ? `${meta.color}12` : 'rgba(255,255,255,0.02)',
+              borderColor: isActive ? meta.color : 'rgba(0,0,0,0.08)',
+              background:  isActive ? `${meta.color}12` : 'var(--color-surface)',
             }}
           >
             {isRecommended && (
@@ -397,20 +397,20 @@ function StrategyPills({
             )}
             <div className="flex items-center gap-1.5">
               <span className="text-sm">{meta.emoji}</span>
-              <span className="text-xs font-semibold" style={{ color: isActive ? meta.color : '#94a3b8' }}>
+              <span className="text-xs font-semibold" style={{ color: isActive ? meta.color : '#475569' }}>
                 {meta.name}
               </span>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className={`font-mono text-lg sm:text-xl font-bold ${isActive ? 'text-white' : 'text-slate-500'}`}>
+              <span className={`font-mono text-lg sm:text-xl font-bold ${isActive ? 'text-[#1a2033]' : 'text-[#64748b]'}`}>
                 {s.totalTimeFormatted}
               </span>
             </div>
             <div className="flex items-center gap-2 text-[10px]">
-              <span className="text-slate-500">{s.avgPaceFormatted}</span>
+              <span className="text-[#64748b]">{s.avgPaceFormatted}</span>
               <span className={
-                s.blowupRisk === 'Élevé'  ? 'text-red-400'   :
-                s.blowupRisk === 'Modéré' ? 'text-amber-400' : 'text-green-400'
+                s.blowupRisk === 'Élevé'  ? 'text-red-600'   :
+                s.blowupRisk === 'Modéré' ? 'text-amber-600' : 'text-emerald-700'
               }>
                 {s.blowupRisk}
               </span>
@@ -441,8 +441,8 @@ function ComparatifTable({ report }: { report: RaceStrategyReport }) {
     <div className="glass rounded-2xl overflow-x-auto">
       <table className="w-full text-xs min-w-[320px]">
         <thead>
-          <tr className="border-b border-white/[0.06]">
-            <th className="text-left px-4 py-3 text-slate-500 font-medium w-2/5" />
+          <tr className="border-b border-black/[0.08]">
+            <th className="text-left px-4 py-3 text-[#64748b] font-medium w-2/5" />
             {report.strategies.map((s) => (
               <th key={s.id} className="text-center px-3 py-3 font-semibold text-xs"
                 style={{ color: STRATEGY_META[s.id].color }}>
@@ -453,21 +453,21 @@ function ComparatifTable({ report }: { report: RaceStrategyReport }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.key} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-              <td className="px-4 py-2.5 text-slate-500">{row.label}</td>
+            <tr key={row.key} className="border-b border-black/[0.06] hover:bg-black/[0.02]">
+              <td className="px-4 py-2.5 text-[#64748b]">{row.label}</td>
               {report.strategies.map((s) => (
                 <td key={s.id} className={`text-center px-3 py-2.5 font-mono ${
-                  row.highlight ? 'text-white font-bold' : 'text-slate-300'
+                  row.highlight ? 'text-[#1a2033] font-bold' : 'text-[#1a2033]'
                 }`}>
                   {row.key === 'risk' ? (
                     <span className={
-                      s.blowupRisk === 'Élevé'  ? 'text-red-400'   :
-                      s.blowupRisk === 'Modéré' ? 'text-amber-400' : 'text-green-400'
+                      s.blowupRisk === 'Élevé'  ? 'text-red-600'   :
+                      s.blowupRisk === 'Modéré' ? 'text-amber-600' : 'text-emerald-700'
                     }>{s.blowupRisk}</span>
                   ) : row.key === 'fatigue' ? (
                     <span className={
-                      s.avgFatigue < 0.1 ? 'text-green-400' :
-                      s.avgFatigue < 0.25 ? 'text-amber-400' : 'text-red-400'
+                      s.avgFatigue < 0.1 ? 'text-emerald-700' :
+                      s.avgFatigue < 0.25 ? 'text-amber-600' : 'text-red-600'
                     }>{row.format(s)}</span>
                   ) : row.format(s)}
                 </td>
@@ -499,10 +499,10 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
             { label: 'Calories',   value: `${plan.totalCalories}`, unit: 'kcal' },
             { label: 'Deficit',    value: `${plan.nutrition.deficitKcal}`, unit: 'kcal' },
           ].map(({ label, value, unit }) => (
-            <div key={label} className="flex flex-col gap-0.5 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-center">
-              <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
-              <span className="text-xs sm:text-sm font-semibold text-slate-100">
-                {value} <span className="text-[9px] text-slate-400">{unit}</span>
+            <div key={label} className="flex flex-col gap-0.5 px-3 py-2.5 rounded-xl bg-black/[0.03] border border-black/[0.08] text-center">
+              <span className="text-[9px] sm:text-[10px] text-[#64748b] uppercase tracking-wider">{label}</span>
+              <span className="text-xs sm:text-sm font-semibold text-[#1a2033]">
+                {value} <span className="text-[9px] text-[#64748b]">{unit}</span>
               </span>
             </div>
           ))}
@@ -512,37 +512,37 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
-            <h3 className="text-slate-200 font-semibold text-xs uppercase tracking-wider">{t('planner.phases')}</h3>
+            <h3 className="text-[#1a2033] font-semibold text-xs uppercase tracking-wider">{t('planner.phases')}</h3>
           </div>
 
           {/* Mobile */}
           <div className="flex flex-col gap-2 sm:hidden">
             {plan.phases.map((phase) => (
-              <div key={phase.index} className="rounded-xl p-3 bg-white/[0.04] border border-white/[0.06]">
+              <div key={phase.index} className="rounded-xl p-3 bg-black/[0.03] border border-black/[0.08]">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
                     <div className="flex items-center gap-1.5">
-                      {phase.riskLevel === 'élevé'  && <span className="text-red-400 text-[10px]">⚠</span>}
-                      {phase.riskLevel === 'modéré' && <span className="text-amber-400 text-[10px]">↑</span>}
-                      <span className="text-slate-200 font-semibold text-xs">{phase.label}</span>
+                      {phase.riskLevel === 'élevé'  && <span className="text-red-600 text-[10px]">⚠</span>}
+                      {phase.riskLevel === 'modéré' && <span className="text-amber-600 text-[10px]">↑</span>}
+                      <span className="text-[#1a2033] font-semibold text-xs">{phase.label}</span>
                     </div>
-                    <span className="text-slate-500 text-[10px]">km {phase.startKm}–{phase.endKm}</span>
+                    <span className="text-[#64748b] text-[10px]">km {phase.startKm}–{phase.endKm}</span>
                   </div>
-                  <span className="text-white font-bold text-sm shrink-0">{phase.cumulativeTimeFormatted}</span>
+                  <span className="text-[#1a2033] font-bold text-sm shrink-0">{phase.cumulativeTimeFormatted}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-[10px] text-center">
-                  <div><div className="text-slate-500">Allure</div><div className="text-slate-200 font-mono">{phase.targetPaceFormatted}</div></div>
-                  <div><div className="text-slate-500">FC</div><div className="text-slate-200">{phase.avgHR} bpm</div></div>
-                  <div><div className="text-slate-500">D+/D-</div><div><span className="text-orange-300">+{phase.elevationGain}</span>/<span className="text-sky-300">-{phase.elevationLoss}</span></div></div>
+                  <div><div className="text-[#64748b]">Allure</div><div className="text-[#1a2033] font-mono">{phase.targetPaceFormatted}</div></div>
+                  <div><div className="text-[#64748b]">FC</div><div className="text-[#1a2033]">{phase.avgHR} bpm</div></div>
+                  <div><div className="text-[#64748b]">D+/D-</div><div><span className="text-orange-600">+{phase.elevationGain}</span>/<span className="text-sky-700">-{phase.elevationLoss}</span></div></div>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Desktop */}
-          <table className="hidden sm:table w-full text-xs text-slate-300">
+          <table className="hidden sm:table w-full text-xs text-[#1a2033]">
             <thead>
-              <tr className="border-b border-white/[0.06] text-slate-500 text-[10px] uppercase tracking-wider">
+              <tr className="border-b border-black/[0.08] text-[#64748b] text-[10px] uppercase tracking-wider">
                 <th className="text-left pb-2 pr-3 font-medium">Phase</th>
                 <th className="text-right pb-2 px-2 font-medium">D+</th>
                 <th className="text-right pb-2 px-2 font-medium">D-</th>
@@ -554,21 +554,21 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
             </thead>
             <tbody>
               {plan.phases.map((phase) => (
-                <tr key={phase.index} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                <tr key={phase.index} className="border-b border-black/[0.06] hover:bg-black/[0.02]">
                   <td className="py-2.5 pr-3">
                     <div className="flex items-center gap-1.5">
-                      {phase.riskLevel === 'élevé'  && <span className="text-red-400 text-[10px]">⚠</span>}
-                      {phase.riskLevel === 'modéré' && <span className="text-amber-400 text-[10px]">↑</span>}
-                      <span className="font-medium text-slate-200">{phase.label}</span>
+                      {phase.riskLevel === 'élevé'  && <span className="text-red-600 text-[10px]">⚠</span>}
+                      {phase.riskLevel === 'modéré' && <span className="text-amber-600 text-[10px]">↑</span>}
+                      <span className="font-medium text-[#1a2033]">{phase.label}</span>
                     </div>
-                    <div className="text-slate-500 text-[10px] mt-0.5">km {phase.startKm}–{phase.endKm}</div>
+                    <div className="text-[#64748b] text-[10px] mt-0.5">km {phase.startKm}–{phase.endKm}</div>
                   </td>
-                  <td className="text-right py-2.5 px-2 text-orange-300">+{phase.elevationGain}m</td>
-                  <td className="text-right py-2.5 px-2 text-sky-300">-{phase.elevationLoss}m</td>
-                  <td className="text-right py-2.5 px-2 font-mono text-slate-200">{phase.targetPaceFormatted}</td>
+                  <td className="text-right py-2.5 px-2 text-orange-600">+{phase.elevationGain}m</td>
+                  <td className="text-right py-2.5 px-2 text-sky-700">-{phase.elevationLoss}m</td>
+                  <td className="text-right py-2.5 px-2 font-mono text-[#1a2033]">{phase.targetPaceFormatted}</td>
                   <td className="text-right py-2.5 px-2">{phase.avgHR} bpm</td>
-                  <td className="py-2.5 px-2 text-slate-400 text-[10px]">{phase.rpe}</td>
-                  <td className="text-right py-2.5 pl-2 font-mono text-slate-400 text-[10px]">{phase.cumulativeTimeFormatted}</td>
+                  <td className="py-2.5 px-2 text-[#64748b] text-[10px]">{phase.rpe}</td>
+                  <td className="text-right py-2.5 pl-2 font-mono text-[#64748b] text-[10px]">{phase.cumulativeTimeFormatted}</td>
                 </tr>
               ))}
             </tbody>
@@ -581,8 +581,8 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
             {plan.riskZones.map((zone, i) => (
               <div key={i} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border ${
                 zone.level === 'élevé'
-                  ? 'bg-red-500/10 border-red-500/30 text-red-300'
-                  : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                  ? 'bg-red-500/10 border-red-500/30 text-red-700'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-700'
               }`}>
                 <span>{zone.level === 'élevé' ? '⚠️' : '↑'}</span>
                 <span>{zone.label}</span>
@@ -600,12 +600,12 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
           <span className="text-base shrink-0">{plan.nutrition.icon}</span>
           <div>
             <div className={`text-xs font-semibold ${
-              plan.nutrition.icon === '✅' ? 'text-green-400' :
-              plan.nutrition.icon === '⚠️' ? 'text-amber-400' : 'text-red-400'
+              plan.nutrition.icon === '✅' ? 'text-emerald-700' :
+              plan.nutrition.icon === '⚠️' ? 'text-amber-600' : 'text-red-600'
             }`}>
               Nutrition — {plan.nutrition.status}
             </div>
-            <div className="text-xs text-slate-400 mt-0.5">{plan.nutrition.message}</div>
+            <div className="text-xs text-[#64748b] mt-0.5">{plan.nutrition.message}</div>
           </div>
         </div>
       </div>
@@ -678,13 +678,13 @@ function GpxLibrary({
 
   if (tracks.length === 0) return null
 
-  const selectClass = 'text-xs rounded-lg px-2 py-1.5 bg-[#1a2540] border border-white/10 text-[rgba(218,226,253,0.7)] focus:outline-none'
+  const selectClass = 'text-xs rounded-lg px-2 py-1.5 bg-white border border-black/10 text-[#64748b] focus:outline-none'
 
   return (
     <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span className="w-1 h-5 rounded-full bg-[#ff6d00] shrink-0" />
-        <p className="text-[11px] uppercase tracking-widest text-slate-200 font-semibold">
+        <p className="text-[11px] uppercase tracking-widest text-[#1a2033] font-semibold">
           Charger un GPX sauvegardé
         </p>
       </div>
@@ -706,7 +706,7 @@ function GpxLibrary({
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-xs text-[rgba(218,226,253,0.3)]">Aucun parcours pour ces filtres.</p>
+        <p className="text-xs text-[#64748b]">Aucun parcours pour ces filtres.</p>
       ) : (
         <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-1">
           {filtered.map((t) => (
@@ -714,11 +714,11 @@ function GpxLibrary({
               key={t.id}
               onClick={() => onSelect(t)}
               className="flex items-center justify-between px-3 py-2 rounded-xl text-left
-                         bg-white/[0.03] border border-white/[0.06] hover:border-[#ff6d00]/40
+                         bg-black/[0.02] border border-black/[0.08] hover:border-[#ff6d00]/40
                          hover:bg-[rgba(255,109,0,0.06)] transition-all"
             >
-              <span className="text-[13px] text-[rgba(218,226,253,0.85)] truncate">{t.name}</span>
-              <div className="flex gap-2 shrink-0 ml-3 text-[11px] text-[rgba(218,226,253,0.4)]">
+              <span className="text-[13px] text-[#1a2033] truncate">{t.name}</span>
+              <div className="flex gap-2 shrink-0 ml-3 text-[11px] text-[#64748b]">
                 <span>{(t.total_distance / 1000).toFixed(1)} km</span>
                 <span>+{Math.round(t.total_elevation_gain)} m</span>
               </div>
@@ -853,7 +853,7 @@ export function PlanificateurPage() {
           onDrop={handleDrop}
         />
         {parseError && (
-          <div className="max-w-lg mx-auto mt-3 px-4 py-3 rounded-xl text-[12px] text-red-400"
+          <div className="max-w-lg mx-auto mt-3 px-4 py-3 rounded-xl text-[12px] text-red-600"
             style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
             ⚠️ {parseError}
           </div>
@@ -893,14 +893,14 @@ export function PlanificateurPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-2">
             <div className="flex items-center gap-3">
               <span className="w-1 h-8 rounded-full bg-[#ff6d00] shrink-0" />
-              <h2 className="text-xl font-bold text-white">Plan de course</h2>
+              <h2 className="text-xl font-bold text-[#1a2033]">Plan de course</h2>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap">Glucides</label>
+              <label className="text-[10px] text-[#64748b] uppercase tracking-wider whitespace-nowrap">Glucides</label>
               <input type="range" min={30} max={120} step={5} value={carbTolerance}
                 onChange={(e) => setCarbTolerance(Number(e.target.value))}
                 className="w-20 sm:w-28 accent-[#ff6d00]" />
-              <span className="text-xs font-mono text-slate-200 w-12 shrink-0">{carbTolerance} g/h</span>
+              <span className="text-xs font-mono text-[#1a2033] w-12 shrink-0">{carbTolerance} g/h</span>
             </div>
           </div>
 
@@ -915,6 +915,9 @@ export function PlanificateurPage() {
             onSelect={setActiveStrategy}
           />
 
+          {/* Tableau comparatif */}
+          <ComparatifTable report={report} />
+
           {/* Pills */}
           <StrategyPills
             strategies={report.strategies}
@@ -922,9 +925,6 @@ export function PlanificateurPage() {
             recommendedId={report.recommendation.id}
             onSelect={setActiveStrategy}
           />
-
-          {/* Tableau comparatif */}
-          <ComparatifTable report={report} />
 
           {/* Détail stratégie active */}
           {activePlan && <StrategyDetail plan={activePlan} />}
