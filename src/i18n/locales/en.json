@@ -1,8 +1,8 @@
 {
   "common": {
-    "loading": "Loading\u2026",
+    "loading": "Loading…",
     "save": "Save",
-    "saving": "Saving\u2026",
+    "saving": "Saving…",
     "saved": "Saved",
     "cancel": "Cancel",
     "close": "Close",
@@ -59,7 +59,7 @@
     "heading1": "Analyze.",
     "heading2": "Simulate.",
     "heading3": "Perform.",
-    "subtitle": "Import your GPX trace, connect Garmin, and get a segment-by-segment simulation of your next race. Pace, heart rate, energy, fatigue \u2014 everything is calculated.",
+    "subtitle": "Import your GPX trace, connect Garmin, and get a segment-by-segment simulation of your next race. Pace, heart rate, energy, fatigue — everything is calculated.",
     "ctaAnalysis": "Start Analysis",
     "ctaImportGpx": "Import a GPX",
     "whatYouGet": "What you get",
@@ -70,7 +70,7 @@
     "feature5": "Race strategy comparison",
     "howItWorks": "How it works",
     "gpxAnalysisTitle": "Complete GPX Analysis",
-    "gpxAnalysisDesc": "Import your GPX file \u2014 the engine automatically splits the course into segments by terrain type (flat, uphill, downhill), calculates grades, distances and elevation, and generates the interactive elevation profile.",
+    "gpxAnalysisDesc": "Import your GPX file — the engine automatically splits the course into segments by terrain type (flat, uphill, downhill), calculates grades, distances and elevation, and generates the interactive elevation profile.",
     "autoSegmentation": "Auto segmentation",
     "elevationProfile": "Elevation profile",
     "view3d": "3D View",
@@ -97,7 +97,7 @@
     "dropTitle": "Import a GPX file",
     "dropTitleDragging": "Drop to import",
     "dropHint": "Drag your GPX trace here to start analysis and generate your race plan.",
-    "analyzing": "Analyzing the course\u2026",
+    "analyzing": "Analyzing the course…",
     "changeGpx": "Change GPX",
     "track": "Course",
     "map2d": "2D Map",
@@ -142,7 +142,7 @@
       "allElevations": "All elevations",
       "allProfiles": "All profiles",
       "flat": "Flat (< 500 m)",
-      "hilly": "Hilly (500\u20131500 m)",
+      "hilly": "Hilly (500–1500 m)",
       "mountain": "Mountain (> 1500 m)",
       "route": "Road",
       "trail": "Trail",
@@ -181,14 +181,9 @@
     "localDataKept": "Your local data will be kept.",
     "signOutBtn": "Sign Out"
   },
-  "premium": {
-    "required": "Premium Access Required",
-    "loggedIn": "Garmin Connect sync is reserved for Premium accounts.",
-    "loggedOut": "Sign in with a Premium account to sync your Garmin activities."
-  },
   "garmin": {
     "title": "Garmin Connect",
-    "connectedDesc": "Connected \u2014 raw FIT data available",
+    "connectedDesc": "Connected — raw FIT data available",
     "disconnectedDesc": "Raw data + Running Power + Cadence + HRM-Pro",
     "securityNote": "Your credentials are sent to your personal Vercel instance only. OAuth tokens are stored securely on your account.",
     "emailLabel": "Garmin Connect Email",
@@ -196,11 +191,11 @@
     "emailAndPasswordRequired": "Email and password required",
     "mfaRequired": "MFA code required",
     "mfaTitle": "Enter the code already received by email",
-    "mfaDesc": "Garmin sent you a code to {{email}} during the first attempt. Enter that same code \u2014 don't wait for a new one.",
+    "mfaDesc": "Garmin sent you a code to {{email}} during the first attempt. Enter that same code — don't wait for a new one.",
     "verificationCode": "Verification code",
-    "retryCredentials": "\u2190 Retry with different credentials",
-    "verifying": "Verifying\u2026",
-    "connectingToGarmin": "Connecting to Garmin\u2026",
+    "retryCredentials": "← Retry with different credentials",
+    "verifying": "Verifying…",
+    "connectingToGarmin": "Connecting to Garmin…",
     "validateCode": "Validate code",
     "connectToGarmin": "Connect to Garmin Connect",
     "updateFromGarmin": "Update from Garmin"
@@ -232,8 +227,8 @@
     "mustBeGpx": "The file must be in .gpx format"
   },
   "lang": {
-    "fr": "Fran\u00e7ais",
+    "fr": "Français",
     "en": "English",
-    "es": "Espa\u00f1ol"
+    "es": "Español"
   }
 }
