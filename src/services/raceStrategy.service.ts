@@ -729,7 +729,12 @@ export function generateRaceStrategy(
     )
     const maxHREstimated = Math.round(Math.max(...result.segments.map(s => s.heartRateRange.max)))
     const avgPaceSec     = result.totalDuration / (track.totalDistance / 1000)
-    const avgFatigue     = result.segments.reduce((s, seg) => s + seg.fatigueFactor, 0) / result.segments.length
+    // Moyenne pondérée par la durée de chaque segment : la fatigue impacte
+    // la vitesse au cours du temps, donc une moyenne arithmétique simple
+    // biaiserait le résultat lorsque les segments sont de tailles inégales.
+    const avgFatigue     = result.totalDuration > 0
+      ? result.segments.reduce((s, seg) => s + seg.fatigueFactor * seg.estimatedDuration, 0) / result.totalDuration
+      : 0
     const walkingSegments = result.segments.filter(s => s.isWalking).length
 
     const chartData = result.segments.map(seg => ({

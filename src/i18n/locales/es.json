@@ -114,6 +114,7 @@
       "avgHR": "FC med.",
       "maxHR": "FC max estimada",
       "avgFatigue": "Fatiga med.",
+      "avgFatigueTooltip": "Pérdida media de velocidad por la fatiga acumulada durante la carrera (tiempo de esfuerzo, distancia, D+, D−). 0 % = fresco, 50 % = agotado. Ej. 20 % ≈ corres ~20 % más lento que en fresco.",
       "walkSegments": "Seg. caminando",
       "calories": "Calorías",
       "blowupRisk": "Riesgo explosión"

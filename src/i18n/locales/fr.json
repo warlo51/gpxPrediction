@@ -114,6 +114,7 @@
       "avgHR": "FC moy.",
       "maxHR": "FC max estimée",
       "avgFatigue": "Fatigue moy.",
+      "avgFatigueTooltip": "Perte de vitesse moyenne due à la fatigue cumulée sur la course (temps d'effort, distance, D+, D−). 0 % = frais, 50 % = épuisé. Ex. 20 % ≈ vous courez ~20 % moins vite qu'à l'état frais.",
       "walkSegments": "Seg. marche",
       "calories": "Calories",
       "blowupRisk": "Risque explosion"

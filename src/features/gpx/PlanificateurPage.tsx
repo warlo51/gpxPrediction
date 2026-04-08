@@ -473,13 +473,13 @@ function StrategyPills({
 function ComparatifTable({ report }: { report: RaceStrategyReport }) {
   const { t } = useTranslation()
   const hasCutoff = report.cutoffs !== null
-  const rows: Array<{ label: string; key: string; format: (s: StrategyPlan) => string; highlight?: boolean }> = [
+  const rows: Array<{ label: string; key: string; format: (s: StrategyPlan) => string; highlight?: boolean; tooltip?: string }> = [
     { label: t('planner.comparativeTable.totalTime'),   key: 'time',    format: (s) => s.totalTimeFormatted, highlight: true },
     ...(hasCutoff ? [{ label: 'Barrière', key: 'cutoff', format: (s: StrategyPlan) => s.feasibility ? formatMargin(s.feasibility.marginSeconds) : '—' }] : []),
     { label: t('planner.comparativeTable.avgPace'),     key: 'pace',    format: (s) => s.avgPaceFormatted },
     { label: t('planner.comparativeTable.avgHR'),       key: 'hr',      format: (s) => `${s.avgHR} bpm` },
     { label: t('planner.comparativeTable.maxHR'),       key: 'maxhr',   format: (s) => `${s.maxHREstimated} bpm` },
-    { label: t('planner.comparativeTable.avgFatigue'),  key: 'fatigue', format: (s) => `${(s.avgFatigue * 100).toFixed(1)}%` },
+    { label: t('planner.comparativeTable.avgFatigue'),  key: 'fatigue', format: (s) => `${(s.avgFatigue * 100).toFixed(1)}%`, tooltip: t('planner.comparativeTable.avgFatigueTooltip') },
     { label: t('planner.comparativeTable.walkSegments'),key: 'walk',    format: (s) => `${s.walkingSegments}` },
     { label: t('planner.comparativeTable.calories'),    key: 'cal',     format: (s) => `${s.totalCalories} kcal` },
     { label: t('planner.comparativeTable.blowupRisk'),  key: 'risk',    format: (s) => s.blowupRisk },
@@ -502,7 +502,14 @@ function ComparatifTable({ report }: { report: RaceStrategyReport }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.key} className="border-b border-black/[0.06] hover:bg-black/[0.02]">
-              <td className="px-4 py-2.5 text-[#64748b]">{row.label}</td>
+              <td className="px-4 py-2.5 text-[#64748b]">
+                {row.tooltip ? (
+                  <span className="inline-flex items-center gap-1 cursor-help" title={row.tooltip}>
+                    {row.label}
+                    <span aria-hidden="true" className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[#94a3b8] text-[9px] font-semibold text-[#64748b] leading-none">i</span>
+                  </span>
+                ) : row.label}
+              </td>
               {report.strategies.map((s) => (
                 <td key={s.id} className={`text-center px-3 py-2.5 font-mono ${
                   row.highlight ? 'text-[#1a2033] font-bold' : 'text-[#1a2033]'

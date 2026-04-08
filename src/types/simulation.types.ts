@@ -14,7 +14,7 @@ export type SegmentSimulation = {
   paceRange: ValueRange
   /** Plage FC cible en bpm */
   heartRateRange: ValueRange
-  /** Facteur de fatigue appliqué (0 = aucune fatigue, 1 = épuisement) */
+  /** Facteur de fatigue appliqué — proportion de vitesse perdue (0 = frais, 0.5 = max, plafonné dans computeFatigueFactor) */
   fatigueFactor: number
   /** Énergie dépensée sur ce segment en kcal */
   caloriesBurned: number

@@ -114,6 +114,7 @@
       "avgHR": "Avg. HR",
       "maxHR": "Est. max HR",
       "avgFatigue": "Avg. fatigue",
+      "avgFatigueTooltip": "Average speed loss caused by cumulative fatigue over the race (time on effort, distance, elevation gain and loss). 0% = fresh, 50% = exhausted. E.g. 20% ≈ you run ~20% slower than when fresh.",
       "walkSegments": "Walk seg.",
       "calories": "Calories",
       "blowupRisk": "Blowup risk"
