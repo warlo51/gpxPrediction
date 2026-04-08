@@ -1,7 +1,7 @@
 /**
  * Hook de chargement initial des données depuis Supabase
- * - Premium : charge profil + sessions + connexions depuis la DB
- * - Non-premium ou anonyme : charge les données demo
+ * - Authentifié : charge profil + sessions + connexions depuis la DB
+ * - Anonyme : charge les données demo
  *
  * La sauvegarde en DB se fait directement dans les composants d'import
  * (GarminConnect) après chaque import réussi.

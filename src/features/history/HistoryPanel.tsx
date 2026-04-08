@@ -8,7 +8,6 @@ import { calibrateRunner, getCalibrationSummary } from '@/services/calibration.s
 import { formatPace } from '@/services/simulationEngine.service'
 import { FitImport } from './FitImport'
 import { GarminConnect } from './GarminConnect'
-import { PremiumGate } from '@/components/PremiumGate'
 import type { TrainingSession } from '@/types'
 
 // ─── Formulaire d'ajout de séance ────────────────────────────────────────────
@@ -364,9 +363,7 @@ export function HistoryPanel() {
 
   return (
     <div className="w-full flex flex-col gap-6">
-      <PremiumGate>
-        <GarminConnect />
-      </PremiumGate>
+      <GarminConnect />
       <FitImport />
       <CalibrationPanel />
       <SessionForm onAdd={addSession} />

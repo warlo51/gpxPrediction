@@ -11,7 +11,6 @@ import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useGarminStore } from '@/stores/garminStore'
 import { GarminLoginForm } from '@/features/history/GarminConnect'
-import { PremiumGate } from '@/components/PremiumGate'
 import { syncGarminProfile, buildProfileFromGarminStats } from '@/services/garmin.service'
 import { saveRunnerProfile } from '@/services/supabase.service'
 
@@ -269,12 +268,10 @@ export function ProfilPage() {
 
       {/* ── Formulaire de connexion Garmin (inline) ── */}
       {showGarminForm && user && !garminConnected && (
-        <PremiumGate>
-          <div className="rounded-2xl p-5"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
-            <GarminLoginForm onConnected={() => setShowGarminForm(false)} />
-          </div>
-        </PremiumGate>
+        <div className="rounded-2xl p-5"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+          <GarminLoginForm onConnected={() => setShowGarminForm(false)} />
+        </div>
       )}
 
       {/* ── 4 stats physiologiques (si Garmin connecté) ── */}
@@ -293,26 +290,24 @@ export function ProfilPage() {
         </div>
       ) : !showGarminForm && user ? (
         /* ── Gros bouton Garmin Connexion (si pas connecté) ── */
-        <PremiumGate>
-          <button
-            type="button"
-            onClick={() => setShowGarminForm(true)}
-            className="w-full flex flex-col items-center justify-center gap-4 py-12 px-6 rounded-2xl transition-all hover:brightness-110"
-            style={{
-              background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)',
-              color: '#341100',
-              boxShadow: '0 4px 24px rgba(255,109,0,0.25)',
-            }}
-          >
-            <span className="text-5xl">🏔️</span>
-            <span className="text-[22px] font-black tracking-tight">
-              {t('profile.connectGarmin')}
-            </span>
-            <span className="text-[12px] font-medium opacity-80 max-w-md text-center">
-              {t('profile.syncWithGarmin')}
-            </span>
-          </button>
-        </PremiumGate>
+        <button
+          type="button"
+          onClick={() => setShowGarminForm(true)}
+          className="w-full flex flex-col items-center justify-center gap-4 py-12 px-6 rounded-2xl transition-all hover:brightness-110"
+          style={{
+            background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)',
+            color: '#341100',
+            boxShadow: '0 4px 24px rgba(255,109,0,0.25)',
+          }}
+        >
+          <span className="text-5xl">🏔️</span>
+          <span className="text-[22px] font-black tracking-tight">
+            {t('profile.connectGarmin')}
+          </span>
+          <span className="text-[12px] font-medium opacity-80 max-w-md text-center">
+            {t('profile.syncWithGarmin')}
+          </span>
+        </button>
       ) : null}
 
       {/* ── Section : Affichage ── */}
