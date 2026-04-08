@@ -51,25 +51,34 @@ function computeBaseSpeed(
   profile: RunnerProfile,
   effortFactor: number,
   envSpeedFactor: number,
-): number {
+): { speed: number; isWalking: boolean } {
   const { flatSpeed, uphillDecayFactor, downhillBoostFactor, walkingThresholdGrade, walkingSpeed } =
     profile.speedModel
 
   const baseSpeed = flatSpeed * effortFactor * envSpeedFactor
+  const effectiveWalkingSpeed = walkingSpeed * envSpeedFactor
 
-  // Marche si pente trop raide
-  if (grade >= walkingThresholdGrade) return walkingSpeed * envSpeedFactor
+  // Marche si pente trop raide (seuil explicite)
+  if (grade >= walkingThresholdGrade) {
+    return { speed: effectiveWalkingSpeed, isWalking: true }
+  }
 
   if (grade > 0) {
     // Montée : modèle exponentiel — bien plus réaliste que linéaire
     // uphillDecayFactor ~0.045 → pente 10% donne exp(-0.045*10) = 0.64 ✓
     const speedReduced = baseSpeed * Math.exp(-uphillDecayFactor * grade)
-    return Math.max(walkingSpeed * envSpeedFactor, speedReduced)
-  } else {
-    // Descente légère : petit boost, plafonné à 1.25x
-    const boost = downhillBoostFactor * Math.abs(grade)
-    return Math.min(baseSpeed * 1.25, baseSpeed * (1 + boost))
+    // Si la course théorique tombe sous la vitesse de marche,
+    // le coureur marche de fait — quel que soit le seuil de pente explicite.
+    if (speedReduced <= effectiveWalkingSpeed) {
+      return { speed: effectiveWalkingSpeed, isWalking: true }
+    }
+    return { speed: speedReduced, isWalking: false }
   }
+
+  // Descente légère : petit boost, plafonné à 1.25x
+  const boost = downhillBoostFactor * Math.abs(grade)
+  const downhillSpeed = Math.min(baseSpeed * 1.25, baseSpeed * (1 + boost))
+  return { speed: downhillSpeed, isWalking: false }
 }
 
 // ─── Calcul fatigue ───────────────────────────────────────────────────────────
@@ -166,17 +175,35 @@ function computeHeartRate(
 
 /**
  * Estime les calories dépensées sur un segment.
+ *
+ * Base physiologique : coût énergétique ≈ distance × poids × ECOR (Energy Cost Of Running),
+ * auquel on ajoute le surcoût de la montée (travail gravitationnel).
+ *
+ * La dépense dépend aussi de l'intensité et de la fatigue :
+ * - Plus l'effort est élevé, plus le rendement métabolique diminue (part anaérobie,
+ *   dissipation thermique), donc plus de calories brûlées pour la même distance.
+ * - La fatigue dégrade l'économie de course (compensations musculaires,
+ *   oscillations verticales accrues), surcoût progressif.
+ *
+ * Résultat : deux stratégies sur le même parcours produisent des totaux caloriques
+ * légèrement différents, comme en conditions réelles.
  */
 function computeCalories(
   distanceM: number,
   elevationGainM: number,
   profile: RunnerProfile,
+  effortFactor: number,
+  fatigueFactor: number,
 ): number {
   const { weightKg, flatCaloriesPerKm, uphillCaloriesPer100m } = profile.energyModel
   const weightFactor = weightKg / 70 // normalisé sur 70 kg
   const flatCal = (distanceM / 1000) * flatCaloriesPerKm * weightFactor
   const uphillCal = (elevationGainM / 100) * uphillCaloriesPer100m * weightFactor
-  return flatCal + uphillCal
+  // Rendement décroissant : scaling non linéaire de l'effort + pénalité de fatigue.
+  // effortFactor ~0.97 → ×0.96 · effortFactor ~1.08 → ×1.10
+  // fatigueFactor 0.25 → +7.5 % de surcoût
+  const intensityFactor = Math.pow(effortFactor, 1.3) * (1 + fatigueFactor * 0.3)
+  return (flatCal + uphillCal) * intensityFactor
 }
 
 // ─── Facteur d'effort par phase ───────────────────────────────────────────────
@@ -271,8 +298,14 @@ export function runSimulation(
     )
 
     // ── Vitesse effective (après fatigue)
-    const isWalking = seg.avgGrade >= profile.speedModel.walkingThresholdGrade
-    const baseSpeed = computeBaseSpeed(seg.avgGrade, profile, effortFactor, envFactor.speedFactor)
+    // isWalking est déterminé à l'intérieur : soit pente ≥ seuil, soit la vitesse
+    // de course théorique tombe sous la vitesse de marche (cohérent entre stratégies).
+    const { speed: baseSpeed, isWalking } = computeBaseSpeed(
+      seg.avgGrade,
+      profile,
+      effortFactor,
+      envFactor.speedFactor,
+    )
     const effectiveSpeed = baseSpeed * (1 - fatigueFactor)
 
     // ── Durée du segment
@@ -293,8 +326,14 @@ export function runSimulation(
     )
     const heartRateRange = toRange(hr, 5) // ±5%
 
-    // ── Calories
-    const calories = computeCalories(seg.distance, seg.elevationGain, profile)
+    // ── Calories (dépend de l'intensité et de la fatigue du segment)
+    const calories = computeCalories(
+      seg.distance,
+      seg.elevationGain,
+      profile,
+      effortFactor,
+      fatigueFactor,
+    )
     cumulativeCalories += calories
     cumulativeTime += duration
     cumulativeElevGain += seg.elevationGain

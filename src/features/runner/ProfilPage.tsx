@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useGarminStore } from '@/stores/garminStore'
-import { GarminLoginForm } from '@/features/history/GarminConnect'
+import { GarminLoginForm } from './GarminLoginForm'
 import { syncGarminProfile, buildProfileFromGarminStats } from '@/services/garmin.service'
 import { saveRunnerProfile } from '@/services/supabase.service'
 
@@ -131,12 +131,16 @@ export function ProfilPage() {
 
   const [unit, setUnit] = useState<DistanceUnit>('km')
   const [weightKg, setWeightKg] = useState<number>(profile.energyModel.weightKg)
+  const [walkingThreshold, setWalkingThreshold] = useState<number>(profile.speedModel.walkingThresholdGrade)
   const [saved, setSaved] = useState(false)
 
-  // Resync local weight si le profil est mis à jour depuis l'extérieur (sync Garmin, recalibration…)
+  // Resync locale si le profil est mis à jour depuis l'extérieur (sync Garmin…)
   useEffect(() => {
     setWeightKg(profile.energyModel.weightKg)
   }, [profile.energyModel.weightKg])
+  useEffect(() => {
+    setWalkingThreshold(profile.speedModel.walkingThresholdGrade)
+  }, [profile.speedModel.walkingThresholdGrade])
   const [showGarminForm, setShowGarminForm] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -181,6 +185,7 @@ export function ProfilPage() {
     const updatedProfile = {
       ...profile,
       energyModel: { ...profile.energyModel, weightKg },
+      speedModel: { ...profile.speedModel, walkingThresholdGrade: walkingThreshold },
     }
     setProfile(updatedProfile)
     if (user) {
@@ -330,31 +335,59 @@ export function ProfilPage() {
       <div>
         <SectionTitle>{t('settings.physicalProfile')}</SectionTitle>
         <Card>
-          <FieldRow
-            label={t('settings.weight')}
-            hint={t('settings.weightHint')}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={weightKg}
-                min={30}
-                max={150}
-                step={0.5}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value)
-                  if (!Number.isNaN(v)) setWeightKg(v)
-                }}
-                className="w-20 px-3 py-1.5 text-[13px] font-medium text-right rounded-lg outline-none transition-colors focus:border-[#ff6d00]"
-                style={{
-                  background: 'var(--color-surface-2)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)',
-                }}
-              />
-              <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>kg</span>
-            </div>
-          </FieldRow>
+          <div className="flex flex-col gap-5">
+            <FieldRow
+              label={t('settings.weight')}
+              hint={t('settings.weightHint')}
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={weightKg}
+                  min={30}
+                  max={150}
+                  step={0.5}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value)
+                    if (!Number.isNaN(v)) setWeightKg(v)
+                  }}
+                  className="w-20 px-3 py-1.5 text-[13px] font-medium text-right rounded-lg outline-none transition-colors focus:border-[#ff6d00]"
+                  style={{
+                    background: 'var(--color-surface-2)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                  }}
+                />
+                <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>kg</span>
+              </div>
+            </FieldRow>
+
+            <FieldRow
+              label="Seuil de marche"
+              hint="Pente à partir de laquelle vous marchez en course"
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={walkingThreshold}
+                  min={5}
+                  max={50}
+                  step={1}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value)
+                    if (!Number.isNaN(v)) setWalkingThreshold(v)
+                  }}
+                  className="w-20 px-3 py-1.5 text-[13px] font-medium text-right rounded-lg outline-none transition-colors focus:border-[#ff6d00]"
+                  style={{
+                    background: 'var(--color-surface-2)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                  }}
+                />
+                <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>% pente</span>
+              </div>
+            </FieldRow>
+          </div>
         </Card>
       </div>
 

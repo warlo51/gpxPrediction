@@ -3,7 +3,7 @@
  */
 
 import { supabase } from '@/lib/supabase'
-import type { RunnerProfile, GpxTrack, TrainingSession } from '@/types'
+import type { RunnerProfile, GpxTrack } from '@/types'
 import type { GarminOAuth1Token, GarminOAuth2Token, GarminProfile } from '@/stores/garminStore'
 
 // ─── Profil utilisateur (email, poids, âge) ─────────────────────────────────
@@ -156,84 +156,6 @@ export async function deleteGpxTrack(trackId: string) {
     .delete()
     .eq('id', trackId)
   if (error) throw error
-}
-
-// ─── Sessions d'entrainement ─────────────────────────────────────────────────
-
-export async function saveSessions(userId: string, sessions: TrainingSession[]) {
-  if (sessions.length === 0) return
-
-  const rows = sessions.map((s) => ({
-    id: s.id,
-    user_id: userId,
-    name: s.name,
-    date: s.date,
-    source: s.source,
-    distance: s.distance,
-    duration: s.duration,
-    elevation_gain: s.elevationGain,
-    avg_pace: s.avgPace,
-    avg_heart_rate: s.avgHeartRate ?? null,
-    max_heart_rate: s.maxHeartRate ?? null,
-    streams: s.streams ?? null,
-  }))
-
-  // Upsert par batch de 5 pour éviter de dépasser la limite de payload Supabase
-  // (les streams FIT Garmin peuvent être très volumineux)
-  const BATCH_SIZE = 5
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE)
-    const { error } = await supabase
-      .from('training_sessions')
-      .upsert(batch, { onConflict: 'id' })
-    if (error) throw error
-  }
-}
-
-export async function getSessions(userId: string): Promise<TrainingSession[]> {
-  const { data, error } = await supabase
-    .from('training_sessions')
-    .select('*')
-    .eq('user_id', userId)
-    .order('date', { ascending: false })
-  if (error) throw error
-
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    name: r.name,
-    date: new Date(r.date),
-    source: r.source,
-    distance: r.distance,
-    duration: r.duration,
-    elevationGain: r.elevation_gain,
-    avgPace: r.avg_pace,
-    avgHeartRate: r.avg_heart_rate ?? undefined,
-    maxHeartRate: r.max_heart_rate ?? undefined,
-    streams: r.streams ?? undefined,
-  }))
-}
-
-export async function getDemoSessions(): Promise<TrainingSession[]> {
-  const { data, error } = await supabase
-    .from('training_sessions')
-    .select('*')
-    .is('user_id', null)
-    .order('date', { ascending: false })
-  if (error) throw error
-
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    name: r.name,
-    date: new Date(r.date),
-    source: r.source,
-    distance: r.distance,
-    duration: r.duration,
-    elevationGain: r.elevation_gain,
-    avgPace: r.avg_pace,
-    avgHeartRate: r.avg_heart_rate ?? undefined,
-    maxHeartRate: r.max_heart_rate ?? undefined,
-    streams: r.streams ?? undefined,
-  }))
 }
 
 // ─── Connexions Garmin ───────────────────────────────────────────────────────

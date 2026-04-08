@@ -369,7 +369,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
                 {t('home.dataSources')}
               </span>
               <ul className="flex flex-col gap-3">
-                {['Garmin (FIT)', t('home.gpxFiles')].map(label => (
+                {['Garmin Connect', t('home.gpxFiles')].map(label => (
                   <li key={label} className="text-[13px]" style={{ color: 'var(--color-text-muted)' }}>
                     {label}
                   </li>
