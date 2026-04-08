@@ -40,6 +40,20 @@ export type SimulationResult = {
   generatedAt: Date
 }
 
+/** Conditions environnementales (biome) de la course */
+export type EnvironmentConditions = {
+  /** Température ambiante en °C (−10 à 45) */
+  temperatureC: number
+  /** Humidité relative en % (0 à 100) */
+  humidityPct: number
+}
+
+/** Conditions neutres : aucun impact sur la simulation */
+export const NEUTRAL_ENVIRONMENT: EnvironmentConditions = {
+  temperatureC: 15,
+  humidityPct: 50,
+}
+
 /** Paramètres d'entrée pour lancer une simulation */
 export type SimulationParams = {
   strategyId: string
@@ -51,4 +65,6 @@ export type SimulationParams = {
   applyFatigue: boolean
   /** Appliquer la dérive cardiaque */
   applyCardiacDrift: boolean
+  /** Conditions environnementales (défaut : neutres → aucun impact) */
+  environment?: EnvironmentConditions
 }

@@ -14,6 +14,10 @@ import type {
   StrategyId,
 } from '@/types'
 import { RACING_STRATEGIES } from '@/models/strategies'
+import {
+  computeEnvironmentFactor,
+  type EnvironmentFactor,
+} from './environmentAdjustment.service'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -46,20 +50,21 @@ function computeBaseSpeed(
   grade: number,
   profile: RunnerProfile,
   effortFactor: number,
+  envSpeedFactor: number,
 ): number {
   const { flatSpeed, uphillDecayFactor, downhillBoostFactor, walkingThresholdGrade, walkingSpeed } =
     profile.speedModel
 
-  const baseSpeed = flatSpeed * effortFactor
+  const baseSpeed = flatSpeed * effortFactor * envSpeedFactor
 
   // Marche si pente trop raide
-  if (grade >= walkingThresholdGrade) return walkingSpeed
+  if (grade >= walkingThresholdGrade) return walkingSpeed * envSpeedFactor
 
   if (grade > 0) {
     // Montée : modèle exponentiel — bien plus réaliste que linéaire
     // uphillDecayFactor ~0.045 → pente 10% donne exp(-0.045*10) = 0.64 ✓
     const speedReduced = baseSpeed * Math.exp(-uphillDecayFactor * grade)
-    return Math.max(walkingSpeed, speedReduced)
+    return Math.max(walkingSpeed * envSpeedFactor, speedReduced)
   } else {
     // Descente légère : petit boost, plafonné à 1.25x
     const boost = downhillBoostFactor * Math.abs(grade)
@@ -88,6 +93,7 @@ function computeFatigueFactor(
   profile: RunnerProfile,
   applyFatigue: boolean,
   isDownhill: boolean,
+  envFatigueFactor: number,
 ): number {
   if (!applyFatigue) return 0
 
@@ -100,17 +106,19 @@ function computeFatigueFactor(
     downhillFatigueFactorPer1000m,
   } = profile.fatigueModel
 
-  // Composante temporelle — réduite en descente (récupération cardiovasculaire)
+  // Composante temporelle — réduite en descente (récupération cardiovasculaire),
+  // amplifiée par les conditions environnementales défavorables
+  const baseHourlyDecay = hourlyDecayFactor * envFatigueFactor
   const effectiveHourlyDecay = isDownhill
-    ? hourlyDecayFactor * (1 - downhillRecoveryFactor * 0.4)
-    : hourlyDecayFactor
+    ? baseHourlyDecay * (1 - downhillRecoveryFactor * 0.4)
+    : baseHourlyDecay
   let fatigue = elapsedHours * effectiveHourlyDecay
 
   // Fatigue accrue au-delà du seuil kilométrique
   if (cumulativeDistanceKm > fatigueThresholdKm) {
     const extraKm = cumulativeDistanceKm - fatigueThresholdKm
     const extraHours = extraKm / (profile.speedModel.flatSpeed * 3.6) // estimation
-    fatigue += extraHours * hourlyDecayFactor * (lateFatigueMultiplier - 1)
+    fatigue += extraHours * baseHourlyDecay * (lateFatigueMultiplier - 1)
   }
 
   // Composante élévation — charge musculaire montée
@@ -134,6 +142,7 @@ function computeHeartRate(
   effortFactor: number,
   profile: RunnerProfile,
   applyDrift: boolean,
+  envHeatDriftBpmPerHour: number,
 ): number {
   const { maxHR, restingHR, gradeHRFactor, cardiacDriftBpmPerHour } =
     profile.heartRateModel
@@ -145,8 +154,9 @@ function computeHeartRate(
   // Ajustement pente
   const gradeAdjust = Math.max(0, grade) * gradeHRFactor
 
-  // Dérive cardiaque
-  const drift = applyDrift ? elapsedHours * cardiacDriftBpmPerHour : 0
+  // Dérive cardiaque (+ bonus thermique si chaleur)
+  const effectiveDrift = cardiacDriftBpmPerHour + envHeatDriftBpmPerHour
+  const drift = applyDrift ? elapsedHours * effectiveDrift : 0
 
   const hr = baseEffortHR + gradeAdjust + drift
   return clamp(hr, restingHR, maxHR)
@@ -215,6 +225,9 @@ export function runSimulation(
   const strategy = RACING_STRATEGIES[params.strategyId as StrategyId]
   if (!strategy) throw new Error(`Stratégie inconnue : ${params.strategyId}`)
 
+  // Facteur environnemental (calculé une seule fois pour toute la course)
+  const envFactor: EnvironmentFactor = computeEnvironmentFactor(params.environment)
+
   let cumulativeTime = 0   // secondes
   let cumulativeCalories = 0
   let cumulativeElevGain = 0  // D+ cumulé en mètres
@@ -254,11 +267,12 @@ export function runSimulation(
       profile,
       params.applyFatigue,
       isDownhill,
+      envFactor.fatigueFactor,
     )
 
     // ── Vitesse effective (après fatigue)
     const isWalking = seg.avgGrade >= profile.speedModel.walkingThresholdGrade
-    const baseSpeed = computeBaseSpeed(seg.avgGrade, profile, effortFactor)
+    const baseSpeed = computeBaseSpeed(seg.avgGrade, profile, effortFactor, envFactor.speedFactor)
     const effectiveSpeed = baseSpeed * (1 - fatigueFactor)
 
     // ── Durée du segment
@@ -275,6 +289,7 @@ export function runSimulation(
       effortFactor,
       profile,
       params.applyCardiacDrift,
+      envFactor.heatDriftBpmPerHour,
     )
     const heartRateRange = toRange(hr, 5) // ±5%
 

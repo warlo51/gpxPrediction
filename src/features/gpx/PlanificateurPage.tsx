@@ -16,7 +16,8 @@ import { useGpxSave } from '@/hooks/useGpxSave'
 import { TrackMap } from './TrackMap'
 import { Track3DView } from './Track3DView'
 import { ElevationChart } from './ElevationChart'
-import type { GpxTrack } from '@/types'
+import type { GpxTrack, EnvironmentConditions } from '@/types'
+import { NEUTRAL_ENVIRONMENT } from '@/types/simulation.types'
 import type { GpxTrackRow, TrackProfile } from '@/services/supabase.service'
 import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation, GarminCurveAnchor, LectureBullet } from '@/types/raceStrategy.types'
 
@@ -730,6 +731,129 @@ function GpxLibrary({
   )
 }
 
+// ─── Panneau conditions de course (température / humidité) ──────────────────
+
+function ConditionsPanel({
+  environment,
+  onChange,
+  baselineReport,
+  adjustedReport,
+}: {
+  environment: EnvironmentConditions
+  onChange: (env: EnvironmentConditions) => void
+  baselineReport: RaceStrategyReport | null
+  adjustedReport: RaceStrategyReport | null
+}) {
+  const { t } = useTranslation()
+
+  const isNeutral =
+    environment.temperatureC === NEUTRAL_ENVIRONMENT.temperatureC &&
+    environment.humidityPct === NEUTRAL_ENVIRONMENT.humidityPct
+
+  // Delta sur la stratégie "objectif" (référence)
+  const impactSeconds = useMemo(() => {
+    if (!baselineReport || !adjustedReport) return 0
+    const base = baselineReport.strategies.find((s) => s.id === 'objectif')
+    const adjusted = adjustedReport.strategies.find((s) => s.id === 'objectif')
+    if (!base || !adjusted) return 0
+    return adjusted.totalTimeSeconds - base.totalTimeSeconds
+  }, [baselineReport, adjustedReport])
+
+  const formatDelta = (seconds: number) => {
+    const sign = seconds >= 0 ? '+' : '−'
+    const abs = Math.abs(Math.round(seconds))
+    const m = Math.floor(abs / 60)
+    const s = abs % 60
+    if (m === 0) return `${sign}${s}s`
+    return `${sign}${m} min ${String(s).padStart(2, '0')}s`
+  }
+
+  const impactColor =
+    Math.abs(impactSeconds) < 30
+      ? 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30'
+      : Math.abs(impactSeconds) < 300
+        ? 'text-amber-700 bg-amber-500/10 border-amber-500/30'
+        : 'text-red-700 bg-red-500/10 border-red-500/30'
+
+  return (
+    <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="w-1 h-5 rounded-full bg-[#ff6d00] shrink-0" />
+          <h3 className="text-[#1a2033] font-semibold text-xs uppercase tracking-wider">
+            {t('planner.conditions.title')}
+          </h3>
+        </div>
+        {!isNeutral && (
+          <button
+            type="button"
+            onClick={() => onChange(NEUTRAL_ENVIRONMENT)}
+            className="text-[10px] font-medium text-[#64748b] hover:text-[#1a2033] underline underline-offset-2"
+          >
+            {t('planner.conditions.reset')}
+          </button>
+        )}
+      </div>
+
+      <p className="text-[11px] text-[#64748b] leading-relaxed">
+        {t('planner.conditions.hint')}
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Température */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-medium tracking-wider uppercase text-[#64748b]">
+              🌡️ {t('planner.conditions.temperature')}
+            </label>
+            <span className="text-xs font-mono text-[#1a2033]">
+              {environment.temperatureC}°C
+            </span>
+          </div>
+          <input
+            type="range"
+            min={-5}
+            max={40}
+            step={1}
+            value={environment.temperatureC}
+            onChange={(e) => onChange({ ...environment, temperatureC: Number(e.target.value) })}
+            className="w-full accent-[#ff6d00]"
+          />
+        </div>
+
+        {/* Humidité */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-medium tracking-wider uppercase text-[#64748b]">
+              💧 {t('planner.conditions.humidity')}
+            </label>
+            <span className="text-xs font-mono text-[#1a2033]">
+              {environment.humidityPct}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={20}
+            max={100}
+            step={5}
+            value={environment.humidityPct}
+            onChange={(e) => onChange({ ...environment, humidityPct: Number(e.target.value) })}
+            className="w-full accent-[#ff6d00]"
+          />
+        </div>
+      </div>
+
+      {/* Badge d'impact */}
+      {!isNeutral && (
+        <div className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs ${impactColor}`}>
+          <span className="font-medium">{t('planner.conditions.impact')}</span>
+          <span className="font-mono font-bold">{formatDelta(impactSeconds)}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Page principale ─────────────────────────────────────────────────────────
 
 export function PlanificateurPage() {
@@ -742,6 +866,7 @@ export function PlanificateurPage() {
   const [parseError, setParseError] = useState<string | null>(null)
   const [carbTolerance, setCarbTolerance] = useState(60)
   const [activeStrategy, setActiveStrategy] = useState<RaceStrategyId | null>(null)
+  const [environment, setEnvironment] = useState<EnvironmentConditions>(NEUTRAL_ENVIRONMENT)
 
   // Bibliothèque GPX sauvegardés
   const [savedTracks, setSavedTracks] = useState<GpxTrackRow[]>([])
@@ -756,14 +881,26 @@ export function PlanificateurPage() {
       .catch((err) => console.warn('[GPX] Failed to load saved tracks:', err))
   }, [user?.id])
 
+  const isNeutralEnv =
+    environment.temperatureC === NEUTRAL_ENVIRONMENT.temperatureC &&
+    environment.humidityPct === NEUTRAL_ENVIRONMENT.humidityPct
+
   // Simulation auto dès qu'un track est chargé
   // Si des prédictions Garmin (Firstbeat) sont disponibles, on les utilise comme ancrage :
   // le flatSpeed du profil est recalé pour que le temps total Minetti colle à la courbe Garmin
   // + km-effort. Sans Garmin, on retombe sur le calcul Minetti pur.
   const report = useMemo<RaceStrategyReport | null>(() => {
     if (!track) return null
+    return generateRaceStrategy(track, profile, carbTolerance, garminRacePredictions, environment)
+  }, [track, profile, carbTolerance, garminRacePredictions, environment])
+
+  // Report de référence (conditions neutres) pour calculer le delta d'impact météo.
+  // Recalculé uniquement si l'environnement est modifié — sinon c'est déjà le report principal.
+  const baselineReport = useMemo<RaceStrategyReport | null>(() => {
+    if (!track) return null
+    if (isNeutralEnv) return report
     return generateRaceStrategy(track, profile, carbTolerance, garminRacePredictions)
-  }, [track, profile, carbTolerance, garminRacePredictions])
+  }, [track, profile, carbTolerance, garminRacePredictions, isNeutralEnv, report])
 
   // Sélection auto de la stratégie recommandée quand le report change
   const effectiveStrategy = activeStrategy ?? report?.recommendation.id ?? 'objectif'
@@ -885,6 +1022,14 @@ export function PlanificateurPage() {
 
       {/* Parcours (carte + élévation + lecture, repliable) */}
       <TrackVisualization track={track} lecture={report?.lecture} />
+
+      {/* Conditions de course (température / humidité) */}
+      <ConditionsPanel
+        environment={environment}
+        onChange={setEnvironment}
+        baselineReport={baselineReport}
+        adjustedReport={report}
+      />
 
       {/* Stratégie */}
       {report && (
