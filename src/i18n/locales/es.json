@@ -1,5 +1,6 @@
 {
   "common": {
+    "or": "o",
     "loading": "Cargando…",
     "save": "Guardar",
     "saving": "Guardando…",
@@ -187,7 +188,8 @@
     "connections": "Conexiones",
     "signOutSection": "Cerrar sesión",
     "localDataKept": "Tus datos locales se conservarán.",
-    "signOutBtn": "Cerrar sesión"
+    "signOutBtn": "Cerrar sesión",
+    "signInWithGoogle": "Continuar con Google"
   },
   "garmin": {
     "title": "Garmin Connect",
