@@ -159,7 +159,9 @@
     "lactateThreshold": "Lactate Threshold",
     "lactateThresholdHR": "Threshold HR",
     "restingHR": "Resting HR",
-    "maxHR": "Max HR"
+    "maxHR": "Max HR",
+    "connectGarmin": "Connect Garmin",
+    "syncGarmin": "Sync Garmin"
   },
   "account": {
     "title": "My Account",

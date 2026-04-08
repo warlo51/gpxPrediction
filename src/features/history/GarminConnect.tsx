@@ -14,7 +14,7 @@ import { formatRaceTime } from '@/services/racePredictor.service'
 
 // ─── Formulaire de connexion ──────────────────────────────────────────────────
 
-function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
+export function GarminLoginForm({ onConnected }: { onConnected: () => void }) {
   const { setTokens } = useGarminStore()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')

@@ -159,7 +159,9 @@
     "lactateThreshold": "Seuil Lactique",
     "lactateThresholdHR": "FC au seuil",
     "restingHR": "FC au repos",
-    "maxHR": "FC maximale"
+    "maxHR": "FC maximale",
+    "connectGarmin": "Connecter Garmin",
+    "syncGarmin": "Synchroniser Garmin"
   },
   "account": {
     "title": "Mon compte",

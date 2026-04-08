@@ -5,13 +5,15 @@
  *  - Édition      : paramètres personnels (poids, FC, allure par défaut, unités)
  */
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
-import { GarminConnect } from '@/features/history/GarminConnect'
+import { useGarminStore } from '@/stores/garminStore'
+import { GarminLoginForm } from '@/features/history/GarminConnect'
 import { PremiumGate } from '@/components/PremiumGate'
-import type { RunnerProfile } from '@/types/runner.types'
+import { syncGarminProfile, buildProfileFromGarminStats } from '@/services/garmin.service'
+import { saveRunnerProfile } from '@/services/supabase.service'
 
 type DistanceUnit = 'km' | 'miles'
 
@@ -29,16 +31,6 @@ function vo2maxLevel(vo2max: number): string {
   if (vo2max >= 45) return 'Advanced'
   if (vo2max >= 38) return 'Amateur'
   return 'Beginner'
-}
-
-function vo2maxPercentile(vo2max: number): string {
-  if (vo2max >= 65) return 'TOP 1%'
-  if (vo2max >= 60) return 'TOP 3%'
-  if (vo2max >= 55) return 'TOP 5%'
-  if (vo2max >= 50) return 'TOP 15%'
-  if (vo2max >= 45) return 'TOP 30%'
-  if (vo2max >= 40) return 'TOP 50%'
-  return ''
 }
 
 // ─── Sous-composants partagés ────────────────────────────────────────────────
@@ -61,50 +53,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
   )
 }
 
-// ─── Bloc lecture seule (Garmin) ─────────────────────────────────────────────
-
-function Vo2Card({ vo2max }: { vo2max?: number }) {
-  const { t } = useTranslation()
-
-  if (!vo2max || vo2max <= 0) {
-    return (
-      <Card className="flex flex-col justify-between min-h-[180px]">
-        <p className="text-[10px] font-medium tracking-[1.5px] uppercase text-[#64748b] mb-3">
-          {t('profile.vo2max')}
-        </p>
-        <p className="text-[18px] font-black text-[#cbd5e1] mb-1">—</p>
-        <p className="text-[11px] text-[#64748b]">
-          {t('profile.noGarminData')}
-        </p>
-      </Card>
-    )
-  }
-
-  const percentile = vo2maxPercentile(vo2max)
-
-  return (
-    <Card className="flex flex-col justify-between min-h-[180px]">
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-[10px] font-medium tracking-[1.5px] uppercase text-[#64748b]">
-          {t('profile.vo2max')}
-        </p>
-        {percentile && (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-            style={{ background: '#ff6d00', color: '#ffffff' }}>
-            {percentile}
-          </span>
-        )}
-      </div>
-      <div className="flex items-end gap-2 mb-1">
-        <span className="text-[64px] font-black leading-none text-[#1a2033]">{Math.round(vo2max)}</span>
-        <span className="text-[12px] font-medium text-[#64748b] mb-2">mL/kg/min</span>
-      </div>
-      <p className="text-[11px] text-[#64748b] mt-3">
-        {t('profile.garminFirstbeat')}
-      </p>
-    </Card>
-  )
-}
+// ─── Stat tile (carte compacte) ──────────────────────────────────────────────
 
 function StatTile({
   label,
@@ -139,46 +88,6 @@ function StatTile({
   )
 }
 
-function GarminStatsCard({ profile }: { profile: RunnerProfile }) {
-  const { t } = useTranslation()
-  const { lactateThresholdSpeed, heartRateModel } = profile
-  const { lactateThresholdHR } = heartRateModel
-
-  // Normalisation de la vitesse au seuil (parfois renvoyée ×10 par l'API Garmin)
-  const ltSpeed = lactateThresholdSpeed && lactateThresholdSpeed < 1.0
-    ? lactateThresholdSpeed * 10
-    : lactateThresholdSpeed
-  const lactatePaceStr = ltSpeed && ltSpeed > 0 ? formatPaceSec(1000 / ltSpeed) : undefined
-
-  return (
-    <Card className="flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-5">
-        <div className="w-2 h-2 rounded-full bg-[#ff6d00]" />
-        <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-[#1a2033]">
-          {t('profile.garminProfile')}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <StatTile
-          label={t('profile.lactateThreshold')}
-          value={lactatePaceStr}
-          unit="/KM"
-          available={!!lactatePaceStr}
-          hint={t('profile.noGarminData')}
-        />
-        <StatTile
-          label={t('profile.lactateThresholdHR')}
-          value={lactateThresholdHR ? String(Math.round(lactateThresholdHR)) : undefined}
-          unit="BPM"
-          available={!!lactateThresholdHR}
-          hint={t('profile.noGarminData')}
-        />
-      </div>
-    </Card>
-  )
-}
-
 function ConnectionBadge({ label, connected }: { label: string; connected: boolean }) {
   const { t } = useTranslation()
   return (
@@ -209,57 +118,85 @@ function FieldRow({ label, hint, children }: { label: string; hint?: string; chi
   )
 }
 
-function NumberInput({
-  value,
-  onChange,
-  min,
-  max,
-  step,
-  suffix,
-}: {
-  value: number
-  onChange: (n: number) => void
-  min?: number
-  max?: number
-  step?: number
-  suffix: string
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        className="w-20 px-3 py-1.5 rounded-lg text-[13px] text-right font-medium outline-none
-                   focus:ring-2 focus:ring-[#ff6d00]/30"
-        style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-      />
-      <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>{suffix}</span>
-    </div>
-  )
-}
-
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export function ProfilPage() {
   const { t } = useTranslation()
-  const { profile, updateProfile } = useAppStore()
+  const {
+    profile,
+    setProfile,
+    setGarminRacePredictions,
+  } = useAppStore()
   const user = useAuthStore(s => s.user)
+  const { oauth1, oauth2, isConnected: isGarminConnected } = useGarminStore()
 
   const [unit, setUnit] = useState<DistanceUnit>('km')
   const [saved, setSaved] = useState(false)
+  const [showGarminForm, setShowGarminForm] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
-  const garminConnected = profile.calibrationSource === 'garmin'
+  const garminConnected = isGarminConnected() || profile.calibrationSource === 'garmin'
   const runnerName = (profile.name || 'Trail Runner').toUpperCase()
   const level = profile.vo2Max ? vo2maxLevel(profile.vo2Max) : 'Beginner'
+
+  // 4 stats physiologiques (depuis profile) affichées en haut
+  const ltSpeed = profile.lactateThresholdSpeed && profile.lactateThresholdSpeed < 1.0
+    ? profile.lactateThresholdSpeed * 10
+    : profile.lactateThresholdSpeed
+  const lactatePaceStr = ltSpeed && ltSpeed > 0 ? formatPaceSec(1000 / ltSpeed) : undefined
+  const basePaceStr = profile.basePaceSecPerKm > 0 ? formatPaceSec(profile.basePaceSecPerKm) : undefined
+
+  const topStats: Array<{ label: string; value?: string; unit: string }> = [
+    {
+      label: t('profile.vo2max'),
+      value: profile.vo2Max ? profile.vo2Max.toFixed(1) : undefined,
+      unit: 'ml/kg/min',
+    },
+    {
+      label: t('profile.lactateThresholdHR'),
+      value: profile.heartRateModel.lactateThresholdHR
+        ? String(Math.round(profile.heartRateModel.lactateThresholdHR))
+        : undefined,
+      unit: 'bpm',
+    },
+    {
+      label: t('profile.restingHR'),
+      value: profile.heartRateModel.restingHR ? String(profile.heartRateModel.restingHR) : undefined,
+      unit: 'bpm',
+    },
+    {
+      label: t('profile.lactateThreshold'),
+      value: lactatePaceStr ?? basePaceStr,
+      unit: '/km',
+    },
+  ]
 
   const handleSave = () => {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
+
+  const handleSync = useCallback(async () => {
+    if (!oauth1 || !oauth2) return
+    setSyncing(true)
+    setSyncError(null)
+    try {
+      const syncResult = await syncGarminProfile(oauth1, oauth2)
+      const updatedProfile = buildProfileFromGarminStats(syncResult, profile)
+      setProfile(updatedProfile)
+      setGarminRacePredictions(syncResult.racePredictions)
+      if (user) {
+        saveRunnerProfile(user.id, updatedProfile).catch(err => {
+          console.error('[GarminSync] Error saving profile to DB:', err)
+        })
+      }
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Erreur de synchronisation')
+    } finally {
+      setSyncing(false)
+    }
+  }, [oauth1, oauth2, profile, setProfile, setGarminRacePredictions, user])
 
   return (
     <div className="w-full flex flex-col gap-8 pb-12">
@@ -290,79 +227,93 @@ export function ProfilPage() {
 
         <div className="flex items-center gap-3 shrink-0">
           <ConnectionBadge label="Garmin" connected={garminConnected} />
+          {garminConnected && (
+            <button
+              type="button"
+              onClick={() => void handleSync()}
+              disabled={syncing}
+              title={t('profile.syncGarmin')}
+              aria-label={t('profile.syncGarmin')}
+              className="w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:brightness-110 disabled:opacity-50"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#1a2033"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={syncing ? 'animate-spin' : ''}
+              >
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M3 22v-6h6" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ── Section : Physiologie (Garmin) ── */}
-      <div>
-        <SectionTitle>{t('profile.physiologySection')}</SectionTitle>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Vo2Card vo2max={profile.vo2Max} />
-          <GarminStatsCard profile={profile} />
+      {/* ── Erreur sync ── */}
+      {syncError && (
+        <div className="px-4 py-3 rounded-xl text-[12px] flex items-start gap-2"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#b91c1c' }}>
+          <span className="shrink-0">⚠️</span>
+          <span>{syncError}</span>
         </div>
-        {!garminConnected && !profile.vo2Max && (
-          <p className="mt-3 text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
-            {t('profile.syncWithGarmin')}
-          </p>
-        )}
-      </div>
+      )}
 
-      {/* ── Section : Profil physique ── */}
-      <div>
-        <SectionTitle>{t('settings.physicalProfile')}</SectionTitle>
-        <Card>
-          <div className="flex flex-col gap-5">
-            <FieldRow
-              label={t('settings.weight')}
-              hint={t('settings.weightHint')}
-            >
-              <NumberInput
-                value={profile.energyModel.weightKg}
-                onChange={v => updateProfile({
-                  energyModel: { ...profile.energyModel, weightKg: v }
-                })}
-                min={30}
-                max={200}
-                suffix="kg"
-              />
-            </FieldRow>
-
-            <div className="h-px" style={{ background: 'var(--color-border)' }} />
-
-            <FieldRow
-              label={t('settings.restingHR')}
-              hint={t('settings.restingHRHint')}
-            >
-              <NumberInput
-                value={profile.heartRateModel.restingHR}
-                onChange={v => updateProfile({
-                  heartRateModel: { ...profile.heartRateModel, restingHR: v }
-                })}
-                min={30}
-                max={100}
-                suffix="bpm"
-              />
-            </FieldRow>
-
-            <div className="h-px" style={{ background: 'var(--color-border)' }} />
-
-            <FieldRow
-              label={t('settings.maxHR')}
-              hint={t('settings.maxHRHint')}
-            >
-              <NumberInput
-                value={profile.heartRateModel.maxHR}
-                onChange={v => updateProfile({
-                  heartRateModel: { ...profile.heartRateModel, maxHR: v }
-                })}
-                min={100}
-                max={220}
-                suffix="bpm"
-              />
-            </FieldRow>
+      {/* ── Formulaire de connexion Garmin (inline) ── */}
+      {showGarminForm && user && !garminConnected && (
+        <PremiumGate>
+          <div className="rounded-2xl p-5"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+            <GarminLoginForm onConnected={() => setShowGarminForm(false)} />
           </div>
-        </Card>
-      </div>
+        </PremiumGate>
+      )}
+
+      {/* ── 4 stats physiologiques (si Garmin connecté) ── */}
+      {garminConnected ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {topStats.map(stat => (
+            <StatTile
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              unit={stat.unit}
+              available={!!stat.value}
+              hint={t('profile.noGarminData')}
+            />
+          ))}
+        </div>
+      ) : !showGarminForm && user ? (
+        /* ── Gros bouton Garmin Connexion (si pas connecté) ── */
+        <PremiumGate>
+          <button
+            type="button"
+            onClick={() => setShowGarminForm(true)}
+            className="w-full flex flex-col items-center justify-center gap-4 py-12 px-6 rounded-2xl transition-all hover:brightness-110"
+            style={{
+              background: 'linear-gradient(135deg, #ffb692 0%, #ff6d00 100%)',
+              color: '#341100',
+              boxShadow: '0 4px 24px rgba(255,109,0,0.25)',
+            }}
+          >
+            <span className="text-5xl">🏔️</span>
+            <span className="text-[22px] font-black tracking-tight">
+              {t('profile.connectGarmin')}
+            </span>
+            <span className="text-[12px] font-medium opacity-80 max-w-md text-center">
+              {t('profile.syncWithGarmin')}
+            </span>
+          </button>
+        </PremiumGate>
+      ) : null}
 
       {/* ── Section : Affichage ── */}
       <div>
@@ -390,16 +341,6 @@ export function ProfilPage() {
           </FieldRow>
         </Card>
       </div>
-
-      {/* ── Section : Connexions (Garmin) — uniquement si utilisateur connecté ── */}
-      {user && (
-        <div>
-          <SectionTitle>{t('account.connections')}</SectionTitle>
-          <PremiumGate>
-            <GarminConnect />
-          </PremiumGate>
-        </div>
-      )}
 
       {/* ── Save button ── */}
       <div className="flex justify-end">

@@ -159,7 +159,9 @@
     "lactateThreshold": "Umbral de Lactato",
     "lactateThresholdHR": "FC en el umbral",
     "restingHR": "FC en reposo",
-    "maxHR": "FC m\u00e1xima"
+    "maxHR": "FC m\u00e1xima",
+    "connectGarmin": "Conectar Garmin",
+    "syncGarmin": "Sincronizar Garmin"
   },
   "account": {
     "title": "Mi cuenta",
