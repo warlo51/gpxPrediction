@@ -44,19 +44,49 @@ function parseHHMMToSeconds(hhmm: string): number | null {
   return hours * 3600 + minutes * 60
 }
 
-/** Une ligne de barrière en cours d'édition (km + HH:mm en string pour input UX) */
-type CutoffRow = { km: string; hhmm: string }
+/**
+ * Parse une allure au format `m:ss` ou `mm:ss` en secondes par km.
+ * Retourne `null` si la chaîne est vide ou invalide.
+ */
+function parsePaceToSecPerKm(pace: string): number | null {
+  const trimmed = pace.trim()
+  if (!trimmed) return null
+  const match = /^(\d{1,2}):([0-5]\d)$/.exec(trimmed)
+  if (!match) return null
+  const minutes = parseInt(match[1]!, 10)
+  const seconds = parseInt(match[2]!, 10)
+  if (minutes < 0 || minutes > 30) return null
+  const total = minutes * 60 + seconds
+  return total > 0 ? total : null
+}
+
+/** Mode de saisie d'une barrière : temps cumulé absolu ou allure moyenne cible */
+type CutoffMode = 'time' | 'pace'
+
+/**
+ * Une ligne de barrière en cours d'édition.
+ * - mode `time` : `value` est un HH:mm (temps cumulé depuis le départ)
+ * - mode `pace` : `value` est un m:ss (allure moyenne à tenir jusqu'à ce km)
+ */
+type CutoffRow = { km: string; mode: CutoffMode; value: string }
 
 /**
  * Convertit la liste éditable en `RaceCheckpoint[]` exploitable par le service.
- * Filtre les lignes invalides (km non parsable, hhmm invalide, km hors bornes).
+ * Filtre les lignes invalides (km non parsable, valeur invalide, km hors bornes).
+ * En mode `pace`, `cutoffSeconds = paceSecPerKm × km`.
  */
 function rowsToCheckpoints(rows: CutoffRow[], totalKm: number): RaceCheckpoint[] {
   const valid: RaceCheckpoint[] = []
   for (const row of rows) {
     const km = parseFloat(row.km)
     if (Number.isNaN(km) || km <= 0 || km > totalKm + 0.5) continue
-    const seconds = parseHHMMToSeconds(row.hhmm)
+    let seconds: number | null
+    if (row.mode === 'pace') {
+      const secPerKm = parsePaceToSecPerKm(row.value)
+      seconds = secPerKm === null ? null : Math.round(secPerKm * km)
+    } else {
+      seconds = parseHHMMToSeconds(row.value)
+    }
     if (seconds === null) continue
     valid.push({ km, cutoffSeconds: seconds })
   }
@@ -1073,14 +1103,17 @@ function RaceParametersPanel({
               </h4>
             </label>
             <p className="text-[11px] text-[#64748b] leading-relaxed">
-              Définis les checkpoints à ne pas dépasser pour valider la course.
+              Définis les checkpoints à ne pas dépasser : soit un temps cumulé
+              (HH:mm), soit une allure moyenne à tenir jusqu'à ce km (m:ss /km).
             </p>
             {cutoffEnabled && (
               <div className="flex flex-col gap-2">
                 {cutoffRows.map((row, idx) => {
                   const km = parseFloat(row.km)
                   const kmValid = !Number.isNaN(km) && km > 0 && km <= trackTotalKm + 0.5
-                  const hhmmValid = parseHHMMToSeconds(row.hhmm) !== null
+                  const valueValid = row.mode === 'pace'
+                    ? parsePaceToSecPerKm(row.value) !== null
+                    : parseHHMMToSeconds(row.value) !== null
                   return (
                     <div key={idx} className="flex items-center gap-1.5">
                       <input
@@ -1099,19 +1132,58 @@ function RaceParametersPanel({
                         className="w-16 px-2 py-1 text-xs font-mono text-center rounded-lg border border-black/[0.12] bg-white text-[#1a2033] focus:outline-none focus:border-[#ff6d00] aria-[invalid=true]:border-red-500"
                       />
                       <span className="text-[10px] text-[#94a3b8]">km</span>
+                      <div className="flex rounded-lg border border-black/[0.12] overflow-hidden" role="group" aria-label="Mode de saisie">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = [...cutoffRows]
+                            next[idx] = { ...next[idx]!, mode: 'time', value: '' }
+                            setCutoffRows(next)
+                          }}
+                          className={`px-2 py-1 text-[10px] font-semibold transition-colors ${
+                            row.mode === 'time'
+                              ? 'bg-[#ff6d00] text-white'
+                              : 'bg-white text-[#64748b] hover:bg-[#f8fafc]'
+                          }`}
+                          aria-pressed={row.mode === 'time'}
+                          title="Temps cumulé depuis le départ"
+                        >
+                          temps
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = [...cutoffRows]
+                            next[idx] = { ...next[idx]!, mode: 'pace', value: '' }
+                            setCutoffRows(next)
+                          }}
+                          className={`px-2 py-1 text-[10px] font-semibold border-l border-black/[0.12] transition-colors ${
+                            row.mode === 'pace'
+                              ? 'bg-[#ff6d00] text-white'
+                              : 'bg-white text-[#64748b] hover:bg-[#f8fafc]'
+                          }`}
+                          aria-pressed={row.mode === 'pace'}
+                          title="Allure moyenne à tenir jusqu'à ce km"
+                        >
+                          allure
+                        </button>
+                      </div>
                       <input
                         type="text"
                         inputMode="numeric"
-                        placeholder="HH:mm"
-                        value={row.hhmm}
+                        placeholder={row.mode === 'pace' ? 'm:ss' : 'HH:mm'}
+                        value={row.value}
                         onChange={(e) => {
                           const next = [...cutoffRows]
-                          next[idx] = { ...next[idx]!, hhmm: e.target.value }
+                          next[idx] = { ...next[idx]!, value: e.target.value }
                           setCutoffRows(next)
                         }}
-                        aria-invalid={!hhmmValid && row.hhmm.trim() !== ''}
+                        aria-invalid={!valueValid && row.value.trim() !== ''}
                         className="w-20 px-2 py-1 text-xs font-mono text-center rounded-lg border border-black/[0.12] bg-white text-[#1a2033] focus:outline-none focus:border-[#ff6d00] aria-[invalid=true]:border-red-500"
                       />
+                      <span className="text-[10px] text-[#94a3b8]">
+                        {row.mode === 'pace' ? '/km' : ''}
+                      </span>
                       <button
                         type="button"
                         onClick={() => setCutoffRows(cutoffRows.filter((_, i) => i !== idx))}
@@ -1129,7 +1201,7 @@ function RaceParametersPanel({
                     const defaultKm = trackTotalKm > 0
                       ? (cutoffRows.length === 0 ? trackTotalKm.toFixed(1) : '')
                       : ''
-                    setCutoffRows([...cutoffRows, { km: defaultKm, hhmm: '' }])
+                    setCutoffRows([...cutoffRows, { km: defaultKm, mode: 'time', value: '' }])
                   }}
                   className="self-start text-[10px] font-semibold text-[#ff6d00] hover:underline"
                 >
@@ -1208,7 +1280,7 @@ export function PlanificateurPage() {
   useEffect(() => {
     if (cutoffEnabled && cutoffRows.length === 0 && track) {
       const totalKm = track.totalDistance / 1000
-      setCutoffRows([{ km: totalKm.toFixed(1), hhmm: '' }])
+      setCutoffRows([{ km: totalKm.toFixed(1), mode: 'time', value: '' }])
     }
   }, [cutoffEnabled, cutoffRows.length, track])
 
