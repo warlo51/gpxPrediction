@@ -170,6 +170,7 @@
     "lactateThresholdHR": "FC en el umbral",
     "restingHR": "FC en reposo",
     "maxHR": "FC máxima",
+    "walkingThresholdGrade": "Umbral de marcha",
     "connectGarmin": "Conectar Garmin",
     "syncGarmin": "Sincronizar Garmin"
   },

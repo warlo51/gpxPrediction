@@ -78,8 +78,13 @@ export default async function handler(req, res) {
     const durationMs = Date.now() - t0
     console.log(`[Garmin Activities] Done — ${all.length} activities fetched in ${durationMs}ms (${page} pages)`)
 
+    // Ne garder que les activités running / trail running
+    const ALLOWED_TYPE_KEYS = new Set(['running', 'trail_running'])
+    const filtered = all.filter((a) => ALLOWED_TYPE_KEYS.has(a?.activityType?.typeKey))
+    console.log(`[Garmin Activities] Filtered running/trail_running — kept ${filtered.length}/${all.length}`)
+
     // Supprimer les coordonnées GPS avant de renvoyer (données sensibles)
-    const activities = all.map(({
+    const activities = filtered.map(({
       activityId,
       activityType,
       activityName,

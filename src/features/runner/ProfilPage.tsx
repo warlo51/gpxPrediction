@@ -11,7 +11,12 @@ import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useGarminStore } from '@/stores/garminStore'
 import { GarminLoginForm } from './GarminLoginForm'
-import { syncGarminProfile, buildProfileFromGarminStats, fetchGarminActivities } from '@/services/garmin.service'
+import {
+  syncGarminProfile,
+  buildProfileFromGarminStats,
+  fetchGarminActivities,
+  computeWalkingThresholdFromGarmin,
+} from '@/services/garmin.service'
 import { saveRunnerProfile } from '@/services/supabase.service'
 
 type DistanceUnit = 'km' | 'miles'
@@ -131,16 +136,12 @@ export function ProfilPage() {
 
   const [unit, setUnit] = useState<DistanceUnit>('km')
   const [weightKg, setWeightKg] = useState<number>(profile.energyModel.weightKg)
-  const [walkingThreshold, setWalkingThreshold] = useState<number>(profile.speedModel.walkingThresholdGrade)
   const [saved, setSaved] = useState(false)
 
   // Resync locale si le profil est mis à jour depuis l'extérieur (sync Garmin…)
   useEffect(() => {
     setWeightKg(profile.energyModel.weightKg)
   }, [profile.energyModel.weightKg])
-  useEffect(() => {
-    setWalkingThreshold(profile.speedModel.walkingThresholdGrade)
-  }, [profile.speedModel.walkingThresholdGrade])
   const [showGarminForm, setShowGarminForm] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -155,6 +156,10 @@ export function ProfilPage() {
     : profile.lactateThresholdSpeed
   const lactatePaceStr = ltSpeed && ltSpeed > 0 ? formatPaceSec(1000 / ltSpeed) : undefined
   const basePaceStr = profile.basePaceSecPerKm > 0 ? formatPaceSec(profile.basePaceSecPerKm) : undefined
+
+  const walkingThresholdStr = profile.speedModel.walkingThresholdGrade > 0
+    ? profile.speedModel.walkingThresholdGrade.toFixed(1)
+    : undefined
 
   const topStats: Array<{ label: string; value?: string; unit: string }> = [
     {
@@ -179,13 +184,17 @@ export function ProfilPage() {
       value: lactatePaceStr ?? basePaceStr,
       unit: '/km',
     },
+    {
+      label: t('profile.walkingThresholdGrade'),
+      value: walkingThresholdStr,
+      unit: '%',
+    },
   ]
 
   const handleSave = () => {
     const updatedProfile = {
       ...profile,
       energyModel: { ...profile.energyModel, weightKg },
-      speedModel: { ...profile.speedModel, walkingThresholdGrade: walkingThreshold },
     }
     setProfile(updatedProfile)
     if (user) {
@@ -203,20 +212,39 @@ export function ProfilPage() {
     setSyncError(null)
     try {
       const syncResult = await syncGarminProfile(oauth1, oauth2)
-      const updatedProfile = buildProfileFromGarminStats(syncResult, profile)
-      setProfile(updatedProfile)
+      let updatedProfile = buildProfileFromGarminStats(syncResult, profile)
       setGarminRacePredictions(syncResult.racePredictions)
+
+      // ── Récupération des activités + analyse seuil de marche (MMA-43)
+      // On utilise les activités trail_running pour déduire la pente à partir
+      // de laquelle le runner marche, ce qui remplace la saisie manuelle.
+      try {
+        const activitiesRes = await fetchGarminActivities(oauth1, oauth2)
+        const walkAnalysis = await computeWalkingThresholdFromGarmin(
+          oauth1,
+          oauth2,
+          activitiesRes.activities,
+          updatedProfile.speedModel.flatSpeed,
+        )
+        if (walkAnalysis) {
+          updatedProfile = {
+            ...updatedProfile,
+            speedModel: {
+              ...updatedProfile.speedModel,
+              walkingThresholdGrade: walkAnalysis.walkingThresholdGrade,
+            },
+          }
+        }
+      } catch (activitiesErr) {
+        console.warn('[GarminSync] Activities/walk-analysis failed (non-blocking):', activitiesErr)
+      }
+
+      // ── Persist final profile (avec walkingThresholdGrade mis à jour si possible)
+      setProfile(updatedProfile)
       if (user) {
         saveRunnerProfile(user.id, updatedProfile).catch(err => {
           console.error('[GarminSync] Error saving profile to DB:', err)
         })
-      }
-
-      // Récupération des activités (MMA-43) — log console uniquement, pas d'affichage
-      try {
-        await fetchGarminActivities(oauth1, oauth2)
-      } catch (activitiesErr) {
-        console.warn('[GarminSync] Activities fetch failed (non-blocking):', activitiesErr)
       }
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Erreur de synchronisation')
@@ -302,9 +330,9 @@ export function ProfilPage() {
         </div>
       )}
 
-      {/* ── 4 stats physiologiques (si Garmin connecté) ── */}
+      {/* ── Stats physiologiques (si Garmin connecté) ── */}
       {garminConnected ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {topStats.map(stat => (
             <StatTile
               key={stat.label}
@@ -366,32 +394,6 @@ export function ProfilPage() {
                   }}
                 />
                 <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>kg</span>
-              </div>
-            </FieldRow>
-
-            <FieldRow
-              label="Seuil de marche"
-              hint="Pente à partir de laquelle vous marchez en course"
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={walkingThreshold}
-                  min={5}
-                  max={50}
-                  step={1}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value)
-                    if (!Number.isNaN(v)) setWalkingThreshold(v)
-                  }}
-                  className="w-20 px-3 py-1.5 text-[13px] font-medium text-right rounded-lg outline-none transition-colors focus:border-[#ff6d00]"
-                  style={{
-                    background: 'var(--color-surface-2)',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text)',
-                  }}
-                />
-                <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>% pente</span>
               </div>
             </FieldRow>
           </div>

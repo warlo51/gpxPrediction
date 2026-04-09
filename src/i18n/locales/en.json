@@ -170,6 +170,7 @@
     "lactateThresholdHR": "Threshold HR",
     "restingHR": "Resting HR",
     "maxHR": "Max HR",
+    "walkingThresholdGrade": "Walk Threshold",
     "connectGarmin": "Connect Garmin",
     "syncGarmin": "Sync Garmin"
   },
