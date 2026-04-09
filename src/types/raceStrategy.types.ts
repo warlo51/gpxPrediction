@@ -22,11 +22,17 @@ export interface RacePhase {
   riskLevel: 'élevé' | 'modéré' | 'faible'
 }
 
+export type RiskZoneCause = 'fc-elevee' | 'fc-soutenue' | 'marche'
+
 export interface RiskZone {
   label: string
   startKm: number
   endKm: number
   level: 'élevé' | 'modéré'
+  /** Cause dominante de la zone (la plus sévère observée sur ses segments) */
+  cause: RiskZoneCause
+  /** FC moyenne (bpm) sur la zone, utile pour l'affichage groupé */
+  avgHR: number
 }
 
 export interface NutritionVerdict {

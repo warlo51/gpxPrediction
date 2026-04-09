@@ -636,21 +636,57 @@ function StrategyDetail({ plan }: { plan: StrategyPlan }) {
           </table>
         </div>
 
-        {/* Risk zones */}
-        {plan.riskZones.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {plan.riskZones.map((zone, i) => (
-              <div key={i} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border ${
-                zone.level === 'élevé'
-                  ? 'bg-red-500/10 border-red-500/30 text-red-700'
-                  : 'bg-amber-500/10 border-amber-500/30 text-amber-700'
-              }`}>
-                <span>{zone.level === 'élevé' ? '⚠️' : '↑'}</span>
-                <span>{zone.label}</span>
+        {/* Zones à surveiller — regroupées par cause */}
+        {plan.riskZones.length > 0 && (() => {
+          const groupDefs = [
+            { cause: 'fc-elevee'   as const, label: 'FC élevée',    sublabel: '> 92 % FCmax', icon: '⚠️', severity: 'high' as const },
+            { cause: 'fc-soutenue' as const, label: 'FC soutenue',  sublabel: '> 87 % FCmax', icon: '↑',  severity: 'mid'  as const },
+            { cause: 'marche'      as const, label: 'Marche forcée', sublabel: 'Pente trop raide', icon: '🚶', severity: 'mid' as const },
+          ]
+          const groups = groupDefs
+            .map(g => ({ ...g, zones: plan.riskZones.filter(z => z.cause === g.cause) }))
+            .filter(g => g.zones.length > 0)
+          if (groups.length === 0) return null
+
+          return (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
+                <h3 className="text-[#1a2033] font-semibold text-xs uppercase tracking-wider">Zones à surveiller</h3>
               </div>
-            ))}
-          </div>
-        )}
+              <div className="flex flex-col gap-1.5">
+                {groups.map((group) => {
+                  const totalKm = group.zones.reduce((sum, z) => sum + (z.endKm - z.startKm), 0)
+                  const avgHR   = Math.round(group.zones.reduce((s, z) => s + z.avgHR, 0) / group.zones.length)
+                  const colorClasses = group.severity === 'high'
+                    ? 'bg-red-500/10 border-red-500/30 text-red-700'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-700'
+                  return (
+                    <div key={group.cause} className={`rounded-xl border px-3 py-2 ${colorClasses}`}>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm shrink-0">{group.icon}</span>
+                          <span className="font-semibold text-xs">{group.label}</span>
+                          <span className="text-[10px] text-[#64748b] truncate">· {group.sublabel}</span>
+                        </div>
+                        <div className="text-[10px] font-mono text-[#64748b] shrink-0">
+                          {group.zones.length} {group.zones.length > 1 ? 'zones' : 'zone'} · {totalKm.toFixed(1)} km · ~{avgHR} bpm
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1 text-[10px] font-mono">
+                        {group.zones.map((z, i) => (
+                          <span key={i} className="px-1.5 py-0.5 rounded bg-black/[0.05] text-[#1a2033]">
+                            km {z.startKm.toFixed(1)}–{z.endKm.toFixed(1)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Barrières horaires */}
         {plan.feasibility && (

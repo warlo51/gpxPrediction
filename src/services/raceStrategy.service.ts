@@ -156,35 +156,56 @@ function buildPhase(index: number, segs: SegmentSimulation[], maxHR: number): Ra
 
 // ─── Zones à risque ────────────────────────────────────────────────────────────
 
+/**
+ * Hiérarchie des causes (de la plus sévère à la moins sévère).
+ * Lorsqu'une zone agrège plusieurs segments, on retient la cause la plus haute.
+ */
+const CAUSE_PRIORITY: Record<RiskZone['cause'], number> = {
+  'fc-elevee':   3,
+  'fc-soutenue': 2,
+  'marche':      1,
+}
+
 function detectRiskZones(simSegments: SegmentSimulation[], maxHR: number): RiskZone[] {
   const zones: RiskZone[] = []
   let zoneStart: number | null = null
   let zoneHRs: number[] = []
-  let zoneLevel: 'élevé' | 'modéré' = 'modéré'
+  let zoneCause: RiskZone['cause'] | null = null
 
   const flush = (endKm: number) => {
-    if (zoneStart === null || zoneHRs.length === 0) return
+    if (zoneStart === null || zoneHRs.length === 0 || zoneCause === null) return
     const avgHR = Math.round(zoneHRs.reduce((a, b) => a + b, 0) / zoneHRs.length)
+    const level: RiskZone['level'] = zoneCause === 'fc-elevee' ? 'élevé' : 'modéré'
     zones.push({
       label: `Km ${zoneStart.toFixed(1)}–${endKm.toFixed(1)} — FC ~${avgHR} bpm`,
       startKm: zoneStart,
       endKm,
-      level: zoneLevel,
+      level,
+      cause: zoneCause,
+      avgHR,
     })
     zoneStart = null
     zoneHRs = []
+    zoneCause = null
   }
 
   for (const sim of simSegments) {
-    const hr     = sim.heartRateRange.target
+    const hr      = sim.heartRateRange.target
     const startKm = (sim.segment.cumulativeDistance - sim.segment.distance) / 1000
 
-    let level: 'élevé' | 'modéré' | null = null
-    if (hr > maxHR * 0.92)                        level = 'élevé'
-    else if (hr > maxHR * 0.87 || sim.isWalking)  level = 'modéré'
+    let cause: RiskZone['cause'] | null = null
+    if (hr > maxHR * 0.92)      cause = 'fc-elevee'
+    else if (hr > maxHR * 0.87) cause = 'fc-soutenue'
+    else if (sim.isWalking)     cause = 'marche'
 
-    if (level) {
-      if (zoneStart === null) { zoneStart = startKm; zoneLevel = level }
+    if (cause) {
+      if (zoneStart === null) {
+        zoneStart = startKm
+        zoneCause = cause
+      } else if (CAUSE_PRIORITY[cause] > CAUSE_PRIORITY[zoneCause!]) {
+        // Élève la cause de la zone si on rencontre un segment plus sévère
+        zoneCause = cause
+      }
       zoneHRs.push(hr)
     } else {
       flush(startKm)
