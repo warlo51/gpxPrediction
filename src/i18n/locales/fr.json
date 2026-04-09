@@ -172,7 +172,15 @@
     "maxHR": "FC maximale",
     "walkingThresholdGrade": "Seuil de marche",
     "connectGarmin": "Connecter Garmin",
-    "syncGarmin": "Synchroniser Garmin"
+    "syncGarmin": "Synchroniser Garmin",
+    "syncPhasePhysio": "Récupération des données physiologiques…",
+    "syncPhaseActivities": "Récupération de l'historique d'activités…",
+    "syncPhaseActivitiesFound": "{{total}} activités running trouvées dont {{trail}} en trail",
+    "syncPhaseSplits": "Récupération des splits de {{count}} trails…",
+    "syncPhaseAnalyzing": "Analyse du seuil de marche…",
+    "syncPhaseWalkDetected": "Seuil de marche détecté : {{grade}}% (sur {{splits}} splits analysés)",
+    "syncPhaseWalkUndetermined": "Seuil de marche non déterminé — signal insuffisant",
+    "syncPhaseNoTrail": "{{total}} activités trouvées, aucun trail avec assez de dénivelé pour l'analyse"
   },
   "account": {
     "title": "Mon compte",

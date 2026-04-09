@@ -15,8 +15,10 @@ import {
   syncGarminProfile,
   buildProfileFromGarminStats,
   fetchGarminActivities,
-  computeWalkingThresholdFromGarmin,
+  fetchGarminActivitySplits,
+  pickActivitiesForWalkAnalysis,
 } from '@/services/garmin.service'
+import { computeWalkingThresholdGrade } from '@/services/walkGradeAnalysis.service'
 import { saveRunnerProfile } from '@/services/supabase.service'
 
 type DistanceUnit = 'km' | 'miles'
@@ -145,6 +147,7 @@ export function ProfilPage() {
   const [showGarminForm, setShowGarminForm] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [syncStatusText, setSyncStatusText] = useState<string | null>(null)
 
   const garminConnected = isGarminConnected() || profile.calibrationSource === 'garmin'
   const runnerName = (profile.name || 'Trail Runner').toUpperCase()
@@ -210,6 +213,7 @@ export function ProfilPage() {
     if (!oauth1 || !oauth2) return
     setSyncing(true)
     setSyncError(null)
+    setSyncStatusText(t('profile.syncPhasePhysio'))
     try {
       const syncResult = await syncGarminProfile(oauth1, oauth2)
       let updatedProfile = buildProfileFromGarminStats(syncResult, profile)
@@ -219,21 +223,49 @@ export function ProfilPage() {
       // On utilise les activités trail_running pour déduire la pente à partir
       // de laquelle le runner marche, ce qui remplace la saisie manuelle.
       try {
+        setSyncStatusText(t('profile.syncPhaseActivities'))
         const activitiesRes = await fetchGarminActivities(oauth1, oauth2)
-        const walkAnalysis = await computeWalkingThresholdFromGarmin(
-          oauth1,
-          oauth2,
-          activitiesRes.activities,
-          updatedProfile.speedModel.flatSpeed,
+        const totalActivities = activitiesRes.activities.length
+        const trailIds = pickActivitiesForWalkAnalysis(activitiesRes.activities)
+
+        setSyncStatusText(
+          t('profile.syncPhaseActivitiesFound', {
+            total: totalActivities,
+            trail: trailIds.length,
+          }),
         )
-        if (walkAnalysis) {
-          updatedProfile = {
-            ...updatedProfile,
-            speedModel: {
-              ...updatedProfile.speedModel,
-              walkingThresholdGrade: walkAnalysis.walkingThresholdGrade,
-            },
+
+        if (trailIds.length > 0) {
+          setSyncStatusText(t('profile.syncPhaseSplits', { count: trailIds.length }))
+          const splitsRes = await fetchGarminActivitySplits(oauth1, oauth2, trailIds)
+
+          setSyncStatusText(t('profile.syncPhaseAnalyzing'))
+          const walkAnalysis = computeWalkingThresholdGrade(
+            splitsRes.splits,
+            updatedProfile.speedModel.flatSpeed,
+          )
+
+          if (walkAnalysis) {
+            updatedProfile = {
+              ...updatedProfile,
+              speedModel: {
+                ...updatedProfile.speedModel,
+                walkingThresholdGrade: walkAnalysis.walkingThresholdGrade,
+              },
+            }
+            setSyncStatusText(
+              t('profile.syncPhaseWalkDetected', {
+                grade: walkAnalysis.walkingThresholdGrade.toFixed(1),
+                splits: walkAnalysis.totalSplits,
+              }),
+            )
+          } else {
+            setSyncStatusText(t('profile.syncPhaseWalkUndetermined'))
           }
+        } else {
+          setSyncStatusText(
+            t('profile.syncPhaseNoTrail', { total: totalActivities }),
+          )
         }
       } catch (activitiesErr) {
         console.warn('[GarminSync] Activities/walk-analysis failed (non-blocking):', activitiesErr)
@@ -250,8 +282,10 @@ export function ProfilPage() {
       setSyncError(err instanceof Error ? err.message : 'Erreur de synchronisation')
     } finally {
       setSyncing(false)
+      // Laisse le dernier message visible 4s puis l'efface
+      setTimeout(() => setSyncStatusText(null), 4000)
     }
-  }, [oauth1, oauth2, profile, setProfile, setGarminRacePredictions, user])
+  }, [oauth1, oauth2, profile, setProfile, setGarminRacePredictions, user, t])
 
   return (
     <div className="w-full flex flex-col gap-8 pb-12">
@@ -319,6 +353,15 @@ export function ProfilPage() {
           style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#b91c1c' }}>
           <span className="shrink-0">⚠️</span>
           <span>{syncError}</span>
+        </div>
+      )}
+
+      {/* ── Statut sync (progression en cours ou résumé final) ── */}
+      {syncStatusText && !syncError && (
+        <div className="px-4 py-3 rounded-xl text-[12px] flex items-start gap-2"
+          style={{ background: 'rgba(255,109,0,0.08)', border: '1px solid rgba(255,109,0,0.25)', color: '#c2410c' }}>
+          <span className="shrink-0">{syncing ? '⏳' : '✓'}</span>
+          <span>{syncStatusText}</span>
         </div>
       )}
 

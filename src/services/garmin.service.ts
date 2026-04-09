@@ -5,11 +5,7 @@
 
 import type { GarminOAuth1Token, GarminOAuth2Token, GarminProfile } from '@/stores/garminStore'
 import type { GarminRacePredictions, RunnerProfile } from '@/types'
-import {
-  computeWalkingThresholdGrade,
-  type ActivitySplit,
-  type WalkGradeAnalysisResult,
-} from '@/services/walkGradeAnalysis.service'
+import type { ActivitySplit } from '@/services/walkGradeAnalysis.service'
 
 const API_BASE = '/api/garmin'
 
@@ -231,27 +227,6 @@ export function pickActivitiesForWalkAnalysis(
     .sort((a, b) => (b.elevationGain ?? 0) - (a.elevationGain ?? 0))
     .slice(0, maxActivities)
     .map((a) => a.activityId)
-}
-
-/**
- * Pipeline complet : récupère activités → splits → calcule le seuil de marche.
- * Retourne null si données insuffisantes (pas d'activités trail, pas de splits…).
- */
-export async function computeWalkingThresholdFromGarmin(
-  oauth1: GarminOAuth1Token,
-  oauth2: GarminOAuth2Token,
-  activities: GarminActivitySummary[],
-  fallbackFlatSpeed?: number,
-): Promise<WalkGradeAnalysisResult | null> {
-  const ids = pickActivitiesForWalkAnalysis(activities)
-  if (ids.length === 0) {
-    console.warn('[WalkGrade] No trail_running activities with enough elevation')
-    return null
-  }
-
-  console.log(`[WalkGrade] Analyzing ${ids.length} trail activities`)
-  const splitsRes = await fetchGarminActivitySplits(oauth1, oauth2, ids)
-  return computeWalkingThresholdGrade(splitsRes.splits, fallbackFlatSpeed)
 }
 
 // ─── Récupérer les stats utilisateur (VO2max, seuil lactate…) ────────────────

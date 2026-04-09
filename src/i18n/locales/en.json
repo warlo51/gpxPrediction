@@ -172,7 +172,15 @@
     "maxHR": "Max HR",
     "walkingThresholdGrade": "Walk Threshold",
     "connectGarmin": "Connect Garmin",
-    "syncGarmin": "Sync Garmin"
+    "syncGarmin": "Sync Garmin",
+    "syncPhasePhysio": "Fetching physiological data…",
+    "syncPhaseActivities": "Fetching activity history…",
+    "syncPhaseActivitiesFound": "{{total}} running activities found, {{trail}} are trail",
+    "syncPhaseSplits": "Fetching splits from {{count}} trails…",
+    "syncPhaseAnalyzing": "Analyzing walk threshold…",
+    "syncPhaseWalkDetected": "Walk threshold detected: {{grade}}% (from {{splits}} splits)",
+    "syncPhaseWalkUndetermined": "Walk threshold undetermined — insufficient signal",
+    "syncPhaseNoTrail": "{{total}} activities found, no trail with enough elevation for analysis"
   },
   "account": {
     "title": "My Account",

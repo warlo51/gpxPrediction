@@ -5,11 +5,14 @@
  * à partir de laquelle le runner marche plutôt que de courir.
  *
  * Méthode :
- * 1. Pour chaque split (~1km auto-lap), calculer la pente moyenne et l'allure
+ * 1. Pour chaque split (~1km auto-lap), calculer la pente montante moyenne
+ *    (elevGain / distance, sans soustraire elevLoss : ce qui déclenche la marche
+ *    c'est l'effort de montée, pas le net)
  * 2. Déterminer une allure de référence "course" à partir des splits à plat
- * 3. Classifier chaque split : marché si allure > 1.6 × allure de référence
+ * 3. Classifier chaque split : marché si allure > WALK_PACE_RATIO × allure de référence
  * 4. Bucketer les splits par tranches de pente
- * 5. Trouver la pente à partir de laquelle ≥50% des splits sont marchés
+ * 5. Trouver la pente à partir de laquelle ≥ WALK_RATIO_THRESHOLD des splits sont marchés
+ * 6. Retourner null si le signal est insuffisant (pas de fallback arbitraire)
  */
 
 export type ActivitySplit = {
@@ -41,27 +44,46 @@ export type WalkGradeAnalysisResult = {
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
-/** Ratio au-dessus duquel un split est considéré comme marché vs allure de référence */
-const WALK_PACE_RATIO = 1.6
+/**
+ * Ratio au-dessus duquel un split est considéré comme marché vs allure de référence.
+ * Calibré sur des données trail : un runner qui alterne course/marche sur 1km
+ * finit ~1.35× plus lent que son allure plat. Au-dessus de 1.5× c'est clairement
+ * de la marche dominante.
+ */
+const WALK_PACE_RATIO = 1.35
+
+/**
+ * Ratio de splits marchés au-dessus duquel on considère qu'à cette pente le
+ * runner marche majoritairement.
+ */
+const WALK_RATIO_THRESHOLD = 0.5
 
 /** Distance minimale d'un split valide (mètres) — élimine les micro-laps */
 const MIN_SPLIT_DISTANCE_M = 400
 
-/** Tranches de pente (%) pour le bucketing */
-const GRADE_BUCKETS: Array<[number, number]> = [
-  [-100, 2],
-  [2, 5],
-  [5, 8],
-  [8, 12],
-  [12, 16],
-  [16, 20],
-  [20, 25],
-  [25, 30],
-  [30, 100],
-]
+/** Nombre minimum de splits valides pour lancer l'analyse */
+const MIN_TOTAL_SPLITS = 10
 
-/** Valeur par défaut si aucune donnée exploitable */
-const DEFAULT_WALK_GRADE = 25
+/** Nombre minimum de splits dans un bucket pour qu'il soit pris en compte */
+const MIN_SPLITS_PER_BUCKET = 3
+
+/**
+ * Tranches de pente (%) pour le bucketing, en utilisant le grade montant
+ * (elevGain/distance). Granularité fine dans la plage 5-20% où se situe
+ * la transition course↔marche pour la plupart des runners.
+ */
+const GRADE_BUCKETS: Array<[number, number]> = [
+  [0, 2],
+  [2, 4],
+  [4, 6],
+  [6, 8],
+  [8, 10],
+  [10, 12],
+  [12, 15],
+  [15, 18],
+  [18, 22],
+  [22, 100],
+]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,14 +97,17 @@ function computePaceSecPerKm(split: ActivitySplit): number | null {
 }
 
 /**
- * Calcule la pente nette d'un split en pourcentage.
- * grade = (elevGain - elevLoss) / distance × 100
+ * Calcule la pente montante d'un split en pourcentage.
+ * On utilise elevGain/distance (et non le net) car ce qui déclenche la marche,
+ * c'est l'effort de montée, pas le dénivelé net. Un split vallonné 100m+/100m-
+ * aura un grade net de 0% mais le runner peut avoir marché les 100m de montée.
+ *
+ * grade = elevGain / distance × 100
  */
 function computeGradePercent(split: ActivitySplit): number | null {
   if (!split.distance || split.distance < MIN_SPLIT_DISTANCE_M) return null
   const gain = split.elevationGain ?? 0
-  const loss = split.elevationLoss ?? 0
-  return ((gain - loss) / split.distance) * 100
+  return (gain / split.distance) * 100
 }
 
 /**
@@ -123,23 +148,29 @@ export function computeWalkingThresholdGrade(
     }
   }
 
-  if (enriched.length < 10) {
-    console.warn(`[WalkGrade] Not enough valid splits (${enriched.length}) — need ≥10`)
+  console.log(`[WalkGrade] Collected ${enriched.length} valid splits across ${Object.keys(splitsMap).length} activities`)
+
+  if (enriched.length < MIN_TOTAL_SPLITS) {
+    console.warn(`[WalkGrade] Not enough valid splits (${enriched.length}) — need ≥${MIN_TOTAL_SPLITS}`)
     return null
   }
 
-  // ── 2. Calculer allure de référence "course" : médiane des splits à plat (|grade| < 2%)
-  const flatPaces = enriched.filter((s) => Math.abs(s.grade) < 2).map((s) => s.pace)
+  // ── 2. Calculer allure de référence "course"
+  //     Médiane des splits à plat (grade < 2% montant). À noter qu'avec le
+  //     grade montant-seul, les splits descendants et plats tombent tous
+  //     dans la tranche 0-2%, ce qui donne une bonne référence.
+  const flatPaces = enriched.filter((s) => s.grade < 2).map((s) => s.pace)
   let runningPaceRef: number
+  let paceRefSource: string
   if (flatPaces.length >= 5) {
     runningPaceRef = median(flatPaces)
+    paceRefSource = `median of ${flatPaces.length} flat splits`
   } else if (fallbackFlatSpeed && fallbackFlatSpeed > 0) {
     runningPaceRef = 1000 / fallbackFlatSpeed
-    console.warn(`[WalkGrade] Only ${flatPaces.length} flat splits — using profile fallback`)
+    paceRefSource = `profile fallback (${flatPaces.length} flat splits insufficient)`
   } else {
-    // Dernier recours : médiane de tous les splits (biaisé par le dénivelé)
     runningPaceRef = median(enriched.map((s) => s.pace))
-    console.warn('[WalkGrade] No flat splits & no fallback — using global median')
+    paceRefSource = 'global median (last resort)'
   }
 
   const walkPaceThreshold = runningPaceRef * WALK_PACE_RATIO
@@ -160,21 +191,42 @@ export function computeWalkingThresholdGrade(
     }
   })
 
-  // ── 5. Trouver le seuil : premier bucket (pente croissante) où walkRatio ≥ 0.5
-  //    On skip les buckets vides et on interpole linéairement entre buckets pour plus de finesse
-  let walkingThresholdGrade = DEFAULT_WALK_GRADE
-  const uphillBuckets = buckets.filter((b) => b.minGrade >= 0 && b.splitCount >= 3)
+  // Log détaillé des buckets pour diagnostic
+  console.log('[WalkGrade] Pace reference:', {
+    runningPaceRef: `${Math.round(runningPaceRef)}s/km`,
+    walkPaceThreshold: `${Math.round(walkPaceThreshold)}s/km`,
+    source: paceRefSource,
+    totalSplits: enriched.length,
+    walkedSplits: walkedCount,
+    walkedRatio: `${((walkedCount / enriched.length) * 100).toFixed(0)}%`,
+  })
+  console.table(
+    buckets.map((b) => ({
+      grade: `${b.minGrade}-${b.maxGrade}%`,
+      splits: b.splitCount,
+      walked: `${(b.walkRatio * 100).toFixed(0)}%`,
+    })),
+  )
 
-  for (let i = 0; i < uphillBuckets.length; i++) {
-    const bucket = uphillBuckets[i]
-    if (bucket.walkRatio >= 0.5) {
+  // ── 5. Trouver le seuil : premier bucket (pente croissante) où walkRatio ≥ 0.5
+  const eligibleBuckets = buckets.filter((b) => b.splitCount >= MIN_SPLITS_PER_BUCKET)
+
+  if (eligibleBuckets.length < 2) {
+    console.warn(`[WalkGrade] Only ${eligibleBuckets.length} buckets with enough data — cannot determine threshold`)
+    return null
+  }
+
+  let walkingThresholdGrade: number | null = null
+  for (let i = 0; i < eligibleBuckets.length; i++) {
+    const bucket = eligibleBuckets[i]
+    if (bucket.walkRatio >= WALK_RATIO_THRESHOLD) {
       if (i === 0) {
         walkingThresholdGrade = bucket.minGrade
       } else {
         // Interpolation linéaire entre le bucket précédent (<0.5) et celui-ci (≥0.5)
-        const prev = uphillBuckets[i - 1]
+        const prev = eligibleBuckets[i - 1]
         const span = bucket.walkRatio - prev.walkRatio
-        const t = span > 0 ? (0.5 - prev.walkRatio) / span : 0
+        const t = span > 0 ? (WALK_RATIO_THRESHOLD - prev.walkRatio) / span : 0
         const prevMid = (prev.minGrade + prev.maxGrade) / 2
         const curMid = (bucket.minGrade + bucket.maxGrade) / 2
         walkingThresholdGrade = prevMid + t * (curMid - prevMid)
@@ -183,16 +235,16 @@ export function computeWalkingThresholdGrade(
     }
   }
 
-  // Arrondi à 1 décimale
+  // Si aucun bucket ne franchit le seuil, on ne peut rien conclure
+  if (walkingThresholdGrade === null) {
+    const maxRatio = Math.max(...eligibleBuckets.map((b) => b.walkRatio))
+    console.warn(`[WalkGrade] No bucket crossed ${WALK_RATIO_THRESHOLD} walk ratio (max=${maxRatio.toFixed(2)}) — threshold undetermined`)
+    return null
+  }
+
   walkingThresholdGrade = Math.round(walkingThresholdGrade * 10) / 10
 
-  console.log('[WalkGrade] Analysis complete:', {
-    totalSplits: enriched.length,
-    walkedSplits: walkedCount,
-    runningPaceRef: Math.round(runningPaceRef),
-    walkPaceThreshold: Math.round(walkPaceThreshold),
-    walkingThresholdGrade,
-  })
+  console.log(`[WalkGrade] ✓ Detected walking threshold: ${walkingThresholdGrade}%`)
 
   return {
     walkingThresholdGrade,
