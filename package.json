@@ -21,6 +21,7 @@
     "i18next": "^26.0.3",
     "i18next-browser-languagedetector": "^8.2.1",
     "leaflet": "^1.9.4",
+    "maplibre-gl": "^5.22.0",
     "oauth-1.0a": "^2.2.6",
     "qs": "^6.15.0",
     "react": "^19.2.4",
