@@ -748,7 +748,13 @@ export function generateRaceStrategy(
     const avgHR          = Math.round(
       result.segments.reduce((s, seg) => s + seg.heartRateRange.target, 0) / result.segments.length
     )
-    const maxHREstimated = Math.round(Math.max(...result.segments.map(s => s.heartRateRange.max)))
+    // Pic de FC simulée plafonné par la FCmax physiologique du runner :
+    // `heartRateRange.max` ajoute une marge ±5% APRÈS le clamp interne de
+    // `computeHeartRate`, donc sans ce re-plafond on pourrait afficher une
+    // valeur > maxHR, ce qui n'a pas de sens physiologiquement.
+    const maxHREstimated = Math.round(
+      Math.min(maxHR, Math.max(...result.segments.map(s => s.heartRateRange.max)))
+    )
     const avgPaceSec     = result.totalDuration / (track.totalDistance / 1000)
     // Moyenne pondérée par la durée de chaque segment : la fatigue impacte
     // la vitesse au cours du temps, donc une moyenne arithmétique simple
