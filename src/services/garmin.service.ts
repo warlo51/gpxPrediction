@@ -102,6 +102,70 @@ async function fetchWithRetry(
   return lastRes!
 }
 
+// ─── Récupérer les activités (historique) ───────────────────────────────────
+
+/**
+ * Résumé d'une activité Garmin — champs utiles pour la calibration du profil.
+ * Coordonnées GPS exclues volontairement (données sensibles).
+ */
+export type GarminActivitySummary = {
+  activityId: number
+  activityType: unknown
+  activityName: string | null
+  startTimeLocal: string
+  distance: number | null
+  duration: number | null
+  elevationGain: number | null
+  elevationLoss: number | null
+  averageSpeed: number | null
+  averageHR: number | null
+  maxHR: number | null
+  calories: number | null
+  steps: number | null
+  trainingEffect: number | null
+  aerobicTrainingEffect: number | null
+  anaerobicTrainingEffect: number | null
+}
+
+export type GarminActivitiesResponse = {
+  count: number
+  durationMs: number
+  pages: number
+  activities: GarminActivitySummary[]
+}
+
+/**
+ * Récupère l'historique complet des activités running Garmin via l'endpoint
+ * Vercel /api/garmin/activities. La pagination est gérée côté backend.
+ */
+export async function fetchGarminActivities(
+  oauth1: GarminOAuth1Token,
+  oauth2: GarminOAuth2Token,
+): Promise<GarminActivitiesResponse> {
+  console.log('[Garmin Activities] Fetching activities from API…')
+  const t0 = Date.now()
+
+  const res = await fetchWithRetry(`${API_BASE}/activities`, {
+    headers: garminHeaders(oauth1, oauth2),
+  })
+
+  console.log(`[Garmin Activities] Response status: ${res.status}`)
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string }
+    console.error('[Garmin Activities] Error:', data)
+    throw new Error(data.error ?? `Erreur activities ${res.status}`)
+  }
+
+  const data = await res.json() as GarminActivitiesResponse
+  const clientDuration = Date.now() - t0
+
+  console.log(`[Garmin Activities] Fetched ${data.count} activities in ${clientDuration}ms (backend: ${data.durationMs}ms, ${data.pages} pages)`)
+  console.log('[Garmin Activities] Activities:', data.activities)
+
+  return data
+}
+
 // ─── Récupérer les stats utilisateur (VO2max, seuil lactate…) ────────────────
 
 export type GarminUserStats = {
