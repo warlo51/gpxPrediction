@@ -11,7 +11,7 @@ import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useGarminStore } from '@/stores/garminStore'
 import { GarminLoginForm } from './GarminLoginForm'
-import { syncGarminProfile, buildProfileFromGarminStats } from '@/services/garmin.service'
+import { syncGarminProfile, buildProfileFromGarminStats, fetchGarminActivities } from '@/services/garmin.service'
 import { saveRunnerProfile } from '@/services/supabase.service'
 
 type DistanceUnit = 'km' | 'miles'
@@ -210,6 +210,13 @@ export function ProfilPage() {
         saveRunnerProfile(user.id, updatedProfile).catch(err => {
           console.error('[GarminSync] Error saving profile to DB:', err)
         })
+      }
+
+      // Récupération des activités (MMA-43) — log console uniquement, pas d'affichage
+      try {
+        await fetchGarminActivities(oauth1, oauth2)
+      } catch (activitiesErr) {
+        console.warn('[GarminSync] Activities fetch failed (non-blocking):', activitiesErr)
       }
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Erreur de synchronisation')
