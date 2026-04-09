@@ -18,13 +18,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
-  console.log('[Garmin Activities] Request received')
-
   const oauth1Header = req.headers['x-garmin-oauth1']
   const oauth2Header = req.headers['x-garmin-oauth2']
 
   if (!oauth1Header || !oauth2Header) {
-    console.warn('[Garmin Activities] Missing OAuth tokens')
     return res.status(401).json({ error: 'Tokens Garmin manquants — reconnectez-vous' })
   }
 
@@ -48,40 +45,24 @@ export default async function handler(req, res) {
     let start = 0
     let page = 0
 
-    console.log(`[Garmin Activities] Starting pagination — pageSize=${PAGE_SIZE}, maxPages=${MAX_PAGES}`)
-
     while (page < MAX_PAGES) {
       const batch = await client.getActivities(start, PAGE_SIZE, 'running')
 
-      if (!Array.isArray(batch) || batch.length === 0) {
-        console.log(`[Garmin Activities] End of pagination at start=${start}`)
-        break
-      }
-
-      console.log(`[Garmin Activities] Page ${page + 1} — start=${start}, got=${batch.length}, total=${all.length + batch.length}`)
+      if (!Array.isArray(batch) || batch.length === 0) break
 
       all.push(...batch)
       start += batch.length
       page++
 
       // Dernière page incomplète → fin de la liste
-      if (batch.length < PAGE_SIZE) {
-        console.log(`[Garmin Activities] Last partial page (${batch.length} < ${PAGE_SIZE})`)
-        break
-      }
-    }
-
-    if (page >= MAX_PAGES) {
-      console.warn(`[Garmin Activities] Max pages reached (${MAX_PAGES}) — possible truncation at ${all.length} activities`)
+      if (batch.length < PAGE_SIZE) break
     }
 
     const durationMs = Date.now() - t0
-    console.log(`[Garmin Activities] Done — ${all.length} activities fetched in ${durationMs}ms (${page} pages)`)
 
     // Ne garder que les activités running / trail running
     const ALLOWED_TYPE_KEYS = new Set(['running', 'trail_running'])
     const filtered = all.filter((a) => ALLOWED_TYPE_KEYS.has(a?.activityType?.typeKey))
-    console.log(`[Garmin Activities] Filtered running/trail_running — kept ${filtered.length}/${all.length}`)
 
     // Supprimer les coordonnées GPS avant de renvoyer (données sensibles)
     const activities = filtered.map(({
@@ -129,14 +110,11 @@ export default async function handler(req, res) {
   } catch (err) {
     const message = err?.message ?? 'Erreur récupération activités'
     if (message.includes('401') || message.includes('403')) {
-      console.error('[Garmin Activities] Session expired:', message)
       return res.status(401).json({ error: 'Session expirée — reconnectez-vous' })
     }
     if (message.includes('429') || message.includes('Too Many')) {
-      console.error('[Garmin Activities] Rate limited:', message)
       return res.status(429).json({ error: 'Garmin rate-limit atteint — réessayez dans quelques minutes' })
     }
-    console.error('[Garmin Activities] Error:', message)
     return res.status(500).json({ error: message })
   }
 }

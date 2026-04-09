@@ -59,8 +59,6 @@ export default async function handler(req, res) {
     const splits = {}
     const errors = []
 
-    console.log(`[Garmin Splits] Fetching splits for ${ids.length} activities`)
-
     for (let i = 0; i < ids.length; i++) {
       const id = ids[i]
       try {
@@ -80,15 +78,11 @@ export default async function handler(req, res) {
         }))
       } catch (err) {
         const msg = err?.message ?? 'unknown error'
-        console.warn(`[Garmin Splits] Failed activity ${id}: ${msg}`)
         errors.push({ activityId: id, error: msg })
         splits[id] = []
 
         // Sur 429 on abandonne les suivants — on retourne ce qu'on a déjà
-        if (msg.includes('429') || msg.includes('Too Many')) {
-          console.warn('[Garmin Splits] Rate limited — stopping pagination early')
-          break
-        }
+        if (msg.includes('429') || msg.includes('Too Many')) break
       }
 
       // Throttle pour éviter rate-limit (sauf dernière itération)
@@ -97,7 +91,6 @@ export default async function handler(req, res) {
 
     const durationMs = Date.now() - t0
     const successCount = Object.values(splits).filter((arr) => arr.length > 0).length
-    console.log(`[Garmin Splits] Done — ${successCount}/${ids.length} activities with splits in ${durationMs}ms`)
 
     return res.status(200).json({
       count: successCount,
@@ -114,7 +107,6 @@ export default async function handler(req, res) {
     if (message.includes('429') || message.includes('Too Many')) {
       return res.status(429).json({ error: 'Garmin rate-limit atteint — réessayez dans quelques minutes' })
     }
-    console.error('[Garmin Splits] Error:', message)
     return res.status(500).json({ error: message })
   }
 }

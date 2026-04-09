@@ -96,7 +96,6 @@ export default async function handler(req, res) {
         const racePredictions = await client.get(
           `https://connectapi.garmin.com/metrics-service/metrics/racepredictions/latest/${encodeURIComponent(displayName)}`,
         )
-        console.log('[race-predictions] raw Garmin response:', JSON.stringify(racePredictions))
 
         // La réponse Garmin peut être un objet { raceTime5K, raceTime10K, raceTimeHalf, raceTimeMarathon }
         // ou un tableau d'objets avec raceDistance/raceTime selon la version de l'API.
@@ -158,9 +157,8 @@ export default async function handler(req, res) {
             updatedAt: new Date().toISOString(),
           })
         }
-      } catch (predicterErr) {
+      } catch {
         // Endpoint non disponible — continuer vers le fallback
-        console.warn('[race-predictions] race predictor endpoint unavailable:', predicterErr?.message)
       }
     }
 

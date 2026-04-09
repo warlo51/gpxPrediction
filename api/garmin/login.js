@@ -165,7 +165,6 @@ async function doLogin(username, password, mfaCode, savedState) {
     // 429 rate-limited — retry avec backoff
     if (attempt < MAX_LOGIN_RETRIES) {
       const wait = Math.pow(2, attempt) * 3000 // 3s, 6s, 12s
-      console.warn(`[Garmin Login] 429 rate-limited — retry ${attempt + 1}/${MAX_LOGIN_RETRIES} in ${wait}ms`)
       await sleep(wait)
     }
   }

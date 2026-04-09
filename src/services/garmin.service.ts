@@ -34,18 +34,14 @@ export async function garminLogin(
   if (mfaCode) body.mfaCode = mfaCode
   if (mfaState) body.state = mfaState
 
-  console.log('[Garmin] Login request:', { username, hasMfa: !!mfaCode })
   const res = await fetch(`${API_BASE}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 
-  console.log('[Garmin] Login response status:', res.status)
-
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string; debug?: string }
-    console.error('[Garmin] Login error:', data)
     const msg = data.error ?? `Erreur ${res.status}`
     throw new Error(data.debug ? `${msg}\n\n[Debug] ${data.debug}` : msg)
   }
@@ -60,8 +56,6 @@ export async function garminLogin(
     error?: string
     debug?: string
   }
-
-  console.log('[Garmin] Login response data:', { mfa_required: data.mfa_required, hasOauth1: !!data.oauth1Token, hasOauth2: !!data.oauth2Token, displayName: data.displayName, error: data.error })
 
   if (data.error) throw new Error(data.debug ? `${data.error} — ${data.debug}` : data.error)
   if (data.mfa_required) return { mfa_required: true, state: data.state }
@@ -96,7 +90,6 @@ async function fetchWithRetry(
     lastRes = res
     if (attempt < maxRetries) {
       const wait = Math.pow(2, attempt + 1) * 1000 // 2s, 4s, 8s
-      console.warn(`[Garmin] 429 rate-limited — retry ${attempt + 1}/${maxRetries} in ${wait}ms`)
       await delay(wait)
     }
   }
@@ -148,28 +141,16 @@ export async function fetchGarminActivities(
   oauth1: GarminOAuth1Token,
   oauth2: GarminOAuth2Token,
 ): Promise<GarminActivitiesResponse> {
-  console.log('[Garmin Activities] Fetching activities from API…')
-  const t0 = Date.now()
-
   const res = await fetchWithRetry(`${API_BASE}/activities`, {
     headers: garminHeaders(oauth1, oauth2),
   })
 
-  console.log(`[Garmin Activities] Response status: ${res.status}`)
-
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string }
-    console.error('[Garmin Activities] Error:', data)
     throw new Error(data.error ?? `Erreur activities ${res.status}`)
   }
 
-  const data = await res.json() as GarminActivitiesResponse
-  const clientDuration = Date.now() - t0
-
-  console.log(`[Garmin Activities] Fetched ${data.count} activities in ${clientDuration}ms (backend: ${data.durationMs}ms, ${data.pages} pages)`)
-  console.log('[Garmin Activities] Activities:', data.activities)
-
-  return data
+  return await res.json() as GarminActivitiesResponse
 }
 
 // ─── Récupérer les splits d'activités (pour analyse seuil de marche) ────────
@@ -191,9 +172,6 @@ export async function fetchGarminActivitySplits(
   oauth2: GarminOAuth2Token,
   activityIds: number[],
 ): Promise<GarminActivitySplitsResponse> {
-  console.log(`[Garmin Splits] Fetching splits for ${activityIds.length} activities`)
-  const t0 = Date.now()
-
   const res = await fetchWithRetry(`${API_BASE}/activity-splits`, {
     method: 'POST',
     headers: garminHeaders(oauth1, oauth2),
@@ -202,13 +180,10 @@ export async function fetchGarminActivitySplits(
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string }
-    console.error('[Garmin Splits] Error:', data)
     throw new Error(data.error ?? `Erreur activity-splits ${res.status}`)
   }
 
-  const data = await res.json() as GarminActivitySplitsResponse
-  console.log(`[Garmin Splits] Received ${data.count}/${data.requested} activities in ${Date.now() - t0}ms`)
-  return data
+  return await res.json() as GarminActivitySplitsResponse
 }
 
 /**
@@ -244,22 +219,16 @@ export async function fetchGarminUserStats(
   oauth1: GarminOAuth1Token,
   oauth2: GarminOAuth2Token,
 ): Promise<GarminUserStats> {
-  console.log('[Garmin] Fetching user-stats (VO2max, lactate threshold…)')
   const res = await fetchWithRetry(`${API_BASE}/user-stats`, {
     headers: garminHeaders(oauth1, oauth2),
   })
 
-  console.log(`[Garmin] User-stats response status: ${res.status}`)
-
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string }
-    console.error('[Garmin] User-stats error:', data)
     throw new Error(data.error ?? `Erreur user-stats ${res.status}`)
   }
 
-  const data = await res.json() as GarminUserStats
-  console.log('[Garmin] User-stats:', JSON.stringify(data, null, 2))
-  return data
+  return await res.json() as GarminUserStats
 }
 
 // ─── Prédictions de course Garmin ─────────────────────────────────────────────
@@ -268,22 +237,16 @@ export async function fetchGarminRacePredictions(
   oauth1: GarminOAuth1Token,
   oauth2: GarminOAuth2Token,
 ): Promise<GarminRacePredictions> {
-  console.log('[Garmin] Fetching race predictions…')
   const res = await fetchWithRetry(`${API_BASE}/race-predictions`, {
     headers: garminHeaders(oauth1, oauth2),
   })
 
-  console.log(`[Garmin] Race predictions response status: ${res.status}`)
-
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string }
-    console.error('[Garmin] Race predictions error:', data)
     throw new Error(data.error ?? `Erreur race-predictions ${res.status}`)
   }
 
-  const data = await res.json() as GarminRacePredictions
-  console.log('[Garmin] Race predictions:', JSON.stringify(data, null, 2))
-  return data
+  return await res.json() as GarminRacePredictions
 }
 
 // ─── Calcul prédictions depuis VO2max (Jack Daniels) ────────────────────────
@@ -335,8 +298,6 @@ export async function syncGarminProfile(
   oauth1: GarminOAuth1Token,
   oauth2: GarminOAuth2Token,
 ): Promise<GarminSyncResult> {
-  console.log('[Garmin] Starting profile sync…')
-
   const [userStatsResult, racePredictionsResult, wellnessRes] = await Promise.allSettled([
     fetchGarminUserStats(oauth1, oauth2),
     fetchGarminRacePredictions(oauth1, oauth2),
@@ -370,15 +331,7 @@ export async function syncGarminProfile(
   // de données mais qu'on a un VO2max, on calcule les prédictions ici
   if (racePredictions.source === 'unavailable' && userStats.vo2MaxRunning && userStats.vo2MaxRunning > 20) {
     racePredictions = computeRacePredictionsFromVo2max(userStats.vo2MaxRunning)
-    console.log('[Garmin] Race predictions computed client-side from VO2max:', racePredictions)
   }
-
-  console.log('[Garmin] Sync complete:', {
-    vo2Max: userStats.vo2MaxRunning,
-    racePredictions: racePredictions.source,
-    restingHR,
-    hrv,
-  })
 
   return { userStats, racePredictions, restingHR, hrv }
 }
@@ -411,17 +364,14 @@ export function buildProfileFromGarminStats(
     const v10K = 10000 / racePredictions.tenK // m/s
     flatSpeed = v10K / 0.87   // remonte vers vVO2max depuis vitesse 10K
     basePaceSecPerKm = Math.round(1000 / v10K)
-    console.log('[buildProfile] flatSpeed from 10K prediction:', { v10K, flatSpeed, basePaceSecPerKm })
   } else if (racePredictions.fiveK && racePredictions.fiveK > 0) {
     const v5K = 5000 / racePredictions.fiveK
     flatSpeed = v5K / 0.92
     basePaceSecPerKm = Math.round(1000 / (flatSpeed * 0.87))
-    console.log('[buildProfile] flatSpeed from 5K prediction:', { v5K, flatSpeed })
   } else if (userStats.vo2MaxRunning && userStats.vo2MaxRunning > 20) {
     const vVo2max = vVo2maxFromVo2max(userStats.vo2MaxRunning)
     flatSpeed = vVo2max * 0.87  // vitesse à ~87% vVO2max (allure marathon ~80%, 10K ~90%, plat moyen ≈ 87%)
     basePaceSecPerKm = Math.round(1000 / (vVo2max * 0.90))
-    console.log('[buildProfile] flatSpeed from VO2max:', { vo2max: userStats.vo2MaxRunning, vVo2max, flatSpeed })
   }
 
   // ── Seuil lactate (vitesse)
