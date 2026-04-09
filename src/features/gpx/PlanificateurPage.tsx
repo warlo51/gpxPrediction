@@ -835,20 +835,39 @@ function GpxLibrary({
   )
 }
 
-// ─── Panneau conditions de course (température / humidité) ──────────────────
+// ─── Panneau paramètres personnalisables (météo / glucides / barrières) ─────
 
-function ConditionsPanel({
+function RaceParametersPanel({
   environment,
-  onChange,
+  onEnvironmentChange,
   baselineReport,
   adjustedReport,
+  carbAnalysisEnabled,
+  setCarbAnalysisEnabled,
+  carbTolerance,
+  setCarbTolerance,
+  cutoffEnabled,
+  setCutoffEnabled,
+  cutoffRows,
+  setCutoffRows,
+  trackTotalKm,
 }: {
   environment: EnvironmentConditions
-  onChange: (env: EnvironmentConditions) => void
+  onEnvironmentChange: (env: EnvironmentConditions) => void
   baselineReport: RaceStrategyReport | null
   adjustedReport: RaceStrategyReport | null
+  carbAnalysisEnabled: boolean
+  setCarbAnalysisEnabled: (v: boolean) => void
+  carbTolerance: number
+  setCarbTolerance: (v: number) => void
+  cutoffEnabled: boolean
+  setCutoffEnabled: (v: boolean) => void
+  cutoffRows: CutoffRow[]
+  setCutoffRows: (rows: CutoffRow[]) => void
+  trackTotalKm: number
 }) {
   const { t } = useTranslation()
+  const [expanded, setExpanded] = useState(true)
 
   const isNeutral =
     environment.temperatureC === NEUTRAL_ENVIRONMENT.temperatureC &&
@@ -880,78 +899,209 @@ function ConditionsPanel({
         : 'text-red-700 bg-red-500/10 border-red-500/30'
 
   return (
-    <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="glass rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5"
+      >
         <div className="flex items-center gap-2">
           <span className="w-1 h-5 rounded-full bg-[#ff6d00] shrink-0" />
           <h3 className="text-[#1a2033] font-semibold text-xs uppercase tracking-wider">
-            {t('planner.conditions.title')}
+            Paramètres personnalisables
           </h3>
         </div>
-        {!isNeutral && (
-          <button
-            type="button"
-            onClick={() => onChange(NEUTRAL_ENVIRONMENT)}
-            className="text-[10px] font-medium text-[#64748b] hover:text-[#1a2033] underline underline-offset-2"
-          >
-            {t('planner.conditions.reset')}
-          </button>
-        )}
-      </div>
+        <span className="text-[#64748b] text-xs">{expanded ? '▲' : '▼'}</span>
+      </button>
 
-      <p className="text-[11px] text-[#64748b] leading-relaxed">
-        {t('planner.conditions.hint')}
-      </p>
+      {expanded && (
+        <div className="px-4 sm:px-5 pb-5 flex flex-col gap-5">
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Température */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-medium tracking-wider uppercase text-[#64748b]">
-              🌡️ {t('planner.conditions.temperature')}
+          {/* ─── Section : Conditions météo ─────────────────────────────── */}
+          <section className="flex flex-col gap-3 pb-5 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h4 className="text-[11px] font-semibold text-[#1a2033] uppercase tracking-wider">
+                🌡️ {t('planner.conditions.title')}
+              </h4>
+              {!isNeutral && (
+                <button
+                  type="button"
+                  onClick={() => onEnvironmentChange(NEUTRAL_ENVIRONMENT)}
+                  className="text-[10px] font-medium text-[#64748b] hover:text-[#1a2033] underline underline-offset-2"
+                >
+                  {t('planner.conditions.reset')}
+                </button>
+              )}
+            </div>
+
+            <p className="text-[11px] text-[#64748b] leading-relaxed">
+              {t('planner.conditions.hint')}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Température */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-medium tracking-wider uppercase text-[#64748b]">
+                    {t('planner.conditions.temperature')}
+                  </label>
+                  <span className="text-xs font-mono text-[#1a2033]">
+                    {environment.temperatureC}°C
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={-5}
+                  max={40}
+                  step={1}
+                  value={environment.temperatureC}
+                  onChange={(e) => onEnvironmentChange({ ...environment, temperatureC: Number(e.target.value) })}
+                  className="w-full accent-[#ff6d00]"
+                />
+              </div>
+
+              {/* Humidité */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-medium tracking-wider uppercase text-[#64748b]">
+                    {t('planner.conditions.humidity')}
+                  </label>
+                  <span className="text-xs font-mono text-[#1a2033]">
+                    {environment.humidityPct}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={20}
+                  max={100}
+                  step={5}
+                  value={environment.humidityPct}
+                  onChange={(e) => onEnvironmentChange({ ...environment, humidityPct: Number(e.target.value) })}
+                  className="w-full accent-[#ff6d00]"
+                />
+              </div>
+            </div>
+
+            {/* Badge d'impact */}
+            {!isNeutral && (
+              <div className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs ${impactColor}`}>
+                <span className="font-medium">{t('planner.conditions.impact')}</span>
+                <span className="font-mono font-bold">{formatDelta(impactSeconds)}</span>
+              </div>
+            )}
+          </section>
+
+          {/* ─── Section : Tolérance glucidique ─────────────────────────── */}
+          <section className="flex flex-col gap-3 pb-5 border-b border-black/[0.06]">
+            <label className="flex items-center gap-2 cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={carbAnalysisEnabled}
+                onChange={(e) => setCarbAnalysisEnabled(e.target.checked)}
+                className="accent-[#ff6d00] cursor-pointer"
+              />
+              <h4 className="text-[11px] font-semibold text-[#1a2033] uppercase tracking-wider">
+                🍬 Tolérance glucidique
+              </h4>
             </label>
-            <span className="text-xs font-mono text-[#1a2033]">
-              {environment.temperatureC}°C
-            </span>
-          </div>
-          <input
-            type="range"
-            min={-5}
-            max={40}
-            step={1}
-            value={environment.temperatureC}
-            onChange={(e) => onChange({ ...environment, temperatureC: Number(e.target.value) })}
-            className="w-full accent-[#ff6d00]"
-          />
-        </div>
+            <p className="text-[11px] text-[#64748b] leading-relaxed">
+              Quantité de glucides que tu peux ingérer par heure pendant l'effort.
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={30}
+                max={120}
+                step={5}
+                value={carbTolerance}
+                disabled={!carbAnalysisEnabled}
+                onChange={(e) => setCarbTolerance(Number(e.target.value))}
+                className="flex-1 accent-[#ff6d00] disabled:opacity-40 disabled:cursor-not-allowed"
+              />
+              <span className={`text-xs font-mono w-16 text-right shrink-0 ${carbAnalysisEnabled ? 'text-[#1a2033]' : 'text-[#94a3b8]'}`}>
+                {carbAnalysisEnabled ? `${carbTolerance} g/h` : 'off'}
+              </span>
+            </div>
+          </section>
 
-        {/* Humidité */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-medium tracking-wider uppercase text-[#64748b]">
-              💧 {t('planner.conditions.humidity')}
+          {/* ─── Section : Barrières horaires ───────────────────────────── */}
+          <section className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={cutoffEnabled}
+                onChange={(e) => setCutoffEnabled(e.target.checked)}
+                className="accent-[#ff6d00] cursor-pointer"
+              />
+              <h4 className="text-[11px] font-semibold text-[#1a2033] uppercase tracking-wider">
+                ⏱️ Barrières horaires
+              </h4>
             </label>
-            <span className="text-xs font-mono text-[#1a2033]">
-              {environment.humidityPct}%
-            </span>
-          </div>
-          <input
-            type="range"
-            min={20}
-            max={100}
-            step={5}
-            value={environment.humidityPct}
-            onChange={(e) => onChange({ ...environment, humidityPct: Number(e.target.value) })}
-            className="w-full accent-[#ff6d00]"
-          />
-        </div>
-      </div>
-
-      {/* Badge d'impact */}
-      {!isNeutral && (
-        <div className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs ${impactColor}`}>
-          <span className="font-medium">{t('planner.conditions.impact')}</span>
-          <span className="font-mono font-bold">{formatDelta(impactSeconds)}</span>
+            <p className="text-[11px] text-[#64748b] leading-relaxed">
+              Définis les checkpoints à ne pas dépasser pour valider la course.
+            </p>
+            {cutoffEnabled && (
+              <div className="flex flex-col gap-2">
+                {cutoffRows.map((row, idx) => {
+                  const km = parseFloat(row.km)
+                  const kmValid = !Number.isNaN(km) && km > 0 && km <= trackTotalKm + 0.5
+                  const hhmmValid = parseHHMMToSeconds(row.hhmm) !== null
+                  return (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step={0.1}
+                        placeholder="km"
+                        value={row.km}
+                        onChange={(e) => {
+                          const next = [...cutoffRows]
+                          next[idx] = { ...next[idx]!, km: e.target.value }
+                          setCutoffRows(next)
+                        }}
+                        aria-invalid={!kmValid && row.km.trim() !== ''}
+                        className="w-16 px-2 py-1 text-xs font-mono text-center rounded-lg border border-black/[0.12] bg-white text-[#1a2033] focus:outline-none focus:border-[#ff6d00] aria-[invalid=true]:border-red-500"
+                      />
+                      <span className="text-[10px] text-[#94a3b8]">km</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="HH:mm"
+                        value={row.hhmm}
+                        onChange={(e) => {
+                          const next = [...cutoffRows]
+                          next[idx] = { ...next[idx]!, hhmm: e.target.value }
+                          setCutoffRows(next)
+                        }}
+                        aria-invalid={!hhmmValid && row.hhmm.trim() !== ''}
+                        className="w-20 px-2 py-1 text-xs font-mono text-center rounded-lg border border-black/[0.12] bg-white text-[#1a2033] focus:outline-none focus:border-[#ff6d00] aria-[invalid=true]:border-red-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setCutoffRows(cutoffRows.filter((_, i) => i !== idx))}
+                        className="w-6 h-6 flex items-center justify-center rounded-md text-[#94a3b8] hover:text-red-600 hover:bg-red-50 transition-colors"
+                        aria-label="Supprimer cette barrière"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultKm = trackTotalKm > 0
+                      ? (cutoffRows.length === 0 ? trackTotalKm.toFixed(1) : '')
+                      : ''
+                    setCutoffRows([...cutoffRows, { km: defaultKm, hhmm: '' }])
+                  }}
+                  className="self-start text-[10px] font-semibold text-[#ff6d00] hover:underline"
+                >
+                  + ajouter une barrière
+                </button>
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>
@@ -1147,121 +1297,30 @@ export function PlanificateurPage() {
       {/* Parcours (carte + élévation + lecture, repliable) */}
       <TrackVisualization track={track} lecture={report?.lecture} />
 
-      {/* Conditions de course (température / humidité) */}
-      <ConditionsPanel
+      {/* Paramètres personnalisables : météo + glucides + barrières horaires */}
+      <RaceParametersPanel
         environment={environment}
-        onChange={setEnvironment}
+        onEnvironmentChange={setEnvironment}
         baselineReport={baselineReport}
         adjustedReport={report}
+        carbAnalysisEnabled={carbAnalysisEnabled}
+        setCarbAnalysisEnabled={setCarbAnalysisEnabled}
+        carbTolerance={carbTolerance}
+        setCarbTolerance={setCarbTolerance}
+        cutoffEnabled={cutoffEnabled}
+        setCutoffEnabled={setCutoffEnabled}
+        cutoffRows={cutoffRows}
+        setCutoffRows={setCutoffRows}
+        trackTotalKm={trackTotalKm}
       />
 
       {/* Stratégie */}
       {report && (
         <>
-          {/* Titre section + contrôles (glucides + barrière horaire) */}
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mt-2">
-            <div className="flex items-center gap-3">
-              <span className="w-1 h-8 rounded-full bg-[#ff6d00] shrink-0" />
-              <h2 className="text-xl font-bold text-[#1a2033]">Plan de course</h2>
-            </div>
-            <div className="flex flex-col gap-2 sm:items-end">
-              {/* Glucides */}
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 cursor-pointer" title="Activer ou désactiver l'analyse glucidique">
-                  <input
-                    type="checkbox"
-                    checked={carbAnalysisEnabled}
-                    onChange={(e) => setCarbAnalysisEnabled(e.target.checked)}
-                    className="accent-[#ff6d00] cursor-pointer"
-                  />
-                  <span className="text-[10px] text-[#64748b] uppercase tracking-wider whitespace-nowrap">Glucides</span>
-                </label>
-                <input type="range" min={30} max={120} step={5} value={carbTolerance}
-                  disabled={!carbAnalysisEnabled}
-                  onChange={(e) => setCarbTolerance(Number(e.target.value))}
-                  className="w-20 sm:w-28 accent-[#ff6d00] disabled:opacity-40 disabled:cursor-not-allowed" />
-                <span className={`text-xs font-mono w-12 shrink-0 ${carbAnalysisEnabled ? 'text-[#1a2033]' : 'text-[#94a3b8]'}`}>
-                  {carbAnalysisEnabled ? `${carbTolerance} g/h` : 'off'}
-                </span>
-              </div>
-
-              {/* Barrières horaires */}
-              <div className="flex flex-col gap-1.5 sm:items-end">
-                <label className="flex items-center gap-1.5 cursor-pointer" title="Activer ou désactiver les barrières horaires">
-                  <input
-                    type="checkbox"
-                    checked={cutoffEnabled}
-                    onChange={(e) => setCutoffEnabled(e.target.checked)}
-                    className="accent-[#ff6d00] cursor-pointer"
-                  />
-                  <span className="text-[10px] text-[#64748b] uppercase tracking-wider whitespace-nowrap">Barrières horaires</span>
-                </label>
-                {cutoffEnabled && (
-                  <div className="flex flex-col gap-1.5 sm:items-end">
-                    {cutoffRows.map((row, idx) => {
-                      const km = parseFloat(row.km)
-                      const kmValid = !Number.isNaN(km) && km > 0 && km <= trackTotalKm + 0.5
-                      const hhmmValid = parseHHMMToSeconds(row.hhmm) !== null
-                      return (
-                        <div key={idx} className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            step={0.1}
-                            placeholder="km"
-                            value={row.km}
-                            onChange={(e) => {
-                              const next = [...cutoffRows]
-                              next[idx] = { ...next[idx]!, km: e.target.value }
-                              setCutoffRows(next)
-                            }}
-                            aria-invalid={!kmValid && row.km.trim() !== ''}
-                            className="w-16 px-2 py-1 text-xs font-mono text-center rounded-lg border border-black/[0.12] bg-white text-[#1a2033] focus:outline-none focus:border-[#ff6d00] aria-[invalid=true]:border-red-500"
-                          />
-                          <span className="text-[10px] text-[#94a3b8]">km</span>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="HH:mm"
-                            value={row.hhmm}
-                            onChange={(e) => {
-                              const next = [...cutoffRows]
-                              next[idx] = { ...next[idx]!, hhmm: e.target.value }
-                              setCutoffRows(next)
-                            }}
-                            aria-invalid={!hhmmValid && row.hhmm.trim() !== ''}
-                            className="w-20 px-2 py-1 text-xs font-mono text-center rounded-lg border border-black/[0.12] bg-white text-[#1a2033] focus:outline-none focus:border-[#ff6d00] aria-[invalid=true]:border-red-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setCutoffRows(cutoffRows.filter((_, i) => i !== idx))}
-                            className="w-6 h-6 flex items-center justify-center rounded-md text-[#94a3b8] hover:text-red-600 hover:bg-red-50 transition-colors"
-                            aria-label="Supprimer cette barrière"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const defaultKm = track
-                          ? (cutoffRows.length === 0
-                              ? (track.totalDistance / 1000).toFixed(1)
-                              : '')
-                          : ''
-                        setCutoffRows([...cutoffRows, { km: defaultKm, hhmm: '' }])
-                      }}
-                      className="self-start sm:self-end text-[10px] font-semibold text-[#ff6d00] hover:underline"
-                    >
-                      + ajouter une barrière
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* Titre section */}
+          <div className="flex items-center gap-3 mt-2">
+            <span className="w-1 h-8 rounded-full bg-[#ff6d00] shrink-0" />
+            <h2 className="text-xl font-bold text-[#1a2033]">Plan de course</h2>
           </div>
 
           {/* Ancrage Garmin (courbe Firstbeat + km-effort) */}
