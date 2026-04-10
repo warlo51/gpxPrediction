@@ -69,6 +69,7 @@
     "feature3": "Pace by grade (Minetti model)",
     "feature4": "Estimated HR (Karvonen), fatigue and calories",
     "feature5": "Weather conditions, nutrition and cutoff barriers",
+    "feature6": "PDF export of race plan",
     "howItWorks": "How it works",
     "gpxAnalysisTitle": "Complete GPX Analysis",
     "gpxAnalysisDesc": "Import your GPX file — the engine automatically splits the course into segments, calculates grades, distances and elevation, and generates the 2D map, elevation profile and an interactive 3D view of the terrain.",
@@ -81,6 +82,9 @@
     "fitFiles": "Secure OAuth",
     "simulationTitle": "3 race strategies",
     "simulationDesc": "Each route is simulated across three strategies — Conservative, Target, Ambitious — with pace adjusted by grade (Minetti), progressive fatigue, estimated HR (Karvonen) and energy expenditure.",
+    "pdfExportTitle": "PDF Export",
+    "pdfExportDesc": "Export your race plan as a PDF for offline reference on race day — strategies, paces, risk zones and nutrition in a single document.",
+    "pdfExportTag": "PDF Export",
     "visualization3dTitle": "3D Visualization",
     "visualization3dDesc": "Visualize your route in 3D with relief exaggeration and interactive rotation. The 2D map and elevation profile accompany each analysis to help spot key sections.",
     "runnerProfileTitle": "Runner Profile",
@@ -146,6 +150,8 @@
       "moderate": "Moderate",
       "high": "High"
     },
+    "exportPdf": "Export PDF",
+    "exportPdfGenerating": "Generating…",
     "library": {
       "title": "My saved tracks",
       "allDistances": "All distances",

@@ -69,6 +69,7 @@
     "feature3": "Ritmo por pendiente (modelo Minetti)",
     "feature4": "FC estimada (Karvonen), fatiga y calorías",
     "feature5": "Clima, nutrición y cortes horarios",
+    "feature6": "Exportación PDF del plan de carrera",
     "howItWorks": "Cómo funciona",
     "gpxAnalysisTitle": "Análisis GPX completo",
     "gpxAnalysisDesc": "Importa tu archivo GPX — el motor divide automáticamente el recorrido en segmentos, calcula pendientes, distancias y desniveles, y genera el mapa 2D, el perfil altimétrico y una vista 3D interactiva del relieve.",
@@ -81,6 +82,9 @@
     "fitFiles": "OAuth seguro",
     "simulationTitle": "3 estrategias de carrera",
     "simulationDesc": "Cada recorrido se simula bajo tres estrategias — Prudente, Objetivo, Ambiciosa — con ritmo ajustado por pendiente (Minetti), fatiga progresiva, FC estimada (Karvonen) y gasto energético.",
+    "pdfExportTitle": "Exportar PDF",
+    "pdfExportDesc": "Exporta tu plan de carrera en PDF para consultarlo sin conexión el día de la carrera — estrategias, ritmos, zonas de riesgo y nutrición en un solo documento.",
+    "pdfExportTag": "Exportar PDF",
     "visualization3dTitle": "Visualización 3D",
     "visualization3dDesc": "Visualiza tu recorrido en 3D con exageración del relieve y rotación interactiva. El mapa 2D y el perfil altimétrico acompañan cada análisis para detectar las secciones clave.",
     "runnerProfileTitle": "Perfil de corredor",
@@ -146,6 +150,8 @@
       "moderate": "Moderado",
       "high": "Alto"
     },
+    "exportPdf": "Exportar en PDF",
+    "exportPdfGenerating": "Generando…",
     "library": {
       "title": "Mis rutas guardadas",
       "allDistances": "Todas las distancias",

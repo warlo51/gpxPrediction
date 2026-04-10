@@ -173,6 +173,7 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
               t('home.feature3'),
               t('home.feature4'),
               t('home.feature5'),
+              t('home.feature6'),
             ].map(item => (
               <li key={item} className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#ff6d00' }} />
@@ -263,6 +264,12 @@ export function AccueilPage({ onNavigate }: AccueilPageProps) {
               <p className="text-[13px] leading-[1.65]" style={{ color: 'var(--color-text-muted)' }}>
                 {t('home.simulationDesc')}
               </p>
+              <div className="mt-4">
+                <span className="px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wide"
+                  style={{ background: 'rgba(255,109,0,0.08)', color: '#ff6d00', border: '1px solid rgba(255,109,0,0.15)' }}>
+                  {t('home.pdfExportTag')}
+                </span>
+              </div>
             </div>
           </div>
 

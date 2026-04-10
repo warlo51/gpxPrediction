@@ -13,6 +13,7 @@ import { generateRaceStrategy, formatMargin } from '@/services/raceStrategy.serv
 import { formatDuration } from '@/services/simulationEngine.service'
 import { getGpxTracks } from '@/services/supabase.service'
 import { useGpxSave } from '@/hooks/useGpxSave'
+import { usePdfExport } from '@/hooks/usePdfExport'
 import { TrackMap } from './TrackMap'
 import { Track3DView } from './Track3DView'
 import { ElevationChart } from './ElevationChart'
@@ -1222,6 +1223,7 @@ export function PlanificateurPage() {
   const { track, setTrack, profile, garminRacePredictions } = useAppStore()
   const user = useAuthStore((s) => s.user)
   const { saveTrack } = useGpxSave()
+  const { exportPdf, isGenerating: isPdfGenerating } = usePdfExport()
 
   const [isDragging, setIsDragging] = useState(false)
   const [isParsing,  setIsParsing]  = useState(false)
@@ -1425,10 +1427,25 @@ export function PlanificateurPage() {
       {/* Stratégie */}
       {report && (
         <>
-          {/* Titre section */}
-          <div className="flex items-center gap-3 mt-2">
-            <span className="w-1 h-8 rounded-full bg-[#ff6d00] shrink-0" />
-            <h2 className="text-xl font-bold text-[#1a2033]">Plan de course</h2>
+          {/* Titre section + export PDF */}
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-3">
+              <span className="w-1 h-8 rounded-full bg-[#ff6d00] shrink-0" />
+              <h2 className="text-xl font-bold text-[#1a2033]">Plan de course</h2>
+            </div>
+            <button
+              onClick={() => report && exportPdf(report, effectiveStrategy)}
+              disabled={isPdfGenerating}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              <span>{isPdfGenerating ? '⏳' : '📄'}</span>
+              <span>{isPdfGenerating ? 'Génération…' : 'Exporter en PDF'}</span>
+            </button>
           </div>
 
           {/* Ancrage Garmin (courbe Firstbeat + km-effort) */}

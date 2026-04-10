@@ -11,7 +11,6 @@ import {
 import { useAppStore } from '@/stores/appStore'
 import { generateRaceStrategy } from '@/services/raceStrategy.service'
 import { formatPace } from '@/services/simulationEngine.service'
-import { usePdfExport } from '@/hooks/usePdfExport'
 import type { RaceStrategyReport, StrategyPlan, RaceStrategyId } from '@/types/raceStrategy.types'
 
 // ─── Metadata ────────────────────────────────────────────────────────────────
@@ -437,8 +436,6 @@ export function RacePlanPage() {
   const [carbTolerance, setCarbTolerance] = useState(60)
   const [activeStrategy, setActiveStrategy] = useState<RaceStrategyId>('objectif')
 
-  const { exportPdf, isGenerating } = usePdfExport()
-
   const report = useMemo<RaceStrategyReport | null>(() => {
     if (!track) return null
     return generateRaceStrategy(track, profile, carbTolerance)
@@ -481,22 +478,12 @@ export function RacePlanPage() {
               <span className="text-slate-500">{track.segments.length} segments</span>
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap">Glucides</label>
-              <input type="range" min={30} max={120} step={5} value={carbTolerance}
-                onChange={(e) => setCarbTolerance(Number(e.target.value))}
-                className="w-20 sm:w-28 accent-[#ff6d00]" />
-              <span className="text-xs font-mono text-slate-200 w-12 shrink-0">{carbTolerance} g/h</span>
-            </div>
-            <button
-              onClick={() => report && exportPdf(report, activeStrategy)}
-              disabled={isGenerating || !report}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] hover:bg-white/[0.10] text-slate-300 border border-white/[0.08] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span>{isGenerating ? '⏳' : '📄'}</span>
-              <span>{isGenerating ? 'Génération...' : 'Exporter en PDF'}</span>
-            </button>
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap">Glucides</label>
+            <input type="range" min={30} max={120} step={5} value={carbTolerance}
+              onChange={(e) => setCarbTolerance(Number(e.target.value))}
+              className="w-20 sm:w-28 accent-[#ff6d00]" />
+            <span className="text-xs font-mono text-slate-200 w-12 shrink-0">{carbTolerance} g/h</span>
           </div>
         </div>
       </div>
