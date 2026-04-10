@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import { fetchWeatherForCoords, weatherToEnvironment } from '@/services/weather.service'
-import type { WeatherData } from '@/types/weather.types'
+import { fetchWeatherForecast, forecastDayToEnvironment } from '@/services/weather.service'
+import type { WeatherForecast, WeatherForecastDay } from '@/types/weather.types'
 import type { EnvironmentConditions } from '@/types'
 
 // ── Cache sessionStorage (TTL 30 min) ───────────────────────────────────────
@@ -8,14 +8,14 @@ import type { EnvironmentConditions } from '@/types'
 const CACHE_TTL_MS = 30 * 60 * 1000
 
 function getCacheKey(lat: number, lon: number): string {
-  return `weather_${lat.toFixed(2)}_${lon.toFixed(2)}`
+  return `weather_forecast_${lat.toFixed(2)}_${lon.toFixed(2)}`
 }
 
-function readCache(key: string): WeatherData | null {
+function readCache(key: string): WeatherForecast | null {
   try {
     const raw = sessionStorage.getItem(key)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as { data: WeatherData; cachedAt: number }
+    const parsed = JSON.parse(raw) as { data: WeatherForecast; cachedAt: number }
     if (Date.now() - parsed.cachedAt > CACHE_TTL_MS) {
       sessionStorage.removeItem(key)
       return null
@@ -26,7 +26,7 @@ function readCache(key: string): WeatherData | null {
   }
 }
 
-function writeCache(key: string, data: WeatherData): void {
+function writeCache(key: string, data: WeatherForecast): void {
   try {
     sessionStorage.setItem(key, JSON.stringify({ data, cachedAt: Date.now() }))
   } catch {
@@ -37,24 +37,31 @@ function writeCache(key: string, data: WeatherData): void {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export type UseWeatherResult = {
-  data: WeatherData | null
+  forecast: WeatherForecast | null
+  selectedDay: WeatherForecastDay | null
+  selectedDayOffset: number
   isLoading: boolean
   error: string | null
-  /** Déclenche le fetch météo pour les coordonnées données */
-  fetch: (lat: number, lon: number) => Promise<EnvironmentConditions | null>
+  /** Récupère les prévisions 7 jours pour les coordonnées données */
+  fetchForecast: (lat: number, lon: number) => Promise<EnvironmentConditions | null>
+  /** Sélectionne un jour de prévision (0 = aujourd'hui, 7 = J+7) */
+  selectDay: (dayOffset: number) => EnvironmentConditions | null
 }
 
 /**
- * Hook météo — récupère les conditions depuis Open-Meteo pour un point GPS.
+ * Hook météo — récupère les prévisions J+0 à J+7 depuis Open-Meteo.
  * Déclenchement manuel uniquement (pas de useEffect réactif).
  * Cache sessionStorage 30 min pour éviter les appels redondants.
  */
 export function useWeather(): UseWeatherResult {
-  const [data, setData] = useState<WeatherData | null>(null)
+  const [forecast, setForecast] = useState<WeatherForecast | null>(null)
+  const [selectedDayOffset, setSelectedDayOffset] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fetch = useCallback(async (
+  const selectedDay = forecast?.days[selectedDayOffset] ?? null
+
+  const fetchForecastCb = useCallback(async (
     lat: number,
     lon: number,
   ): Promise<EnvironmentConditions | null> => {
@@ -65,18 +72,20 @@ export function useWeather(): UseWeatherResult {
     const cacheKey = getCacheKey(lat, lon)
     const cached = readCache(cacheKey)
     if (cached) {
-      setData(cached)
+      setForecast(cached)
+      setSelectedDayOffset(0)
       setIsLoading(false)
-      return weatherToEnvironment(cached)
+      return forecastDayToEnvironment(cached.days[0])
     }
 
-    const result = await fetchWeatherForCoords(lat, lon)
+    const result = await fetchWeatherForecast(lat, lon)
 
-    if (result) {
+    if (result && result.days.length > 0) {
       writeCache(cacheKey, result)
-      setData(result)
+      setForecast(result)
+      setSelectedDayOffset(0)
       setIsLoading(false)
-      return weatherToEnvironment(result)
+      return forecastDayToEnvironment(result.days[0])
     }
 
     setError('weather_fetch_failed')
@@ -84,5 +93,21 @@ export function useWeather(): UseWeatherResult {
     return null
   }, [])
 
-  return { data, isLoading, error, fetch }
+  const selectDay = useCallback((dayOffset: number): EnvironmentConditions | null => {
+    if (!forecast) return null
+    const day = forecast.days[dayOffset]
+    if (!day) return null
+    setSelectedDayOffset(dayOffset)
+    return forecastDayToEnvironment(day)
+  }, [forecast])
+
+  return {
+    forecast,
+    selectedDay,
+    selectedDayOffset,
+    isLoading,
+    error,
+    fetchForecast: fetchForecastCb,
+    selectDay,
+  }
 }

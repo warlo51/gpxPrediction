@@ -951,8 +951,20 @@ function RaceParametersPanel({
 
   const handleFetchWeather = async () => {
     if (!startPoint) return
-    const env = await weather.fetch(startPoint.lat, startPoint.lon)
+    const env = await weather.fetchForecast(startPoint.lat, startPoint.lon)
     if (env) onEnvironmentChange(env)
+  }
+
+  const handleSelectDay = (dayOffset: number) => {
+    const env = weather.selectDay(dayOffset)
+    if (env) onEnvironmentChange(env)
+  }
+
+  const formatDayLabel = (date: string, offset: number): string => {
+    if (offset === 0) return t('planner.conditions.today')
+    const d = new Date(date + 'T12:00:00')
+    const dayName = d.toLocaleDateString(t('planner.conditions.locale'), { weekday: 'short', day: 'numeric', month: 'short' })
+    return `J+${offset} · ${dayName}`
   }
 
   // Delta sur la stratégie "objectif" (référence)
@@ -1019,9 +1031,9 @@ function RaceParametersPanel({
               {t('planner.conditions.hint')}
             </p>
 
-            {/* Bouton récupération météo auto */}
+            {/* Bouton récupération météo auto + sélecteur jour */}
             {startPoint && (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2.5">
                 <button
                   type="button"
                   onClick={handleFetchWeather}
@@ -1034,11 +1046,37 @@ function RaceParametersPanel({
                     <>🌤️ {t('planner.conditions.fetchWeather')}</>
                   )}
                 </button>
-                {weather.data && !weather.isLoading && (
-                  <span className="text-[10px] text-[#64748b]">
-                    {weather.data.weatherLabel} · 💨 {weather.data.windSpeedKmh} km/h · {t('planner.conditions.weatherFetched')}
-                  </span>
+
+                {/* Sélecteur de jour J+0 à J+7 */}
+                {weather.forecast && !weather.isLoading && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] font-medium text-[#64748b] uppercase tracking-wider">
+                      {t('planner.conditions.selectDay')}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {weather.forecast.days.map((day) => (
+                        <button
+                          key={day.dayOffset}
+                          type="button"
+                          onClick={() => handleSelectDay(day.dayOffset)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors ${
+                            weather.selectedDayOffset === day.dayOffset
+                              ? 'bg-[#ff6d00] text-white shadow-sm'
+                              : 'bg-black/[0.04] text-[#64748b] hover:bg-black/[0.08] hover:text-[#1a2033]'
+                          }`}
+                        >
+                          {formatDayLabel(day.date, day.dayOffset)}
+                        </button>
+                      ))}
+                    </div>
+                    {weather.selectedDay && (
+                      <span className="text-[10px] text-[#64748b]">
+                        {weather.selectedDay.weatherLabel} · {weather.selectedDay.temperatureC}°C · 💨 {weather.selectedDay.windSpeedKmh} km/h · 💧 {weather.selectedDay.humidityPct}%
+                      </span>
+                    )}
+                  </div>
                 )}
+
                 {weather.error && (
                   <span className="text-[10px] text-red-500">{t('planner.conditions.weatherError')}</span>
                 )}

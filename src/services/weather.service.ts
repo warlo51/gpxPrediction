@@ -5,7 +5,7 @@
  * Aucune dépendance React — service pur.
  */
 
-import type { WeatherApiResponse, WeatherData } from '@/types/weather.types'
+import type { WeatherApiResponse, WeatherData, WeatherForecast, WeatherForecastDay } from '@/types/weather.types'
 import type { EnvironmentConditions } from '@/types'
 
 // ── WMO weather codes → label ───────────────────────────────────────────────
@@ -63,6 +63,32 @@ export function weatherToEnvironment(data: WeatherData): EnvironmentConditions {
   }
 }
 
+// ── Mapping forecast daily ──────────────────────────────────────────────────
+
+function mapToForecast(raw: WeatherApiResponse): WeatherForecast {
+  const days: WeatherForecastDay[] = raw.daily.time.map((date, i) => ({
+    date,
+    dayOffset: i,
+    temperatureC: Math.round(raw.daily.temperature_2m_mean[i]),
+    humidityPct: Math.round(raw.daily.relative_humidity_2m_mean[i]),
+    windSpeedKmh: Math.round(raw.daily.windspeed_10m_max[i]),
+    weatherCode: raw.daily.weathercode[i],
+    weatherLabel: wmoLabel(raw.daily.weathercode[i]),
+  }))
+  return { days, fetchedAt: new Date() }
+}
+
+/** Convertit un jour de prévision en conditions utilisables par la simulation */
+export function forecastDayToEnvironment(day: WeatherForecastDay): EnvironmentConditions {
+  return {
+    temperatureC: day.temperatureC,
+    humidityPct: day.humidityPct,
+    windSpeedKmh: day.windSpeedKmh,
+    weatherCode: day.weatherCode,
+    weatherLabel: day.weatherLabel,
+  }
+}
+
 // ── Fetch principal ──────────────────────────────────────────────────────────
 
 /**
@@ -114,6 +140,54 @@ export async function fetchWeatherForCoords(
     return data
   } catch (err) {
     console.warn('[Weather] Fetch failed:', (err as Error).message)
+    return null
+  }
+}
+
+/**
+ * Récupère les prévisions météo sur 7 jours pour des coordonnées GPS.
+ * Utilise les moyennes/max daily de l'API Open-Meteo.
+ */
+export async function fetchWeatherForecast(
+  lat: number,
+  lon: number,
+): Promise<WeatherForecast | null> {
+  if (
+    !Number.isFinite(lat) || lat < -90 || lat > 90 ||
+    !Number.isFinite(lon) || lon < -180 || lon > 180
+  ) {
+    console.warn('[Weather] Coordonnées GPS invalides')
+    return null
+  }
+
+  const params = new URLSearchParams({
+    latitude: lat.toFixed(6),
+    longitude: lon.toFixed(6),
+    current_weather: 'true',
+    hourly: 'relativehumidity_2m',
+    daily: 'temperature_2m_mean,windspeed_10m_max,weathercode,relative_humidity_2m_mean',
+    forecast_days: '8',
+    timezone: 'auto',
+  })
+
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`)
+
+    if (!res.ok) {
+      console.warn(`[Weather] API error: ${res.status}`)
+      return null
+    }
+
+    const raw = (await res.json()) as WeatherApiResponse
+    const forecast = mapToForecast(raw)
+
+    if (import.meta.env.DEV) {
+      console.debug('[Weather] Forecast fetched:', forecast.days.length, 'days')
+    }
+
+    return forecast
+  } catch (err) {
+    console.warn('[Weather] Forecast fetch failed:', (err as Error).message)
     return null
   }
 }

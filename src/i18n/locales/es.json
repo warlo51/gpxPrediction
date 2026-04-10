@@ -130,10 +130,13 @@
       "humidity": "Humedad",
       "impact": "Impacto en el tiempo total",
       "reset": "Restablecer",
-      "fetchWeather": "Obtener el tiempo",
+      "fetchWeather": "Obtener previsión meteorológica",
       "weatherLoading": "Cargando el tiempo...",
       "weatherError": "Tiempo no disponible — ajuste manualmente",
-      "weatherFetched": "Tiempo obtenido automáticamente"
+      "weatherFetched": "Tiempo obtenido automáticamente",
+      "selectDay": "Día de carrera",
+      "today": "Hoy",
+      "locale": "es-ES"
     },
     "phases": "Fases",
     "phase": "Fase",

@@ -130,10 +130,13 @@
       "humidity": "Humidity",
       "impact": "Impact on total time",
       "reset": "Reset",
-      "fetchWeather": "Get weather",
+      "fetchWeather": "Get weather forecast",
       "weatherLoading": "Loading weather...",
       "weatherError": "Weather unavailable — adjust manually",
-      "weatherFetched": "Weather fetched automatically"
+      "weatherFetched": "Weather fetched automatically",
+      "selectDay": "Race day",
+      "today": "Today",
+      "locale": "en-US"
     },
     "phases": "Phases",
     "phase": "Phase",
