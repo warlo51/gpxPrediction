@@ -24,10 +24,12 @@ import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommen
 
 // ─── Strategy metadata ──────────────────────────────────────────────────────
 
-const STRATEGY_META: Record<RaceStrategyId, { color: string; name: string; emoji: string }> = {
-  prudente:   { color: '#15803d', name: 'Prudente',   emoji: '🟢' }, // green-700
-  objectif:   { color: '#c2410c', name: 'Objectif',   emoji: '🟡' }, // orange-700
-  ambitieuse: { color: '#b91c1c', name: 'Ambitieuse', emoji: '🔴' }, // red-700
+const STRATEGY_META: Record<RaceStrategyId, { color: string; name: string; emoji: string; desc: string }> = {
+  prudente:   { color: '#15803d', name: 'Prudente',   emoji: '🟢', desc: 'Effort stable et maîtrisé, idéal longues distances' },
+  montagnard: { color: '#0284c7', name: 'Montagnard', emoji: '🏔️', desc: 'Marche en montée, course en descente' },
+  objectif:   { color: '#c2410c', name: 'Objectif',   emoji: '🟡', desc: 'Compromis performance / sécurité' },
+  ambitieuse: { color: '#b91c1c', name: 'Ambitieuse', emoji: '🔴', desc: 'Effort élevé, risque d\'explosion' },
+  all_out:    { color: '#9f1239', name: 'All-Out',    emoji: '⚡', desc: 'Effort max, pour trails courts (< 30 km)' },
 }
 
 /**
@@ -440,7 +442,7 @@ function StrategyPills({
 }) {
   const { t } = useTranslation()
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
       {strategies.map((s) => {
         const meta = STRATEGY_META[s.id]
         const isActive = active === s.id
@@ -467,6 +469,9 @@ function StrategyPills({
                 {meta.name}
               </span>
             </div>
+            <p className={`text-[9px] leading-tight ${isActive ? 'text-[#475569]' : 'text-[#94a3b8]'}`}>
+              {meta.desc}
+            </p>
             <div className="flex items-baseline gap-2">
               <span className={`font-mono text-lg sm:text-xl font-bold ${isActive ? 'text-[#1a2033]' : 'text-[#64748b]'}`}>
                 {s.totalTimeFormatted}

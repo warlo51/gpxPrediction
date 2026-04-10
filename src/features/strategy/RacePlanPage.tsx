@@ -15,10 +15,12 @@ import type { RaceStrategyReport, StrategyPlan, RaceStrategyId } from '@/types/r
 
 // ─── Metadata ────────────────────────────────────────────────────────────────
 
-const STRATEGY_META: Record<RaceStrategyId, { color: string; name: string; emoji: string }> = {
-  prudente:   { color: '#22c55e', name: 'Prudente',   emoji: '🟢' },
-  objectif:   { color: '#f97316', name: 'Objectif',   emoji: '🟡' },
-  ambitieuse: { color: '#ef4444', name: 'Ambitieuse', emoji: '🔴' },
+const STRATEGY_META: Record<RaceStrategyId, { color: string; name: string; emoji: string; desc: string }> = {
+  prudente:   { color: '#22c55e', name: 'Prudente',   emoji: '🟢', desc: 'Effort stable et maîtrisé, idéal longues distances' },
+  montagnard: { color: '#0ea5e9', name: 'Montagnard', emoji: '🏔️', desc: 'Marche en montée, course en descente' },
+  objectif:   { color: '#f97316', name: 'Objectif',   emoji: '🟡', desc: 'Compromis performance / sécurité' },
+  ambitieuse: { color: '#ef4444', name: 'Ambitieuse', emoji: '🔴', desc: 'Effort élevé, risque d\'explosion' },
+  all_out:    { color: '#dc2626', name: 'All-Out',    emoji: '⚡', desc: 'Effort max, pour trails courts (< 30 km)' },
 }
 
 // ─── Strategy selector pills ─────────────────────────────────────────────────
@@ -33,7 +35,7 @@ function StrategyPills({
   onSelect: (id: RaceStrategyId) => void
 }) {
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
       {strategies.map((s) => {
         const meta = STRATEGY_META[s.id]
         const isActive = active === s.id
@@ -53,6 +55,9 @@ function StrategyPills({
                 {meta.name}
               </span>
             </div>
+            <p className={`text-[9px] leading-tight ${isActive ? 'text-slate-400' : 'text-slate-600'}`}>
+              {meta.desc}
+            </p>
             <div className="flex items-baseline gap-2">
               <span className={`font-mono text-lg sm:text-xl font-bold ${isActive ? 'text-white' : 'text-slate-500'}`}>
                 {s.totalTimeFormatted}

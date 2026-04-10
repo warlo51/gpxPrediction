@@ -3,7 +3,7 @@
  * (équivalent du skill /race-strategy, sans appel API Claude)
  */
 
-export type RaceStrategyId = 'prudente' | 'objectif' | 'ambitieuse'
+export type RaceStrategyId = 'prudente' | 'montagnard' | 'objectif' | 'ambitieuse' | 'all_out'
 
 export interface RacePhase {
   index: number

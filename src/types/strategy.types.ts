@@ -10,6 +10,8 @@ export type StrategyId =
   | 'performance'
   | 'negative_split'
   | 'positive_split'
+  | 'montagnard'
+  | 'all_out'
   | 'custom'
 
 /** Description d'une zone d'allure (ex: zones 1 à 5) */

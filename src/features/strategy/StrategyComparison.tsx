@@ -432,6 +432,8 @@ const STRATEGIES_TO_COMPARE: StrategyId[] = [
   'performance',
   'negative_split',
   'positive_split',
+  'montagnard',
+  'all_out',
 ]
 
 export function StrategyComparison() {
