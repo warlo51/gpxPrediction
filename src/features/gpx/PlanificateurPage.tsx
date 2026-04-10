@@ -14,10 +14,11 @@ import { formatDuration } from '@/services/simulationEngine.service'
 import { getGpxTracks } from '@/services/supabase.service'
 import { useGpxSave } from '@/hooks/useGpxSave'
 import { usePdfExport } from '@/hooks/usePdfExport'
+import { useWeather } from '@/hooks/useWeather'
 import { TrackMap } from './TrackMap'
 import { Track3DView } from './Track3DView'
 import { ElevationChart } from './ElevationChart'
-import type { GpxTrack, EnvironmentConditions } from '@/types'
+import type { GpxTrack, GpxPoint, EnvironmentConditions } from '@/types'
 import { NEUTRAL_ENVIRONMENT } from '@/types/simulation.types'
 import type { GpxTrackRow, TrackProfile } from '@/services/supabase.service'
 import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, StrategyRecommendation, GarminCurveAnchor, LectureBullet, RaceCheckpoint } from '@/types/raceStrategy.types'
@@ -923,9 +924,11 @@ function RaceParametersPanel({
   cutoffRows,
   setCutoffRows,
   trackTotalKm,
+  startPoint,
 }: {
   environment: EnvironmentConditions
   onEnvironmentChange: (env: EnvironmentConditions) => void
+  startPoint?: GpxPoint
   baselineReport: RaceStrategyReport | null
   adjustedReport: RaceStrategyReport | null
   carbAnalysisEnabled: boolean
@@ -940,10 +943,17 @@ function RaceParametersPanel({
 }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(true)
+  const weather = useWeather()
 
   const isNeutral =
     environment.temperatureC === NEUTRAL_ENVIRONMENT.temperatureC &&
     environment.humidityPct === NEUTRAL_ENVIRONMENT.humidityPct
+
+  const handleFetchWeather = async () => {
+    if (!startPoint) return
+    const env = await weather.fetch(startPoint.lat, startPoint.lon)
+    if (env) onEnvironmentChange(env)
+  }
 
   // Delta sur la stratégie "objectif" (référence)
   const impactSeconds = useMemo(() => {
@@ -1008,6 +1018,32 @@ function RaceParametersPanel({
             <p className="text-[11px] text-[#64748b] leading-relaxed">
               {t('planner.conditions.hint')}
             </p>
+
+            {/* Bouton récupération météo auto */}
+            {startPoint && (
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleFetchWeather}
+                  disabled={weather.isLoading}
+                  className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-[#ff6d00]/10 text-[#ff6d00] hover:bg-[#ff6d00]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {weather.isLoading ? (
+                    <>⏳ {t('planner.conditions.weatherLoading')}</>
+                  ) : (
+                    <>🌤️ {t('planner.conditions.fetchWeather')}</>
+                  )}
+                </button>
+                {weather.data && !weather.isLoading && (
+                  <span className="text-[10px] text-[#64748b]">
+                    {weather.data.weatherLabel} · 💨 {weather.data.windSpeedKmh} km/h · {t('planner.conditions.weatherFetched')}
+                  </span>
+                )}
+                {weather.error && (
+                  <span className="text-[10px] text-red-500">{t('planner.conditions.weatherError')}</span>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Température */}
@@ -1427,6 +1463,7 @@ export function PlanificateurPage() {
         cutoffRows={cutoffRows}
         setCutoffRows={setCutoffRows}
         trackTotalKm={trackTotalKm}
+        startPoint={track?.points[0]}
       />
 
       {/* Stratégie */}

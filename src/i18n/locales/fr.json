@@ -129,7 +129,11 @@
       "temperature": "Température",
       "humidity": "Humidité",
       "impact": "Impact sur le temps total",
-      "reset": "Réinitialiser"
+      "reset": "Réinitialiser",
+      "fetchWeather": "Récupérer la météo",
+      "weatherLoading": "Chargement météo...",
+      "weatherError": "Météo indisponible — ajustez manuellement",
+      "weatherFetched": "Météo récupérée automatiquement"
     },
     "phases": "Phases",
     "phase": "Phase",
