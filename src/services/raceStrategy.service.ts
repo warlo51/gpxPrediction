@@ -33,8 +33,10 @@ const STRATEGY_CONFIGS: Array<{
   blowupRisk: 'Faible' | 'Modéré' | 'Élevé'
 }> = [
   { id: 'prudente',   name: 'Prudente',   emoji: '🟢', strategyId: 'conservative', effortFactor: 1.0,  blowupRisk: 'Faible' },
+  { id: 'montagnard', name: 'Montagnard', emoji: '🏔️', strategyId: 'montagnard',   effortFactor: 0.95, blowupRisk: 'Faible' },
   { id: 'objectif',   name: 'Objectif',   emoji: '🟡', strategyId: 'performance',  effortFactor: 1.0,  blowupRisk: 'Modéré' },
   { id: 'ambitieuse', name: 'Ambitieuse', emoji: '🔴', strategyId: 'performance',  effortFactor: 1.07, blowupRisk: 'Élevé' },
+  { id: 'all_out',    name: 'All-Out',    emoji: '⚡',  strategyId: 'all_out',      effortFactor: 1.08, blowupRisk: 'Élevé' },
 ]
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -602,14 +604,30 @@ function computeRecommendation(
     }
   }
 
-  // ── Branche sans barrière : logique d'origine basée sur endurance / nutrition / D+
-  // Course ultra/longue (>50 km) ou très montagneux (>60 m D+/km)
-  if (totalKm > 50 || ratioD > 60) {
+  // ── Branche sans barrière : logique basée sur endurance / nutrition / D+ / distance
+  const hasStrategy = (id: RaceStrategyId) => plans.some(p => p.id === id)
+
+  // Trail court (< 25 km) + bonne endurance → All-Out (si disponible)
+  if (hasStrategy('all_out') && totalKm < 25 && endurance > 0.6 && ratioD < 60) {
+    return {
+      id: 'all_out',
+      reason: `Sur ${Math.round(totalKm)} km avec un dénivelé modéré, tu peux maintenir un effort soutenu — All-Out maximise le chrono sur cette distance`,
+    }
+  }
+
+  // Parcours très montagneux (> 60 m D+/km) → Montagnard (si disponible)
+  if (hasStrategy('montagnard') && ratioD > 60) {
+    return {
+      id: 'montagnard',
+      reason: `Avec ${Math.round(ratioD)} m de D+/km, le parcours est très montagneux — la stratégie Montagnard (marche en montée, course en descente) optimise l'énergie`,
+    }
+  }
+
+  // Course ultra/longue (> 50 km) → Prudente
+  if (totalKm > 50) {
     return {
       id: 'prudente',
-      reason: totalKm > 50
-        ? `Sur ${Math.round(totalKm)} km, la gestion de l'énergie est critique — une approche prudente maximise les chances de finir fort`
-        : `Avec ${Math.round(ratioD)} m de D+/km, le parcours est très exigeant — mieux vaut se préserver pour les montées`,
+      reason: `Sur ${Math.round(totalKm)} km, la gestion de l'énergie est critique — une approche prudente maximise les chances de finir fort`,
     }
   }
 
@@ -723,7 +741,17 @@ export function generateRaceStrategy(
   const simMap  = new Map<RaceStrategyId, SegmentSimulation[]>()
   const plans: StrategyPlan[] = []
 
-  for (const config of STRATEGY_CONFIGS) {
+  // Filtrage contextuel : certaines stratégies ne sont pertinentes que sur
+  // des profils de parcours spécifiques (D+/km, distance totale).
+  const totalKm = track.totalDistance / 1000
+  const ratioD  = track.totalElevationGain / totalKm // m D+ par km
+  const relevantConfigs = STRATEGY_CONFIGS.filter((c) => {
+    if (c.id === 'montagnard') return ratioD >= 40 // parcours montagneux (≥ 40 m D+/km)
+    if (c.id === 'all_out')    return totalKm <= 40 && ratioD < 60 // trail court, pas trop montagneux
+    return true
+  })
+
+  for (const config of relevantConfigs) {
     const result = runSimulation(track, simProfile, {
       strategyId:       config.strategyId,
       effortFactor:     config.effortFactor,

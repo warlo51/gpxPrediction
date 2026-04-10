@@ -10,8 +10,10 @@ import type { RaceStrategyReport, StrategyPlan, RaceStrategyId, RacePhase } from
 
 const COLORS = {
   prudente:    '#16a34a',
+  montagnard:  '#0284c7',
   objectif:    '#ea580c',
   ambitieuse:  '#dc2626',
+  all_out:     '#9f1239',
   text:        '#0f172a',
   muted:       '#64748b',
   border:      '#e2e8f0',
@@ -28,14 +30,18 @@ const COLORS = {
 
 const STRATEGY_LABEL: Record<RaceStrategyId, string> = {
   prudente:   'Prudente',
+  montagnard: 'Montagnard',
   objectif:   'Objectif',
   ambitieuse: 'Ambitieuse',
+  all_out:    'All-Out',
 }
 
 const STRATEGY_EMOJI: Record<RaceStrategyId, string> = {
   prudente:   '🟢',
+  montagnard: '🏔️',
   objectif:   '🟡',
   ambitieuse: '🔴',
+  all_out:    '⚡',
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────

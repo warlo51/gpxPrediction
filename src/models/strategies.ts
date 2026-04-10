@@ -45,6 +45,26 @@ export const RACING_STRATEGIES: Record<StrategyId, RacingStrategy> = {
     color: '#f59e0b',
   },
 
+  montagnard: {
+    id: 'montagnard',
+    name: 'Montagnard',
+    description: 'Marche systématique en montée, course efficace sur plats et descentes. Idéal pour les parcours très vallonnés ou les ultras.',
+    effortCurve: [0.98, 0.98, 0.97],  // très stable, légère baisse en fin
+    uphillAggressiveness: 0.1,          // économise au maximum en montée
+    downhillRecovery: 0.15,             // exploite les descentes (quasi pas de récupération)
+    color: '#0ea5e9',
+  },
+
+  all_out: {
+    id: 'all_out',
+    name: 'All-Out',
+    description: 'Effort soutenu élevé du début à la fin. Pour trails courts (< 30 km) où l\'objectif est le chrono.',
+    effortCurve: [1.03, 1.05, 1.02],   // au-dessus du nominal partout
+    uphillAggressiveness: 0.9,           // pousse fort en montée
+    downhillRecovery: 0.1,              // pas de récupération, exploite tout
+    color: '#dc2626',
+  },
+
   custom: {
     id: 'custom',
     name: 'Personnalisée',
