@@ -46,6 +46,12 @@ export type EnvironmentConditions = {
   temperatureC: number
   /** Humidité relative en % (0 à 100) */
   humidityPct: number
+  /** Vitesse du vent en km/h (optionnel, issu du fetch météo auto) */
+  windSpeedKmh?: number
+  /** Code météo WMO (optionnel, issu du fetch météo auto) */
+  weatherCode?: number
+  /** Label météo lisible (optionnel, issu du fetch météo auto) */
+  weatherLabel?: string
 }
 
 /** Conditions neutres : aucun impact sur la simulation */

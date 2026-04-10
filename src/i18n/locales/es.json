@@ -129,7 +129,11 @@
       "temperature": "Temperatura",
       "humidity": "Humedad",
       "impact": "Impacto en el tiempo total",
-      "reset": "Restablecer"
+      "reset": "Restablecer",
+      "fetchWeather": "Obtener el tiempo",
+      "weatherLoading": "Cargando el tiempo...",
+      "weatherError": "Tiempo no disponible — ajuste manualmente",
+      "weatherFetched": "Tiempo obtenido automáticamente"
     },
     "phases": "Fases",
     "phase": "Fase",
