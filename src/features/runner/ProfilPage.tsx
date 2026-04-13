@@ -5,7 +5,7 @@
  *  - Édition      : paramètres personnels (poids, FC, allure par défaut, unités)
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/stores/appStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -110,6 +110,119 @@ function ConnectionBadge({ label, connected }: { label: string; connected: boole
   )
 }
 
+// ─── Zones FC ────────────────────────────────────────────────────────────────
+
+type HRZone = {
+  zone: number
+  label: string
+  color: string
+  minHR: number
+  maxHR: number
+  minPct?: number
+  maxPct?: number
+}
+
+function computeMaxHRZones(maxHR: number): HRZone[] {
+  const defs = [
+    { zone: 1, label: 'Récupération',      color: '#22c55e', pctMin: 0.50, pctMax: 0.60 },
+    { zone: 2, label: 'Aérobie de base',    color: '#84cc16', pctMin: 0.60, pctMax: 0.70 },
+    { zone: 3, label: 'Aérobie seuil',      color: '#f59e0b', pctMin: 0.70, pctMax: 0.80 },
+    { zone: 4, label: 'Seuil anaérobie',     color: '#f97316', pctMin: 0.80, pctMax: 0.90 },
+    { zone: 5, label: 'Maximal',            color: '#ef4444', pctMin: 0.90, pctMax: 1.00 },
+  ]
+  return defs.map(d => ({
+    zone: d.zone, label: d.label, color: d.color,
+    minHR: Math.round(maxHR * d.pctMin),
+    maxHR: Math.round(maxHR * d.pctMax),
+  }))
+}
+
+function computeKarvonenZones(restingHR: number, maxHR: number): HRZone[] {
+  const fcReserve = maxHR - restingHR
+  const defs = [
+    { zone: 1, label: 'Récupération active',     color: '#22c55e', pctMin: 0.50, pctMax: 0.60 },
+    { zone: 2, label: 'Endurance fondamentale',   color: '#84cc16', pctMin: 0.60, pctMax: 0.70 },
+    { zone: 3, label: 'Aérobie seuil',            color: '#f59e0b', pctMin: 0.70, pctMax: 0.80 },
+    { zone: 4, label: 'Seuil anaérobie',           color: '#f97316', pctMin: 0.80, pctMax: 0.90 },
+    { zone: 5, label: 'Maximal / PMA',            color: '#ef4444', pctMin: 0.90, pctMax: 1.00 },
+  ]
+  return defs.map(d => ({
+    zone: d.zone, label: d.label, color: d.color,
+    minHR: Math.round(restingHR + fcReserve * d.pctMin),
+    maxHR: Math.round(restingHR + fcReserve * d.pctMax),
+    minPct: Math.round(d.pctMin * 100),
+    maxPct: Math.round(d.pctMax * 100),
+  }))
+}
+
+function computeLactateThresholdZones(restingHR: number, maxHR: number, lactateThresholdHR?: number): HRZone[] {
+  const lthr = lactateThresholdHR ?? Math.round(restingHR + 0.85 * (maxHR - restingHR))
+  const defs = [
+    { zone: 1, label: 'Récupération active',     color: '#22c55e', pctMin: 0.00, pctMax: 0.85 },
+    { zone: 2, label: 'Endurance fondamentale',   color: '#84cc16', pctMin: 0.85, pctMax: 0.90 },
+    { zone: 3, label: 'Tempo',                    color: '#f59e0b', pctMin: 0.90, pctMax: 0.95 },
+    { zone: 4, label: 'Seuil lactique',           color: '#f97316', pctMin: 0.95, pctMax: 1.05 },
+    { zone: 5, label: 'VO2max / Anaérobie',       color: '#ef4444', pctMin: 1.05, pctMax: maxHR / lthr },
+  ]
+  return defs.map(d => ({
+    zone: d.zone, label: d.label, color: d.color,
+    minHR: d.zone === 1 ? restingHR : Math.round(lthr * d.pctMin),
+    maxHR: Math.min(Math.round(lthr * d.pctMax), maxHR),
+    minPct: Math.round(d.pctMin * 100),
+    maxPct: Math.round(d.pctMax * 100),
+  }))
+}
+
+function HRZoneCard({
+  title,
+  subtitle,
+  accentColor,
+  zones,
+  pctLabel,
+}: {
+  title: string
+  subtitle: string
+  accentColor: string
+  zones: HRZone[]
+  pctLabel?: string
+}) {
+  return (
+    <Card className="flex flex-col">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="w-1 h-5 rounded-full inline-block" style={{ backgroundColor: accentColor }} />
+        <h3 className="text-[13px] font-semibold uppercase tracking-[1px]" style={{ color: 'var(--color-text)' }}>{title}</h3>
+      </div>
+      <p className="text-[11px] mb-4 ml-3" style={{ color: 'var(--color-text-subtle)' }}>{subtitle}</p>
+      <div className="space-y-2.5 flex-1">
+        {zones.map(z => (
+          <div key={z.zone} className="flex items-center gap-2">
+            <span className="text-[11px] w-3 shrink-0" style={{ color: 'var(--color-text-subtle)' }}>{z.zone}</span>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-0.5 gap-1">
+                <span className="text-[11px] truncate" style={{ color: z.color }}>{z.label}</span>
+                <span className="text-[11px] shrink-0 tabular-nums" style={{ color: 'var(--color-text-subtle)' }}>
+                  {z.minHR}–{z.maxHR} bpm
+                  {z.minPct !== undefined && ` (${z.minPct}–${z.maxPct}% ${pctLabel ?? 'FCR'})`}
+                </span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-surface-2)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${Math.min(((z.maxHR - z.minHR) / (zones[zones.length - 1]!.maxHR - zones[0]!.minHR)) * 200, 100)}%`, backgroundColor: z.color }}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 pt-3 flex justify-between text-[10px]" style={{ borderTop: '1px solid var(--color-border)', color: 'var(--color-text-subtle)' }}>
+        <span>FC repos : <span style={{ color: 'var(--color-text-muted)' }}>{zones[0]?.minHR ?? '--'} bpm</span></span>
+        <span>FC max : <span style={{ color: 'var(--color-text-muted)' }}>{zones[zones.length - 1]?.maxHR ?? '--'} bpm</span></span>
+      </div>
+    </Card>
+  )
+}
+
 // ─── Bloc éditable (paramètres personnels) ───────────────────────────────────
 
 function FieldRow({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -163,6 +276,16 @@ export function ProfilPage() {
   const walkingThresholdStr = profile.speedModel.walkingThresholdGrade > 0
     ? profile.speedModel.walkingThresholdGrade.toFixed(1)
     : undefined
+
+  const { maxHR, restingHR, lactateThresholdHR } = profile.heartRateModel
+  const hasHRData = maxHR > 0 && restingHR > 0
+
+  const maxHRZones = useMemo(() => hasHRData ? computeMaxHRZones(maxHR) : [], [hasHRData, maxHR])
+  const karvonenZonesData = useMemo(() => hasHRData ? computeKarvonenZones(restingHR, maxHR) : [], [hasHRData, restingHR, maxHR])
+  const lactateZones = useMemo(
+    () => hasHRData ? computeLactateThresholdZones(restingHR, maxHR, lactateThresholdHR) : [],
+    [hasHRData, restingHR, maxHR, lactateThresholdHR],
+  )
 
   const topStats: Array<{ label: string; value?: string; unit: string }> = [
     {
@@ -408,6 +531,34 @@ export function ProfilPage() {
           </span>
         </button>
       ) : null}
+
+      {/* ── Zones FC (si données FC disponibles) ── */}
+      {hasHRData && (
+        <div>
+          <SectionTitle>Zones de fréquence cardiaque</SectionTitle>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <HRZoneCard
+              title="% FC max"
+              subtitle="Intensité basée sur le % de votre FC maximale"
+              accentColor="#ef4444"
+              zones={maxHRZones}
+            />
+            <HRZoneCard
+              title="Karvonen (FCR)"
+              subtitle="Tient compte de votre FC de repos — plus précise"
+              accentColor="#f97316"
+              zones={karvonenZonesData}
+            />
+            <HRZoneCard
+              title="Seuil Lactique"
+              subtitle="Zones définies par rapport à votre FC au seuil (LTHR)"
+              accentColor="#a855f7"
+              zones={lactateZones}
+              pctLabel="FCSL"
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Section : Profil physique ── */}
       <div>
